@@ -178,8 +178,12 @@
           <div class="message-area" id="message-area">
             <div class="message-topbar" id="message-topbar">
               <div class="msg-channel-info">
+                <div class="mobile-talk-tabs" style="display:none">
+                  <button class="mobile-talk-tab active" onclick="setTalkMode('channels')">Channels</button>
+                  <button class="mobile-talk-tab" onclick="setTalkMode('dms')">DMs</button>
+                </div>
                 <span class="msg-channel-hash">#</span>
-                <span class="msg-channel-name" id="current-channel-name">bridge</span>
+                <span class="msg-channel-name" id="current-channel-name" onclick="openMobileChannelDrawer()">bridge</span>
               </div>
               <div class="message-topbar-actions">
                 <button class="msg-action-btn" onclick="togglePinned()" title="Pinned">📌</button>

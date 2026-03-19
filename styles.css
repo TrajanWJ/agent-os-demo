@@ -398,6 +398,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   overflow: hidden;
   transition: all var(--transition);
   animation: slideInDown 0.3s ease;
+  flex-shrink: 0;
 }
 .queue-card.priority-urgent { border-left-color: var(--red); }
 .queue-card.priority-normal  { border-left-color: var(--orange); }
@@ -577,7 +578,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   flex-direction: row !important;
   overflow: hidden;
 }
-.talk-layout { display: flex; }
+.talk-layout.active { display: flex; }
 
 /* Server Rail */
 .server-rail {
@@ -2136,10 +2137,85 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   }
 
   /* Talk page mobile */
-  .server-rail { width: 54px; min-width: 54px; }
-  .channel-sidebar { display: none; }
+  .server-rail { display: none !important; }
+  .channel-sidebar { display: none !important; }
   .member-list { display: none !important; }
   .thread-panel { display: none !important; }
+
+  /* Mobile channel drawer */
+  .channel-sidebar.mobile-drawer {
+    display: flex !important;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 280px;
+    z-index: 400;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+    animation: slideInLeft 0.2s ease;
+  }
+  .mobile-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 399;
+  }
+  @keyframes slideInLeft {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+
+  /* Make channel name tappable */
+  .msg-channel-name.mobile-tap {
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--bg-raised);
+  }
+  .msg-channel-name.mobile-tap::before {
+    content: '☰ ';
+    font-size: 12px;
+  }
+
+  /* Message area full width */
+  .message-area { width: 100% !important; }
+  .message-topbar { padding: 8px 12px; }
+  .messages-container { padding: 8px; }
+  .message-input-area { padding: 8px; }
+  .message-input { font-size: 16px !important; /* prevents iOS zoom */ }
+
+  /* DM list mobile */
+  .dm-sidebar.mobile-drawer {
+    display: flex !important;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 280px;
+    z-index: 400;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+    animation: slideInLeft 0.2s ease;
+    background: var(--bg-surface);
+    flex-direction: column;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  /* Talk mode switcher for mobile */
+  .mobile-talk-tabs {
+    display: flex !important;
+    gap: 4px;
+    margin-right: auto;
+  }
+  .mobile-talk-tab {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: var(--bg-raised);
+    color: var(--text-dim);
+    border: none;
+    cursor: pointer;
+  }
+  .mobile-talk-tab.active {
+    background: var(--accent);
+    color: var(--bg);
+  }
 
   /* Pulse grid */
   .pulse-grid { grid-template-columns: 1fr; }

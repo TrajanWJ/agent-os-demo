@@ -1,434 +1,644 @@
-/* AGENT OS v5 — COMMAND + CONFIG + SIMULATION + INIT */
+/* Agent OS v5 — app3.js — Command + Config + Simulation + Init */
 'use strict';
 
-// ── COMMAND PALETTE ───────────────────────────────────────────────────────────
-const CMD_ITEMS = [
-  // Navigation
-  {icon:'🏠', title:'Go to Feed',       sub:'Main activity stream', badge:'Nav',  action:()=>nav('feed')},
-  {icon:'❓', title:'Go to Queue',      sub:'Expiring decision cards', badge:'Nav', action:()=>nav('queue')},
-  {icon:'💬', title:'Go to Talk',       sub:'Discord-style chat', badge:'Nav', action:()=>nav('talk')},
-  {icon:'🧠', title:'Go to Mind',       sub:'Knowledge vault', badge:'Nav', action:()=>nav('mind')},
-  {icon:'⚡', title:'Go to Pulse',      sub:'System vitals', badge:'Nav', action:()=>nav('pulse')},
-  {icon:'📋', title:'Go to Board',      sub:'Kanban board', badge:'Nav', action:()=>nav('board')},
-  {icon:'📡', title:'Go to Stream',     sub:'Real-time event log', badge:'Nav', action:()=>nav('stream')},
-  {icon:'⚙️', title:'Go to Config',     sub:'Agent settings', badge:'Nav', action:()=>nav('config')},
-  // Actions
-  {icon:'🚀', title:'Dispatch Researcher', sub:'Start competitive analysis', badge:'>', action:()=>{spawnAgent('researcher','Competitive analysis');closeCommand();}},
-  {icon:'🚀', title:'Dispatch Coder',      sub:'Start a coding task', badge:'>',       action:()=>{spawnAgent('coder','Streaming UI');closeCommand();}},
-  {icon:'🔄', title:'Restart Watchdog',    sub:'Fix session-watchdog service', badge:'!', action:()=>{pulseAction('restart-watchdog');closeCommand();}},
-  {icon:'🧹', title:'Clear Queue',         sub:'Clear all pending decisions', badge:'!', action:()=>{pulseAction('clear-queue');closeCommand();}},
-  // Vault
-  {icon:'📚', title:'Search Vault',         sub:'Search all vault notes', badge:'/vault', action:()=>{nav('mind');setMindView('cards',null);setTimeout(()=>{const s=$('#mind-search');if(s)s.focus();},200);closeCommand();}},
-  {icon:'＋', title:'Quick Capture',        sub:'Add a note to vault', badge:'/capture', action:()=>{quickCapture();closeCommand();}},
-  // Agents
-  {icon:'🤝', title:'Chat with Right Hand', sub:'Open DM', badge:'@', action:()=>{nav('talk');setTimeout(()=>{dcSelectServer('dm');dcSelectDM('righthand');},50);closeCommand();}},
-  {icon:'🔬', title:'Chat with Researcher', sub:'Open DM', badge:'@', action:()=>{nav('talk');setTimeout(()=>{dcSelectServer('dm');dcSelectDM('researcher');},50);closeCommand();}},
-  {icon:'💻', title:'Chat with Coder',      sub:'Open DM', badge:'@', action:()=>{nav('talk');setTimeout(()=>{dcSelectServer('dm');dcSelectDM('coder');},50);closeCommand();}},
-];
+// ═══════════════════════════════════════════════════════════
+// COMMAND PAGE
+// ═══════════════════════════════════════════════════════════
 
-function openCommand() {
-  const o = $('#command-overlay'); if (!o) return;
-  o.classList.remove('hidden');
-  const inp = $('#command-input');
-  if (inp) { inp.value = ''; inp.focus(); }
-  commandSearch('');
+let cmdMode = 'search'; // search | command | agent | system
+let cmdSelectedIdx = 0;
+
+function initCommand() {
+  const input = $('command-input');
+  if (input) { input.value = ''; input.focus(); }
+  updateCommandMode('');
+  renderCommandResults('');
 }
 
-function closeCommand() {
-  $('#command-overlay')?.classList.add('hidden');
+function handleCommandInput(val) {
+  updateCommandMode(val);
+  renderCommandResults(val);
 }
 
-function commandSearch(q) {
-  const res = $('#command-results'); if (!res) return;
-  const query = q.toLowerCase().trim();
+function updateCommandMode(val) {
+  const indicator = $('cmd-mode-indicator');
+  const prefix = $('cmd-prefix');
+  if (val.startsWith('>')) {
+    cmdMode = 'command';
+    indicator.innerHTML = '<span class="mode-badge command">⚡ Command</span>';
+    prefix.textContent = '>';
+  } else if (val.startsWith('@')) {
+    cmdMode = 'agent';
+    indicator.innerHTML = '<span class="mode-badge agent">🤖 Agent</span>';
+    prefix.textContent = '@';
+  } else if (val.startsWith('/')) {
+    cmdMode = 'system';
+    indicator.innerHTML = '<span class="mode-badge system">⚙️ System</span>';
+    prefix.textContent = '/';
+  } else {
+    cmdMode = 'search';
+    indicator.innerHTML = '<span class="mode-badge search">🔍 Search</span>';
+    prefix.textContent = '→';
+  }
+}
 
-  let items = CMD_ITEMS;
-  if (query.startsWith('>')) {
-    const sub = query.slice(1).trim();
-    items = CMD_ITEMS.filter(i => i.badge.startsWith('>') || i.title.toLowerCase().includes(sub) || i.sub.toLowerCase().includes(sub));
-  } else if (query.startsWith('@')) {
-    const sub = query.slice(1).trim();
-    items = CMD_ITEMS.filter(i => i.badge === '@' || (sub && i.title.toLowerCase().includes(sub)));
-  } else if (query.startsWith('/')) {
-    const sub = query.slice(1).trim();
-    items = CMD_ITEMS.filter(i => i.badge.startsWith('/') || (sub && i.title.toLowerCase().includes(sub)));
-  } else if (query.startsWith('!')) {
-    items = CMD_ITEMS.filter(i => i.badge === '!');
-  } else if (query) {
-    items = CMD_ITEMS.filter(i => i.title.toLowerCase().includes(query) || i.sub.toLowerCase().includes(query) || i.icon.includes(query));
+function renderCommandResults(val) {
+  const container = $('command-results');
+  const preview = $('command-preview');
+  if (!container) return;
+
+  let results = [];
+  const q = val.toLowerCase().replace(/^[>@/]\s*/, '');
+
+  if (cmdMode === 'search' || !q) {
+    // Search across pages, agents, vault notes
+    if (q) {
+      // Pages
+      Object.entries(PAGE_TITLES).forEach(([k, v]) => {
+        if (v.toLowerCase().includes(q)) {
+          results.push({ icon: '📄', title: v, desc: `Go to ${v} page`, action: () => nav(k) });
+        }
+      });
+      // Agents
+      AGENTS.forEach(a => {
+        if (a.name.toLowerCase().includes(q) || a.role.toLowerCase().includes(q)) {
+          results.push({ icon: a.emoji, title: a.name, desc: `${a.role} · ${a.status}`, action: () => { nav('talk'); setTimeout(() => selectDM(a.id), 200); } });
+        }
+      });
+      // Vault notes
+      VAULT_NOTES.forEach(n => {
+        if (n.title.toLowerCase().includes(q) || n.summary.toLowerCase().includes(q)) {
+          results.push({ icon: '📚', title: n.title, desc: n.summary.substring(0, 80) + '…', action: () => { nav('mind'); setMindMode('cards'); } });
+        }
+      });
+    } else {
+      // Default suggestions
+      results = [
+        { icon: '🏠', title: 'Feed', desc: 'Activity stream', action: () => nav('feed') },
+        { icon: '❓', title: 'Queue', desc: 'Pending decisions', action: () => nav('queue') },
+        { icon: '💬', title: 'Talk', desc: 'Agent comms', action: () => nav('talk') },
+        { icon: '🧠', title: 'Mind', desc: 'Knowledge vault', action: () => nav('mind') },
+        { icon: '⚡', title: 'Pulse', desc: 'System health', action: () => nav('pulse') },
+      ];
+    }
+  } else if (cmdMode === 'command') {
+    const commands = [
+      { icon: '🔄', title: 'restart gateway', desc: 'Restart the gateway service' },
+      { icon: '📚', title: 'reindex vault', desc: 'Force vault reindexing' },
+      { icon: '🗑️', title: 'clear queue', desc: 'Clear all pending questions' },
+      { icon: '🩺', title: 'health check', desc: 'Run system health check' },
+      { icon: '📊', title: 'show stats', desc: 'Show system statistics' },
+      { icon: '🤖', title: 'dispatch', desc: 'Dispatch task to agent' },
+    ];
+    results = commands.filter(c => !q || c.title.includes(q));
+    results.forEach(r => r.action = () => { toast(`⚡ ${r.title}`, 'success'); addXP(5); });
+  } else if (cmdMode === 'agent') {
+    results = AGENTS.filter(a => !q || a.name.toLowerCase().includes(q) || a.id.includes(q))
+      .map(a => ({
+        icon: a.emoji,
+        title: a.name,
+        desc: `${a.role} · ${a.status === 'active' ? '🟢 active' : '⚪ idle'}`,
+        action: () => { nav('talk'); setTimeout(() => selectDM(a.id), 200); },
+      }));
+  } else if (cmdMode === 'system') {
+    results = SLASH_COMMANDS.filter(c => !q || c.cmd.includes(q) || c.desc.toLowerCase().includes(q))
+      .map(c => ({
+        icon: '⌨️',
+        title: c.cmd,
+        desc: c.desc,
+        action: () => toast(`${c.cmd} — ${c.usage}`, 'info', 4000),
+      }));
   }
 
-  S.cmdSelected = 0;
-  res.innerHTML = items.slice(0,8).map((item, i) => `
-    <div class="command-result ${i===0?'selected':''}" onclick="cmdExec(${CMD_ITEMS.indexOf(item)})">
-      <div class="command-result-icon">${item.icon}</div>
-      <div class="command-result-body">
-        <div class="command-result-title">${esc(item.title)}</div>
-        <div class="command-result-sub">${esc(item.sub)}</div>
+  cmdSelectedIdx = 0;
+  container.innerHTML = results.slice(0, 10).map((r, i) => `
+    <div class="cmd-result-item${i === 0 ? ' selected' : ''}" onclick="cmdResults[${i}]?.action?.()" data-idx="${i}">
+      <span class="cmd-result-icon">${r.icon}</span>
+      <div>
+        <div class="cmd-result-title">${r.title}</div>
+        <div class="cmd-result-desc">${r.desc}</div>
       </div>
-      <div class="command-result-badge">${esc(item.badge)}</div>
-    </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">No results</div>';
-}
-
-function commandKey(e) {
-  const items = $$('#command-results .command-result');
-  if (e.key === 'ArrowDown') { e.preventDefault(); S.cmdSelected = Math.min(S.cmdSelected+1, items.length-1); cmdHighlight(items); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); S.cmdSelected = Math.max(S.cmdSelected-1, 0); cmdHighlight(items); }
-  else if (e.key === 'Enter') { e.preventDefault(); if (items[S.cmdSelected]) items[S.cmdSelected].click(); }
-  else if (e.key === 'Escape') closeCommand();
-}
-
-function cmdHighlight(items) {
-  items.forEach((el,i) => el.classList.toggle('selected', i===S.cmdSelected));
-  items[S.cmdSelected]?.scrollIntoView({block:'nearest'});
-}
-
-function cmdExec(idx) {
-  const item = CMD_ITEMS[idx];
-  if (!item) return;
-  S.cmdHistory.unshift(item.title);
-  if (S.cmdHistory.length > 10) S.cmdHistory.pop();
-  item.action();
-  addXP(5, `command: ${item.title}`);
-}
-
-function rCommand() {
-  const inp = $('#command-page-input');
-  if (inp) { inp.value = ''; commandPageSearch(''); }
-  renderCommandHistory();
-}
-
-function commandPageSearch(q) {
-  const res = $('#command-page-results'); if (!res) return;
-  if (!q) { res.innerHTML = renderCommandGroups(); return; }
-  const query = q.toLowerCase();
-  const items = CMD_ITEMS.filter(i => i.title.toLowerCase().includes(query) || i.sub.toLowerCase().includes(query));
-  res.innerHTML = items.map((item, i) => `
-    <div class="command-result" onclick="cmdExec(${CMD_ITEMS.indexOf(item)});$('#command-page-input').value=''">
-      <div class="command-result-icon">${item.icon}</div>
-      <div class="command-result-body">
-        <div class="command-result-title">${esc(item.title)}</div>
-        <div class="command-result-sub">${esc(item.sub)}</div>
-      </div>
-      <div class="command-result-badge">${esc(item.badge)}</div>
-    </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:12px">No results</div>';
-}
-
-function renderCommandGroups() {
-  const groups = [
-    {label:'Navigation', filter: i => i.badge === 'Nav'},
-    {label:'Actions', filter: i => i.badge === '>' || i.badge === '!'},
-    {label:'Agents', filter: i => i.badge === '@'},
-  ];
-  return groups.map(g => {
-    const items = CMD_ITEMS.filter(g.filter);
-    if (!items.length) return '';
-    return `<div class="command-section-label">${g.label}</div>` +
-      items.map(item => `
-        <div class="command-result" onclick="cmdExec(${CMD_ITEMS.indexOf(item)})">
-          <div class="command-result-icon">${item.icon}</div>
-          <div class="command-result-body">
-            <div class="command-result-title">${esc(item.title)}</div>
-            <div class="command-result-sub">${esc(item.sub)}</div>
-          </div>
-          <div class="command-result-badge">${esc(item.badge)}</div>
-        </div>`).join('');
-  }).join('');
-}
-
-function renderCommandHistory() {
-  const h = $('#command-history'); if (!h) return;
-  h.innerHTML = S.cmdHistory.map(c => `
-    <div class="command-history-item" onclick="$('#command-page-input').value='${esc(c)}';commandPageSearch('${esc(c)}')">
-      <span>🕐</span><span>${esc(c)}</span>
-    </div>`).join('');
-}
-
-// ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_STATE = {
-  autonomy: 72, verbosity: 55, creativity: 68, costAlert: true, darkMode: true, notifications: true, autoResolve: true,
-};
-
-function rConfig() {
-  const c = $('#config-inner'); if (!c) return;
-  c.innerHTML = `
-    <h2 style="font-size:18px;font-weight:800;margin-bottom:20px">Configuration</h2>
-
-    <div class="config-section">
-      <div class="config-section-title">Agent Behavior</div>
-      ${renderSlider('autonomy','Autonomy','How much agents act without asking',0,100,'%')}
-      ${renderSlider('verbosity','Verbosity','How much agents explain their actions',0,100,'%')}
-      ${renderSlider('creativity','Creativity','Temperature / risk-taking in responses',0,100,'%')}
     </div>
+  `).join('');
 
-    <div class="config-section">
-      <div class="config-section-title">System</div>
-      ${renderToggle('costAlert','Cost Alerts','Notify when daily budget exceeds 80%')}
-      ${renderToggle('darkMode','Dark Mode','Catppuccin Mocha theme')}
-      ${renderToggle('notifications','Notifications','Toast + badge notifications')}
-      ${renderToggle('autoResolve','Auto-resolve Queue','Auto-answer queue items when timer expires')}
-    </div>
+  // Store results for click handler
+  window.cmdResults = results;
 
-    <div class="config-section">
-      <div class="config-section-title">Dispatch Rules</div>
-      <div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Rules that control how Right Hand routes tasks</div>
-      ${[
-        {label:'Max concurrent agents',value:'3',icon:'🔢'},
-        {label:'Default priority',value:'P2',icon:'🎯'},
-        {label:'Token budget/task',value:'15,000',icon:'💰'},
-        {label:'Retry on failure',value:'3x',icon:'🔄'},
-      ].map(r=>`<div class="config-row">
-        <div class="config-label"><div class="config-label-name">${r.icon} ${r.label}</div></div>
-        <div style="font-size:12px;color:var(--text-2);background:var(--bg-overlay);padding:4px 10px;border-radius:var(--r-sm);cursor:pointer" onclick="toast('⚙️','Edit dispatch rules')">${r.value}</div>
-      </div>`).join('')}
-    </div>
-
-    <div class="config-section">
-      <div class="config-section-title">Installed Skills</div>
-      ${[
-        {name:'agent-factory',     icon:'🏭', ver:'v2.1.0'},
-        {name:'context-evolution', icon:'🧬', ver:'v1.3.2'},
-        {name:'discord-rich-output',icon:'💬',ver:'v1.0.5'},
-        {name:'feedback-loop',     icon:'🔄', ver:'v0.9.1'},
-        {name:'prompt-compiler',   icon:'⚡', ver:'v1.2.0'},
-        {name:'pr-review',         icon:'🔍', ver:'v1.1.3'},
-      ].map(s=>`<div class="skill-item">
-        <div class="skill-icon">${s.icon}</div>
-        <div class="skill-info"><div class="skill-name">${s.name}</div><div class="skill-ver">${s.ver}</div></div>
-        <button class="chip" style="font-size:10px;padding:2px 8px" onclick="toast('📦','Updated ${s.name}')">Update</button>
-      </div>`).join('')}
-      <button class="btn-primary" style="margin-top:12px;width:100%" onclick="toast('🔍','Opening ClawHub…')">+ Browse ClawHub</button>
-    </div>`;
-}
-
-function renderSlider(key, label, desc, min, max, unit) {
-  const val = CONFIG_STATE[key];
-  return `<div class="config-row">
-    <div class="config-label">
-      <div class="config-label-name">${label}</div>
-      <div class="config-label-desc">${desc}</div>
-    </div>
-    <input type="range" class="config-slider" min="${min}" max="${max}" value="${val}" oninput="configSlider('${key}',this.value,this.nextElementSibling)"/>
-    <div class="config-slider-val">${val}${unit}</div>
-  </div>`;
-}
-
-function configSlider(key, val, display) {
-  CONFIG_STATE[key] = +val;
-  if (display) display.textContent = val + (key==='autonomy'||key==='verbosity'||key==='creativity' ? '%' : '');
-}
-
-function renderToggle(key, label, desc) {
-  const on = CONFIG_STATE[key];
-  return `<div class="config-row">
-    <div class="config-label">
-      <div class="config-label-name">${label}</div>
-      <div class="config-label-desc">${desc}</div>
-    </div>
-    <div class="config-toggle ${on?'on':''}" id="tog-${key}" onclick="configToggle('${key}')"></div>
-  </div>`;
-}
-
-function configToggle(key) {
-  CONFIG_STATE[key] = !CONFIG_STATE[key];
-  const el = $(`#tog-${key}`); if (el) el.classList.toggle('on', CONFIG_STATE[key]);
-  toast(CONFIG_STATE[key]?'✅':'❌', key + ' ' + (CONFIG_STATE[key]?'enabled':'disabled'));
-}
-
-// ── SIMULATION ────────────────────────────────────────────────────────────────
-const QUEUE_TEMPLATES = [
-  {type:'binary',   question:'Should I deploy this to production?', context:'All tests pass. No breaking changes detected. Staging looks clean.', priority:'urgent', agent:'coder'},
-  {type:'choice',   question:'Which approach for the streaming UI?', context:'Three options available. Each has tradeoffs.',
-   options:['WebSocket (real-time)','Server-Sent Events (simpler)','Polling (most compatible)'], priority:'normal', agent:'coder'},
-  {type:'binary',   question:'Found a related paper. Should I add it to vault?', context:'Paper: "Multi-Agent Coordination Patterns in LLMs" — 2025, 12 pages.', priority:'optional', agent:'researcher'},
-  {type:'freetext', question:'How should I prioritize the remaining tasks?', context:'3 P1s and 5 P2s in queue. Estimated tokens: 45K. Daily budget: 60K remaining.', priority:'normal', agent:'righthand'},
-  {type:'rating',   question:'Rate the quality of this research output (1-5)', context:'Researcher completed deep-dive on Cursor UX. 8 pages, 14 insights, 6 recommendations.',
-   options:['1','2','3','4','5'], priority:'optional', agent:'researcher'},
-  {type:'approval', question:'Ready to commit these prompt template changes?', context:'12 templates updated. Quality scores improved. Staging review complete.',
-   options:null, priority:'normal', agent:'prompt'},
-];
-
-function spawnAgent(id, task) {
-  const a = ga(id); if (!a) return;
-  a.status = 'active'; a.task = task || 'Running task…';
-  updActiveCount();
-  toast(a.emoji, `${a.name} activated`);
-  addNotif(a.emoji, `${a.name}: started "${task}"`);
-  addXP(25, `dispatched ${a.name}`);
-  // Auto-idle after 30-60s
-  setTimeout(() => {
-    a.status = 'idle'; a.task = '';
-    updActiveCount();
-    addNotif('✅', `${a.name}: task complete`);
-    FEED_EVENTS.unshift({id:'sim'+Date.now(), agent:id, type:'task_completed', time:new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}), content:`Completed: ${task}`});
-    if (S.view === 'feed') rFeed();
-    if (S.view === 'pulse') rPulse();
-  }, 30000 + Math.random()*30000);
-}
-
-function simAddQueueCard() {
-  const tmpl = QUEUE_TEMPLATES[Math.floor(Math.random()*QUEUE_TEMPLATES.length)];
-  const newCard = {...tmpl, id:'sq'+Date.now(), ttl: 120+Math.floor(Math.random()*180), elapsed:0, _elapsed:0, _answered:false, _expired:false, _rating:0, _choice:null};
-  if (!S.qCards) S.qCards = [];
-  S.qCards.push(newCard);
-  const badge = $('#queue-badge');
-  if (badge) badge.textContent = (S.qCards||[]).filter(q=>!q._answered&&!q._expired).length;
-  addNotif('❓', `New question: ${newCard.question.substring(0,50)}…`);
-  if (S.view === 'queue') renderQueueCards();
-}
-
-function simAddFeedEvent() {
-  const types = ['task_started','task_completed','file_changed','insight','vault_write'];
-  const type = types[Math.floor(Math.random()*types.length)];
-  const agents = AGENTS.filter(a=>a.status==='active');
-  const agent = agents.length ? agents[Math.floor(Math.random()*agents.length)] : AGENTS[0];
-  const contents = {
-    task_started:  'Starting new analysis task. Estimated completion: 5-10 minutes.',
-    task_completed:'Task completed successfully. Results saved to vault.',
-    file_changed:  'Modified `dispatch-engine.sh` — improved error handling.',
-    insight:       'Interesting pattern detected: correlation between token usage and task complexity.',
-    vault_write:   'New note written to vault. Cross-references updated.',
-  };
-  FEED_EVENTS.unshift({
-    id:'sim'+Date.now(), agent:agent.id, type, time:new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}),
-    content: contents[type]||'Activity logged.'
-  });
-  if (FEED_EVENTS.length > 50) FEED_EVENTS.pop();
-  if (S.view === 'feed') rFeed();
-
-  // Add to stream
-  STREAM_EVENTS.unshift({id:'ss'+Date.now(), level:'info', agent:agent.id, time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}), text:`[SIM] ${type}: ${agent.name}`});
-  if (S.view === 'stream') renderStreamLog();
-}
-
-function simAgentToggle() {
-  const idleAgents = AGENTS.filter(a => a.status === 'idle');
-  const activeAgents = AGENTS.filter(a => a.status === 'active');
-  if (Math.random() < 0.4 && idleAgents.length > 0) {
-    const a = idleAgents[Math.floor(Math.random()*idleAgents.length)];
-    const tasks = ['Analyzing patterns','Cross-referencing vault','Optimizing prompts','Scanning for errors','Running health check'];
-    a.status = 'active'; a.task = tasks[Math.floor(Math.random()*tasks.length)];
-  } else if (activeAgents.length > 2) {
-    const a = activeAgents[Math.floor(Math.random()*activeAgents.length)];
-    if (a.id !== 'righthand' && a.id !== 'researcher') { a.status = 'idle'; a.task = ''; }
+  // Preview — hide for default/page results, show for deep content
+  if (results.length > 0 && q && results[0]) {
+    preview.style.display = '';
+    preview.innerHTML = `<div style="font-weight:600;margin-bottom:6px">${results[0].icon} ${results[0].title}</div><div style="color:var(--text-dim)">${results[0].desc}</div>`;
+  } else {
+    preview.style.display = 'none';
+    preview.innerHTML = '';
   }
-  updActiveCount();
-  if (S.view === 'pulse') rPulse();
-  if (S.view === 'feed') renderFeedTyping();
-  if (S.view === 'talk') rDcMemberList();
 }
 
-// ── KEYBOARD SHORTCUTS ────────────────────────────────────────────────────────
+function handleCommandKey(e) {
+  const items = $$('.cmd-result-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    cmdSelectedIdx = Math.min(cmdSelectedIdx + 1, items.length - 1);
+    items.forEach((it, i) => it.classList.toggle('selected', i === cmdSelectedIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    cmdSelectedIdx = Math.max(cmdSelectedIdx - 1, 0);
+    items.forEach((it, i) => it.classList.toggle('selected', i === cmdSelectedIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (window.cmdResults && window.cmdResults[cmdSelectedIdx]?.action) {
+      window.cmdResults[cmdSelectedIdx].action();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMMAND PALETTE (⌘K overlay)
+// ═══════════════════════════════════════════════════════════
+
+let paletteOpen = false;
+let paletteSelectedIdx = 0;
+
+function openCommandPalette() {
+  paletteOpen = true;
+  $('cmd-palette-overlay').classList.remove('hidden');
+  const input = $('palette-input');
+  input.value = '';
+  input.focus();
+  renderPaletteResults('');
+}
+
+function closeCommandPalette() {
+  paletteOpen = false;
+  $('cmd-palette-overlay').classList.add('hidden');
+}
+
+function closeCmdPaletteIfOutside(e) {
+  if (e.target === $('cmd-palette-overlay')) closeCommandPalette();
+}
+
+function handlePaletteInput(val) {
+  // Update prefix icon
+  const prefix = $('palette-prefix');
+  if (val.startsWith('>')) prefix.textContent = '⚡';
+  else if (val.startsWith('@')) prefix.textContent = '🤖';
+  else if (val.startsWith('/')) prefix.textContent = '⌨️';
+  else prefix.textContent = '🔍';
+
+  renderPaletteResults(val);
+}
+
+function renderPaletteResults(val) {
+  const container = $('palette-results');
+  let results = [];
+  const q = val.toLowerCase().replace(/^[>@/]\s*/, '');
+
+  if (val.startsWith('>')) {
+    // Commands
+    const cmds = [
+      { icon: '🏠', title: 'Go to Feed', sc: '1', action: () => { nav('feed'); closeCommandPalette(); } },
+      { icon: '❓', title: 'Go to Queue', sc: '2', action: () => { nav('queue'); closeCommandPalette(); } },
+      { icon: '💬', title: 'Go to Talk', sc: '3', action: () => { nav('talk'); closeCommandPalette(); } },
+      { icon: '🧠', title: 'Go to Mind', sc: '4', action: () => { nav('mind'); closeCommandPalette(); } },
+      { icon: '⚡', title: 'Go to Pulse', sc: '5', action: () => { nav('pulse'); closeCommandPalette(); } },
+      { icon: '🔄', title: 'Restart Gateway', action: () => { quickAction('restart-gateway'); closeCommandPalette(); } },
+      { icon: '📚', title: 'Reindex Vault', action: () => { quickAction('reindex'); closeCommandPalette(); } },
+      { icon: '🩺', title: 'Health Check', action: () => { quickAction('health-check'); closeCommandPalette(); } },
+    ];
+    results = cmds.filter(c => !q || c.title.toLowerCase().includes(q));
+  } else if (val.startsWith('@')) {
+    results = AGENTS.filter(a => !q || a.name.toLowerCase().includes(q))
+      .map(a => ({
+        icon: a.emoji,
+        title: `Talk to ${a.name}`,
+        desc: `${a.role} · ${a.status}`,
+        action: () => { nav('talk'); setTimeout(() => selectDM(a.id), 200); closeCommandPalette(); },
+      }));
+  } else if (val.startsWith('/')) {
+    results = SLASH_COMMANDS.filter(c => !q || c.cmd.includes(q))
+      .map(c => ({
+        icon: '⌨️', title: c.cmd, desc: c.desc,
+        action: () => { toast(`${c.usage}`, 'info', 4000); closeCommandPalette(); },
+      }));
+  } else {
+    // Default: search everything
+    // Pages
+    Object.entries(PAGE_TITLES).forEach(([k, v]) => {
+      if (!q || v.toLowerCase().includes(q)) {
+        results.push({ icon: '📄', title: v, desc: `Navigate to ${v}`, sc: '', action: () => { nav(k); closeCommandPalette(); } });
+      }
+    });
+    // Agents
+    if (q) {
+      AGENTS.forEach(a => {
+        if (a.name.toLowerCase().includes(q) || a.id.includes(q)) {
+          results.push({ icon: a.emoji, title: a.name, desc: a.role, action: () => { nav('talk'); setTimeout(() => selectDM(a.id), 200); closeCommandPalette(); } });
+        }
+      });
+      // Vault notes
+      VAULT_NOTES.forEach(n => {
+        if (n.title.toLowerCase().includes(q)) {
+          results.push({ icon: '📚', title: n.title, desc: n.type, action: () => { nav('mind'); setMindMode('cards'); closeCommandPalette(); } });
+        }
+      });
+    }
+  }
+
+  paletteSelectedIdx = 0;
+  window.paletteResults = results;
+
+  container.innerHTML = results.slice(0, 12).map((r, i) => `
+    <div class="palette-item${i === 0 ? ' selected' : ''}" onclick="window.paletteResults[${i}]?.action?.()" data-idx="${i}">
+      <span class="palette-item-icon">${r.icon}</span>
+      <div class="palette-item-text">
+        <div class="palette-item-title">${r.title}</div>
+        ${r.desc ? `<div class="palette-item-desc">${r.desc}</div>` : ''}
+      </div>
+      ${r.sc ? `<span class="palette-item-shortcut">${r.sc}</span>` : ''}
+    </div>
+  `).join('');
+}
+
+function handlePaletteKey(e) {
+  const items = $$('.palette-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    paletteSelectedIdx = Math.min(paletteSelectedIdx + 1, items.length - 1);
+    items.forEach((it, i) => it.classList.toggle('selected', i === paletteSelectedIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    paletteSelectedIdx = Math.max(paletteSelectedIdx - 1, 0);
+    items.forEach((it, i) => it.classList.toggle('selected', i === paletteSelectedIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (window.paletteResults && window.paletteResults[paletteSelectedIdx]?.action) {
+      window.paletteResults[paletteSelectedIdx].action();
+    }
+  } else if (e.key === 'Escape') {
+    closeCommandPalette();
+  }
+}
+
+// ⌘K keyboard shortcut
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault();
-    const o = $('#command-overlay');
-    if (o.classList.contains('hidden')) openCommand();
-    else closeCommand();
+    if (paletteOpen) closeCommandPalette();
+    else openCommandPalette();
   }
-  if (e.key === 'Escape') {
-    closeCommand();
-    $('#notif-panel')?.classList.add('hidden');
-    $('#capture-modal')?.classList.add('hidden');
-    $('#note-modal')?.classList.add('hidden');
-  }
-  // Board: 'n' key for new card
-  if (e.key === 'n' && S.view === 'board' && !e.target.matches('input,textarea')) {
-    boardAddCard('inbox');
-  }
+  if (e.key === 'Escape' && paletteOpen) closeCommandPalette();
 });
 
-// Close panels on outside click
-document.addEventListener('click', e => {
-  const notifPanel = $('#notif-panel');
-  const notifBtn = $('#notif-btn');
-  if (notifPanel && !notifPanel.contains(e.target) && !notifBtn?.contains(e.target)) {
-    notifPanel.classList.add('hidden');
-  }
-});
+// ═══════════════════════════════════════════════════════════
+// CONFIG PAGE
+// ═══════════════════════════════════════════════════════════
 
-// ── MAIN SIMULATION LOOP ──────────────────────────────────────────────────────
-function startSim() {
-  // Queue card timer tick every second
-  setInterval(qTick, 1000);
-
-  // Task timer countdown
-  setInterval(() => {
-    if (S.timerSec > 0) S.timerSec--;
-    else S.timerSec = 300 + Math.floor(Math.random()*300);
-  }, 1000);
-
-  // Feed events every 15-25s
-  setInterval(() => simAddFeedEvent(), 15000 + Math.random()*10000);
-
-  // Queue questions every 25-35s
-  setInterval(() => simAddQueueCard(), 25000 + Math.random()*10000);
-
-  // Agent status changes every 12-20s
-  setInterval(() => simAgentToggle(), 12000 + Math.random()*8000);
-
-  // Stream events (add new lines every few seconds when on stream page)
-  setInterval(() => {
-    if (S.view === 'stream') {
-      const a = AGENTS[Math.floor(Math.random()*AGENTS.length)];
-      const levels = ['debug','debug','info','info','info','warn'];
-      const level = levels[Math.floor(Math.random()*levels.length)];
-      const msgs = ['Heartbeat OK','Vault sync: 0 changes','Token ledger updated','Task queue depth: 2','Semaphore: 1/3 slots used'];
-      STREAM_EVENTS.unshift({
-        id:'rt'+Date.now(), level, agent:a.id,
-        time: new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-        text: msgs[Math.floor(Math.random()*msgs.length)]
-      });
-      if (STREAM_EVENTS.length > 100) STREAM_EVENTS.pop();
-      if (streamAutoScroll) renderStreamLog();
-    }
-  }, 3000);
-
-  // Badge update
-  setInterval(() => {
-    const badge = $('#queue-badge');
-    if (badge && S.qCards) {
-      const cnt = S.qCards.filter(q=>!q._answered&&!q._expired).length;
-      badge.textContent = cnt;
-      badge.style.display = cnt > 0 ? '' : 'none';
-    }
-  }, 2000);
+function renderConfig() {
+  renderAgentConfig();
+  renderConfigCrons();
 }
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
-function init() {
-  // Initial queue state
-  S.qCards = QUEUE_QUESTIONS.map(q => ({...q, _elapsed: q.elapsed, _answered: false, _expired: false, _rating: 0, _choice: null}));
+function renderAgentConfig() {
+  const container = $('agent-config-cards');
+  if (!container) return;
+  container.innerHTML = '';
 
-  // Growth display
-  updGrowth();
-  updActiveCount();
+  AGENTS.forEach(agent => {
+    const card = document.createElement('div');
+    card.className = 'agent-config-card';
+    const autonomy = Math.floor(Math.random() * 5) + 4;
+    const verbosity = Math.floor(Math.random() * 5) + 3;
+    const creativity = Math.floor(Math.random() * 5) + 3;
+    const isOn = agent.status === 'active' || Math.random() > 0.3;
 
-  // Initial notifs
-  addNotif('🔴', 'session-watchdog has been failing for 2h');
-  addNotif('❓', '8 queue items awaiting your decision');
-  addNotif('✅', 'cross-channel-backlinker deployed successfully');
+    card.innerHTML = `
+      <div class="agent-config-header">
+        <span style="font-size:20px">${agent.emoji}</span>
+        <span class="config-agent-name" style="color:${agent.color}">${agent.name}</span>
+        <span style="font-size:11px;color:var(--text-muted)">${agent.role}</span>
+        <label class="config-toggle">
+          <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleAgent('${agent.id}', this.checked)">
+          <div class="toggle-track"><div class="toggle-thumb"></div></div>
+        </label>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Autonomy</span>
+        <input type="range" class="slider-input" min="1" max="10" value="${autonomy}" oninput="this.nextElementSibling.textContent=this.value">
+        <span class="slider-value">${autonomy}</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Verbosity</span>
+        <input type="range" class="slider-input" min="1" max="10" value="${verbosity}" oninput="this.nextElementSibling.textContent=this.value">
+        <span class="slider-value">${verbosity}</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Creativity</span>
+        <input type="range" class="slider-input" min="1" max="10" value="${creativity}" oninput="this.nextElementSibling.textContent=this.value">
+        <span class="slider-value">${creativity}</span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
 
-  // Render initial view
-  rFeed();
+function toggleAgent(agentId, enabled) {
+  const agent = ga(agentId);
+  if (agent) {
+    agent.status = enabled ? 'idle' : 'offline';
+    toast(`${agent.emoji} ${agent.name} ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'success' : 'info');
+  }
+}
+
+function setTheme(theme) {
+  $$('.theme-option').forEach(el => el.classList.remove('active'));
+  const selected = [...$$('.theme-option')].find(el => el.querySelector(`.theme-preview.${theme}`));
+  if (selected) selected.classList.add('active');
+
+  // Apply theme vars (simplified — only Mocha fully implemented)
+  if (theme === 'mocha') {
+    document.documentElement.style.setProperty('--bg-base', '#1e1e2e');
+    document.documentElement.style.setProperty('--bg-surface', '#252536');
+    document.documentElement.style.setProperty('--bg-overlay', '#2a2a3c');
+    document.documentElement.style.setProperty('--text', '#cdd6f4');
+  } else if (theme === 'latte') {
+    document.documentElement.style.setProperty('--bg-base', '#eff1f5');
+    document.documentElement.style.setProperty('--bg-surface', '#e6e9ef');
+    document.documentElement.style.setProperty('--bg-overlay', '#dce0e8');
+    document.documentElement.style.setProperty('--text', '#4c4f69');
+  } else if (theme === 'macchiato') {
+    document.documentElement.style.setProperty('--bg-base', '#24273a');
+    document.documentElement.style.setProperty('--bg-surface', '#2a2d3e');
+    document.documentElement.style.setProperty('--bg-overlay', '#303347');
+    document.documentElement.style.setProperty('--text', '#cad3f5');
+  }
+  toast(`🎨 Theme: ${theme}`, 'info');
+}
+
+function renderConfigCrons() {
+  const container = $('config-crons');
+  if (!container) return;
+  container.innerHTML = CRONS.map(c => `
+    <div class="cron-row">
+      <span class="status-dot ${c.ok ? 'status-ok' : 'status-fail'}"></span>
+      <span class="cron-name">${c.n}</span>
+      <span class="cron-schedule">${c.s}</span>
+      <label class="config-toggle" style="margin-left:auto">
+        <input type="checkbox" ${c.ok ? 'checked' : ''} onchange="toggleCron('${c.n}', this.checked)">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </label>
+    </div>
+  `).join('');
+}
+
+function toggleCron(name, enabled) {
+  const cron = CRONS.find(c => c.n === name);
+  if (cron) {
+    cron.ok = enabled;
+    toast(`${enabled ? '✅' : '⛔'} ${name} ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'success' : 'info');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ═══════════════════════════════════════════════════════════
+
+let simTimers = {};
+
+function startSimulation() {
+  // Agent status changes every 8s
+  simTimers.agents = setInterval(() => {
+    AGENTS.forEach(a => {
+      if (Math.random() < 0.15) {
+        if (a.status === 'active') {
+          a.status = 'idle';
+          a.task = '';
+        } else if (a.status === 'idle') {
+          a.status = 'active';
+          const tasks = ['Processing batch...', 'Scanning vault...', 'Running analysis...', 'Reviewing output...', 'Indexing documents...'];
+          a.task = tasks[Math.floor(Math.random() * tasks.length)];
+        }
+      }
+    });
+    updateActiveAgents();
+  }, 8000);
+
+  // Feed update every 15s
+  simTimers.feed = setInterval(() => {
+    const agent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
+    const types = ['task_started', 'task_completed', 'insight', 'vault_write', 'file_changed'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const contents = {
+      task_started:   ['Initiated new scan cycle.', 'Starting background processing...', 'New task dispatched to executor.'],
+      task_completed: ['Task finished successfully.', 'All checks passed ✅', 'Report generated and saved.'],
+      insight:        ['Interesting pattern discovered in recent data.', 'Cross-reference reveals new connection.', 'Confidence score updated.'],
+      vault_write:    ['New document saved to vault.', 'Updated existing note with latest findings.', 'Cross-links refreshed.'],
+      file_changed:   ['Configuration updated.', 'Script modified and deployed.', 'Template file regenerated.'],
+    };
+    const contentList = contents[type] || contents.task_completed;
+
+    prependFeedCard({
+      id: 'sim_' + Date.now(),
+      agent: agent.id,
+      type,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      content: contentList[Math.floor(Math.random() * contentList.length)],
+    });
+  }, 15000);
+
+  // Queue cards every 25s
+  simTimers.queue = setInterval(() => {
+    if (typeof generateQueueCard === 'function') generateQueueCard();
+  }, 25000);
+
+  // Stream events every 10s
+  simTimers.stream = setInterval(() => {
+    const agent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
+    const levels = ['debug', 'info', 'info', 'info', 'warn'];
+    const level = levels[Math.floor(Math.random() * levels.length)];
+    const texts = {
+      debug: ['Heartbeat OK', 'Vault sync complete', 'Token ledger updated', 'Memory compactor idle'],
+      info:  ['Task checkpoint reached', 'Dispatch acknowledged', 'Agent registered', 'Scan cycle complete'],
+      warn:  ['Latency spike detected', 'Approaching token limit', 'Retry queued'],
+    };
+    const textList = texts[level] || texts.info;
+
+    const event = {
+      id: 'ss_' + Date.now(),
+      level,
+      agent: agent.id,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      text: textList[Math.floor(Math.random() * textList.length)],
+    };
+
+    if (typeof addStreamEvent === 'function') addStreamEvent(event);
+  }, 10000);
+}
+
+function updateActiveAgents() {
+  const active = AGENTS.filter(a => a.status === 'active');
+  const count = active.length;
+  const text = `${count} agent${count !== 1 ? 's' : ''} active`;
+  const el = $('active-agents-text');
+  if (el) el.textContent = text;
+  const sideCount = $('sidebar-active-count');
+  if (sideCount) sideCount.textContent = `${count} active`;
+  const metricEl = $('metric-agents');
+  if (metricEl) metricEl.textContent = count;
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// MOBILE TALK — Channel Drawer
+// ═══════════════════════════════════════════════════════════
+
+function isMobile() { return window.innerWidth <= 767; }
+
+function initMobileTalk() {
+  if (isMobile()) {
+    const chName = document.getElementById('current-channel-name');
+    if (chName) chName.classList.add('mobile-tap');
+  }
+  window.addEventListener('resize', () => {
+    const chName = document.getElementById('current-channel-name');
+    if (!chName) return;
+    if (isMobile()) chName.classList.add('mobile-tap');
+    else chName.classList.remove('mobile-tap');
+  });
+}
+
+function openMobileChannelDrawer() {
+  if (!isMobile()) return;
+  closeMobileDrawer();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'mobile-drawer-overlay';
+  overlay.onclick = closeMobileDrawer;
+  document.body.appendChild(overlay);
+
+  const drawer = document.createElement('div');
+  drawer.className = 'channel-sidebar mobile-drawer';
+  drawer.id = 'mobile-channel-drawer';
+
+  // Server name header
+  const header = document.createElement('div');
+  header.className = 'channel-server-name';
+  header.innerHTML = '<span>Agent OS</span>';
+  drawer.appendChild(header);
+
+  // Mode tabs
+  const tabs = document.createElement('div');
+  tabs.style.cssText = 'display:flex;gap:4px;padding:8px 12px;';
+  tabs.innerHTML = `
+    <button style="flex:1;padding:6px;border:none;border-radius:4px;font-size:12px;cursor:pointer;
+      background:${talkMode==='channels'?'var(--accent)':'var(--bg-raised)'};
+      color:${talkMode==='channels'?'var(--bg)':'var(--text-dim)'};"
+      onclick="talkMode='channels';closeMobileDrawer();openMobileChannelDrawer()">Channels</button>
+    <button style="flex:1;padding:6px;border:none;border-radius:4px;font-size:12px;cursor:pointer;
+      background:${talkMode==='dms'?'var(--accent)':'var(--bg-raised)'};
+      color:${talkMode==='dms'?'var(--bg)':'var(--text-dim)'};"
+      onclick="talkMode='dms';closeMobileDrawer();openMobileChannelDrawer()">DMs</button>`;
+  drawer.appendChild(tabs);
+
+  // Channel/DM list
+  const list = document.createElement('div');
+  list.id = 'mobile-channel-list';
+  list.style.cssText = 'flex:1;overflow-y:auto;padding:4px 0;';
+  drawer.appendChild(list);
+
+  document.body.appendChild(drawer);
+  renderMobileDrawerChannels();
+}
+
+function renderMobileDrawerChannels() {
+  const list = document.getElementById('mobile-channel-list');
+  if (!list) return;
+
+  if (talkMode === 'channels') {
+    const categories = {};
+    DC_CHANNELS.text.forEach(ch => {
+      const cat = ch.category || 'general';
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(ch);
+    });
+
+    let html = '';
+    for (const [cat, channels] of Object.entries(categories)) {
+      html += `<div style="padding:8px 12px 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">${cat}</div>`;
+      channels.forEach(ch => {
+        const active = ch.id === currentChannel ? 'background:var(--bg-raised);color:var(--accent)' : '';
+        const unread = ch.unread ? `<span style="background:var(--accent);color:var(--bg);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:auto">${ch.unread}</span>` : '';
+        html += `<div onclick="switchChannel('${ch.id}');closeMobileDrawer()" 
+          style="display:flex;align-items:center;gap:8px;padding:8px 16px;cursor:pointer;border-radius:4px;margin:1px 8px;${active}">
+          <span style="color:var(--text-muted);font-size:14px">${ch.type==='voice'?'🔊':ch.type==='forum'?'💬':'#'}</span>
+          <span style="font-size:14px">${ch.id}</span>
+          ${unread}
+        </div>`;
+      });
+    }
+    list.innerHTML = html;
+  } else {
+    // DMs — derive from DM_MESSAGES keys
+    let html = '';
+    const dmAgents = typeof DM_MESSAGES !== 'undefined' ? Object.keys(DM_MESSAGES) : [];
+    dmAgents.forEach(agentId => {
+      const agent = AGENTS.find(a => a.id === agentId) || {};
+      const msgs = DM_MESSAGES[agentId] || [];
+      const lastMsg = msgs.length ? msgs[msgs.length - 1].text : '';
+      const active = currentDM === agentId ? 'background:var(--bg-raised);color:var(--accent)' : '';
+      html += `<div onclick="selectDM('${agentId}');closeMobileDrawer()"
+        style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;border-radius:4px;margin:1px 8px;${active}">
+        <span style="font-size:20px">${agent.emoji||'🤖'}</span>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:14px;font-weight:500">${agent.name||agentId}</div>
+          <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lastMsg.slice(0,60)}</div>
+        </div>
+      </div>`;
+    });
+    if (!dmAgents.length) html = '<div style="padding:20px;text-align:center;color:var(--text-muted)">No DMs yet</div>';
+    list.innerHTML = html;
+  }
+}
+
+function closeMobileDrawer() {
+  document.querySelectorAll('.mobile-drawer-overlay').forEach(el => el.remove());
+  document.getElementById('mobile-channel-drawer')?.remove();
+}
+
+// ═══════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Set initial XP display
+  updateXPDisplay();
+
+  // Initial notifications from existing data
+  addNotification('Red Team v5.1', '3 critical issues found', '🔴');
+  addNotification('Deploy complete', 'cross-channel-backlinker.sh live', '✅');
+  addNotification('Queue pending', `${QUEUE_QUESTIONS.length} questions need answers`, '❓');
+
+  // Render Feed (home page)
+  renderFeed();
+
+  // Render Queue (preload)
+  renderQueue();
+
+  // Init Talk
+  initTalk();
+  initMobileTalk();
+
+  // Init active agents display
+  updateActiveAgents();
 
   // Start simulation
-  startSim();
+  startSimulation();
 
-  // Resize handler for graph
-  window.addEventListener('resize', () => {
-    if (S.view === 'mind' && S.mindView === 'graph') {
-      mindGraphNodes = null;
-      initMindGraph();
-    }
+  // Keyboard shortcuts for nav  
+  document.addEventListener('keydown', e => {
+    if (paletteOpen) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const map = { '1': 'feed', '2': 'queue', '3': 'talk', '4': 'mind', '5': 'pulse', '6': 'board', '7': 'stream', '8': 'command', '9': 'config' };
+    if (map[e.key]) { nav(map[e.key]); }
   });
-
-  console.log('🤖 Agent OS v5 initialized. ⌘K for command palette.');
-}
-
-// Run when DOM ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+});

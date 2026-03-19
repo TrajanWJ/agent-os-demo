@@ -1,601 +1,678 @@
-/* AGENT OS v5 — MIND + PULSE + BOARD + STREAM */
+/* Agent OS v5 — app2.js — Mind + Pulse + Board + Stream */
 'use strict';
 
-// ── MIND ─────────────────────────────────────────────────────────────────────
-let mindGraphNodes = null;
-let mindGraphAnim = null;
+// ═══════════════════════════════════════════════════════════
+// MIND PAGE
+// ═══════════════════════════════════════════════════════════
 
-function setMindView(view, btn) {
-  S.mindView = view;
-  $$('.toggle-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  ['graph','cards','timeline'].forEach(v => {
-    const p = $(`#mind-${v}-view`);
-    if (p) p.classList.toggle('hidden', v !== view);
-  });
-  if (view === 'graph') initMindGraph();
-  else if (view === 'cards') renderMindCards();
-  else if (view === 'timeline') renderMindTimeline();
-}
+let mindMode = 'graph';
+let graphNodes = [];
+let graphEdges = [];
+let graphCanvas = null;
+let graphCtx = null;
+let hoveredNode = null;
+let selectedNode = null;
+let draggingNode = null;
+let graphAnimId = null;
 
 function initMind() {
-  if (S.mindView === 'graph') initMindGraph();
-  else if (S.mindView === 'cards') renderMindCards();
-  else renderMindTimeline();
-}
-
-// ── GRAPH ─────────────────────────────────────────────────────────────────────
-function initMindGraph() {
-  const canvas = $('#mind-canvas'); if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const wrap = canvas.parentElement;
-  canvas.width = wrap.offsetWidth;
-  canvas.height = wrap.offsetHeight;
-  const W = canvas.width, H = canvas.height;
-
-  if (!mindGraphNodes) {
-    mindGraphNodes = GNODES.map(n => ({
-      ...n,
-      x: W/2 + (Math.random()-0.5)*W*0.7,
-      y: H/2 + (Math.random()-0.5)*H*0.7,
-      vx: 0, vy: 0,
-    }));
+  if (mindMode === 'graph') {
+    requestAnimationFrame(() => initGraph());
+  } else if (mindMode === 'cards') {
+    renderVaultCards();
   } else {
-    mindGraphNodes.forEach(n => {
-      n.x = Math.max(60, Math.min(W-60, n.x));
-      n.y = Math.max(60, Math.min(H-60, n.y));
-    });
+    renderTimeline();
   }
+}
 
-  let hoveredNode = null;
-  canvas.onmousemove = e => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const prev = hoveredNode;
-    hoveredNode = mindGraphNodes.find(n => {
-      const r = (n.size||12) + 4;
-      return Math.hypot(n.x-mx, n.y-my) < r;
-    }) || null;
-    if (hoveredNode !== prev) canvas.style.cursor = hoveredNode ? 'pointer' : 'default';
-  };
+function setMindMode(mode) {
+  mindMode = mode;
+  $$('.view-toggle').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
 
-  canvas.onclick = e => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const clicked = mindGraphNodes.find(n => Math.hypot(n.x-mx, n.y-my) < (n.size||12)+6);
-    if (clicked) showGraphNote(clicked);
-  };
+  $('mind-graph').classList.toggle('hidden', mode !== 'graph');
+  $('mind-cards').classList.toggle('hidden', mode !== 'cards');
+  $('mind-timeline').classList.toggle('hidden', mode !== 'timeline');
 
-  if (mindGraphAnim) cancelAnimationFrame(mindGraphAnim);
-  function tick() {
-    // Force-directed
-    mindGraphNodes.forEach(n => { n.vx *= 0.85; n.vy *= 0.85; });
-    // Repulsion
-    for (let i = 0; i < mindGraphNodes.length; i++) {
-      for (let j = i+1; j < mindGraphNodes.length; j++) {
-        const a = mindGraphNodes[i], b = mindGraphNodes[j];
-        const dx = a.x-b.x, dy = a.y-b.y;
-        const dist = Math.max(Math.hypot(dx,dy), 1);
-        const force = 1800/(dist*dist);
-        const fx = (dx/dist)*force, fy = (dy/dist)*force;
-        a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy;
-      }
+  if (mode !== 'graph') $('mind-graph').classList.remove('active');
+  if (mode !== 'cards') $('mind-cards').classList.remove('active');
+  if (mode !== 'timeline') $('mind-timeline').classList.remove('active');
+
+  const target = mode === 'graph' ? 'mind-graph' : mode === 'cards' ? 'mind-cards' : 'mind-timeline';
+  $(target).classList.add('active');
+  $(target).classList.remove('hidden');
+
+  if (mode === 'graph') initGraph();
+  else if (mode === 'cards') renderVaultCards();
+  else renderTimeline();
+}
+
+// ── Force-Directed Graph ──────────────────────────────────
+function initGraph() {
+  graphCanvas = $('graph-canvas');
+  if (!graphCanvas) return;
+  graphCtx = graphCanvas.getContext('2d');
+
+  const parent = graphCanvas.parentElement;
+  graphCanvas.width = parent.clientWidth || 800;
+  graphCanvas.height = parent.clientHeight || 500;
+
+  const W = graphCanvas.width;
+  const H = graphCanvas.height;
+
+  graphNodes = GNODES.map(n => ({
+    ...n,
+    x: W / 2 + (Math.random() - 0.5) * 200,
+    y: H / 2 + (Math.random() - 0.5) * 150,
+    vx: 0, vy: 0,
+    r: n.size || 12,
+  }));
+  graphEdges = GEDGES.map(([a, b]) => ({ source: a, target: b }));
+
+  graphCanvas.onmousemove = graphMouseMove;
+  graphCanvas.onmousedown = graphMouseDown;
+  graphCanvas.onmouseup = graphMouseUp;
+  graphCanvas.onclick = graphClick;
+
+  if (graphAnimId) cancelAnimationFrame(graphAnimId);
+  runGraphSim();
+}
+
+function runGraphSim() {
+  if (mindMode !== 'graph' || !graphCtx) return;
+
+  const W = graphCanvas.width;
+  const H = graphCanvas.height;
+  const k = Math.sqrt((W * H) / Math.max(graphNodes.length, 1));
+
+  // Reset forces
+  graphNodes.forEach(n => { n.fx = 0; n.fy = 0; });
+
+  // Repulsion between all nodes
+  for (let i = 0; i < graphNodes.length; i++) {
+    for (let j = i + 1; j < graphNodes.length; j++) {
+      const a = graphNodes[i], b = graphNodes[j];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const force = (k * k) / d * 0.3;
+      const fx = (dx / d) * force;
+      const fy = (dy / d) * force;
+      a.fx -= fx; a.fy -= fy;
+      b.fx += fx; b.fy += fy;
     }
-    // Attraction along edges
-    GEDGES.forEach(([ai,bi]) => {
-      const a = mindGraphNodes[ai], b = mindGraphNodes[bi];
-      if (!a||!b) return;
-      const dx = b.x-a.x, dy = b.y-a.y;
-      const dist = Math.max(Math.hypot(dx,dy), 1);
-      const target = 120;
-      const force = (dist-target)*0.03;
-      const fx = (dx/dist)*force, fy = (dy/dist)*force;
-      a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy;
-    });
-    // Center gravity
-    mindGraphNodes.forEach(n => {
-      n.vx += (W/2 - n.x)*0.002;
-      n.vy += (H/2 - n.y)*0.002;
-      n.x += n.vx; n.y += n.vy;
-      n.x = Math.max(60, Math.min(W-60, n.x));
-      n.y = Math.max(60, Math.min(H-60, n.y));
-    });
+  }
 
-    // Draw
-    ctx.clearRect(0,0,W,H);
-    // Edges
-    ctx.save();
-    GEDGES.forEach(([ai,bi]) => {
-      const a = mindGraphNodes[ai], b = mindGraphNodes[bi];
-      if (!a||!b) return;
-      const isHighlighted = hoveredNode && (hoveredNode.id===ai||hoveredNode.id===bi);
-      ctx.globalAlpha = isHighlighted ? 0.6 : 0.15;
-      ctx.strokeStyle = isHighlighted ? '#cba6f7' : '#6c7086';
-      ctx.lineWidth = isHighlighted ? 1.5 : 0.8;
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    });
-    ctx.restore();
+  // Attraction along edges
+  graphEdges.forEach(({ source, target }) => {
+    const a = graphNodes[source], b = graphNodes[target];
+    if (!a || !b) return;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const force = (d * d) / k * 0.08;
+    const fx = (dx / d) * force;
+    const fy = (dy / d) * force;
+    a.fx += fx; a.fy += fy;
+    b.fx -= fx; b.fy -= fy;
+  });
 
-    // Nodes
-    mindGraphNodes.forEach(n => {
-      const r = n.size || 12;
-      const isHov = hoveredNode && hoveredNode.id===n.id;
-      ctx.save();
-      if (n.glow || isHov) {
-        ctx.shadowColor = n.hex; ctx.shadowBlur = isHov ? 20 : 10;
-      }
+  // Center gravity — strong pull to keep nodes clustered
+  graphNodes.forEach(n => {
+    n.fx += (W / 2 - n.x) * 0.12;
+    n.fy += (H / 2 - n.y) * 0.12;
+  });
+
+  // Integrate
+  graphNodes.forEach(n => {
+    if (n === draggingNode) return;
+    n.vx = (n.vx + n.fx) * 0.85;
+    n.vy = (n.vy + n.fy) * 0.85;
+    n.x += n.vx;
+    n.y += n.vy;
+    const pad = 60; // padding for labels
+    n.x = Math.max(pad, Math.min(W - pad, n.x));
+    n.y = Math.max(pad, Math.min(H - pad, n.y));
+  });
+
+  drawGraph();
+  graphAnimId = requestAnimationFrame(runGraphSim);
+}
+
+function drawGraph() {
+  const ctx = graphCtx;
+  const W = graphCanvas.width, H = graphCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#1e1e2e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Edges
+  graphEdges.forEach(({ source, target }) => {
+    const a = graphNodes[source], b = graphNodes[target];
+    if (!a || !b) return;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = 'rgba(99,102,119,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Nodes
+  graphNodes.forEach(n => {
+    const isH = n === hoveredNode;
+    const isS = n === selectedNode;
+    const r = n.r + (isH ? 4 : 0);
+
+    if (n.glow || isS) {
       ctx.beginPath();
-      ctx.arc(n.x, n.y, r + (isHov?2:0), 0, Math.PI*2);
-      ctx.fillStyle = n.hex + (isHov?'':'99');
+      ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2);
+      const gr = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r + 8);
+      gr.addColorStop(0, (n.hex || '#cba6f7') + '60');
+      gr.addColorStop(1, 'transparent');
+      ctx.fillStyle = gr;
       ctx.fill();
-      if (isHov) { ctx.strokeStyle = n.hex; ctx.lineWidth = 2; ctx.stroke(); }
-      ctx.restore();
-      // Label
-      ctx.save();
-      ctx.font = `${isHov?600:500} ${isHov?11:10}px var(--font, system-ui)`;
-      ctx.fillStyle = isHov ? '#cdd6f4' : '#6c7086';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      const label = n.label.length > 18 ? n.label.substring(0,16)+'…' : n.label;
-      ctx.fillText(label, n.x, n.y + r + 4);
-      ctx.restore();
-    });
+    }
 
-    mindGraphAnim = requestAnimationFrame(tick);
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = n.hex || '#cba6f7';
+    ctx.fill();
+    ctx.strokeStyle = isS ? '#fff' : 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = isS ? 2 : 1;
+    ctx.stroke();
+
+    ctx.fillStyle = isH ? '#fff' : 'rgba(205,214,244,0.8)';
+    ctx.font = `${isH ? '12px' : '10px'} sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label, n.x, n.y + r + 12);
+  });
+}
+
+function hitTestNode(mx, my) {
+  for (let i = graphNodes.length - 1; i >= 0; i--) {
+    const n = graphNodes[i];
+    const dx = mx - n.x, dy = my - n.y;
+    if (dx * dx + dy * dy < (n.r + 6) * (n.r + 6)) return n;
   }
-  tick();
+  return null;
 }
 
-function showGraphNote(node) {
-  const panel = $('#graph-note-panel'); if (!panel) return;
-  const note = VAULT_NOTES.find(v => v.title.toLowerCase().includes(node.label.toLowerCase().split(' ').slice(0,2).join(' ')));
-  const noteContent = GNOTES_MAP[node.id] || (note?.summary) || `${node.type} node in the knowledge graph. Connected to ${GEDGES.filter(e=>e[0]===node.id||e[1]===node.id).length} other nodes.`;
-  panel.classList.remove('hidden');
-  panel.innerHTML = `
-    <button class="gnp-close" onclick="this.parentElement.classList.add('hidden')">✕</button>
-    <div class="gnp-title" style="color:${node.hex}">${node.label}</div>
-    <div class="gnp-type">${node.type}</div>
-    <div class="gnp-body">${esc(noteContent)}</div>
-    ${note ? `<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <span style="font-size:11px;color:var(--text-3)">Confidence: <strong style="color:${node.hex}">${note.confidence}%</strong></span>
-      <span style="font-size:11px;color:var(--text-3)">${note.backlinks} backlinks</span>
-    </div>` : ''}
-    <div style="margin-top:10px">
-      <button class="chip" onclick="openNote('${node.id}')">Open Note →</button>
-    </div>`;
-}
-
-function openNote(nodeId) {
-  const node = GNODES.find(n => n.id === +nodeId);
-  const note = node ? VAULT_NOTES.find(v => v.title.toLowerCase().includes(node.label.toLowerCase().split(' ')[0].toLowerCase())) : null;
-  if (!note) { toast('📚', 'Note opened in vault'); return; }
-  showNoteModal(note);
-}
-
-// ── VAULT CARDS ───────────────────────────────────────────────────────────────
-function renderMindCards(searchQ) {
-  const grid = $('#mind-cards-grid'); if (!grid) return;
-  let notes = VAULT_NOTES;
-  if (searchQ || S.mindSearch) {
-    const q = (searchQ || S.mindSearch).toLowerCase();
-    notes = notes.filter(n => n.title.toLowerCase().includes(q) || n.summary.toLowerCase().includes(q) || n.tags.some(t=>t.includes(q)));
-  }
-  if (!notes.length) {
-    grid.innerHTML = `<div style="color:var(--text-3);padding:24px;text-align:center">No notes match your search</div>`;
+function graphMouseMove(e) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  if (draggingNode) {
+    draggingNode.x = mx; draggingNode.y = my;
+    draggingNode.vx = 0; draggingNode.vy = 0;
     return;
   }
-  grid.innerHTML = notes.map(note => {
-    const confColor = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
-    const typeColors = {Research:'#89b4fa',Vision:'#cba6f7',Architecture:'#f9e2af',Report:'#f38ba8',Code:'#a6e3a1',Operations:'#fab387'};
-    const tc = typeColors[note.type] || '#6c7086';
-    const a = AGENTS.find(ag => ag.id === note.agent);
-    return `<div class="vault-card" onclick="showNoteModal_id('${note.id}')">
-      <div class="vc-title">${esc(note.title)}</div>
-      <div class="vc-type" style="color:${tc}">${note.type}</div>
-      <div class="vc-summary">${esc(note.summary.substring(0,140))}${note.summary.length>140?'…':''}</div>
-      <div class="vc-conf-bar"><div class="vc-conf-fill" style="width:${note.confidence}%;background:${confColor}"></div></div>
-      <div class="vc-meta">
-        <span>${a?.emoji||''} ${a?.name||note.agent}</span>
-        <span>${note.date}</span>
-        <span class="vc-links">🔗 ${note.backlinks}</span>
-      </div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
-        ${note.tags.slice(0,3).map(t=>`<span style="font-size:10px;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 6px;color:var(--text-3)">#${t}</span>`).join('')}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function showNoteModal_id(id) {
-  const note = VAULT_NOTES.find(n => n.id === id);
-  if (note) showNoteModal(note);
-}
-
-function showNoteModal(note) {
-  const modal = $('#note-modal'); if (!modal) return;
-  const a = ga(note.agent);
-  const confColor = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
-  modal.classList.remove('hidden');
-  modal.innerHTML = `<div class="note-modal-card">
-    <button class="close-btn" onclick="$('#note-modal').classList.add('hidden')">✕</button>
-    <h3>${esc(note.title)}</h3>
-    <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">${note.type} · ${note.date} · ${a?.emoji} ${a?.name}</div>
-    <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:16px">${esc(note.summary)}</div>
-    <div class="note-conf-row">
-      Confidence:
-      <div class="note-conf-track"><div class="note-conf-bar" style="width:${note.confidence}%;background:${confColor}"></div></div>
-      <strong style="color:${confColor}">${note.confidence}%</strong>
-    </div>
-    <div style="margin-top:12px;font-size:12px;color:var(--text-3)">🔗 ${note.backlinks} backlinks · ${note.tags.map(t=>'#'+t).join(' ')}</div>
-    <div style="margin-top:16px;display:flex;gap:8px">
-      <button class="btn-primary" onclick="toast('📝','Editing…');$('#note-modal').classList.add('hidden')">Edit</button>
-      <button class="btn-secondary" onclick="$('#note-modal').classList.add('hidden')">Close</button>
-    </div>
-  </div>`;
-}
-
-// ── TIMELINE ──────────────────────────────────────────────────────────────────
-function renderMindTimeline() {
-  const tl = $('#mind-timeline'); if (!tl) return;
-  // Sort notes by date desc
-  const sorted = [...VAULT_NOTES].sort((a,b) => b.date.localeCompare(a.date));
-  const sizeMap = n => Math.max(14, Math.min(32, n.confidence * 0.3 + n.backlinks * 1.5));
-  const typeColors = {Research:'#89b4fa',Vision:'#cba6f7',Architecture:'#f9e2af',Report:'#f38ba8',Code:'#a6e3a1',Operations:'#fab387'};
-
-  tl.innerHTML = `<div class="tl-axis"></div>` + sorted.map((note, i) => {
-    const sz = sizeMap(note);
-    const tc = typeColors[note.type] || '#6c7086';
-    const above = i % 2 === 0;
-    return `
-      <div class="tl-spacer"></div>
-      <div class="tl-dot-wrap">
-        <div class="tl-tooltip">${esc(note.title)}<br><span style="color:var(--text-3)">${note.summary.substring(0,60)}…</span></div>
-        <div class="tl-dot" style="width:${sz}px;height:${sz}px;background:${tc}22;border-color:${tc};margin:${above?`0 0 ${(sz/2)+4}px`:`${(sz/2)+4}px 0 0`}" onclick="showNoteModal_id('${note.id}')"></div>
-        <div class="tl-label" style="color:${tc}">${note.title.substring(0,20)}${note.title.length>20?'…':''}</div>
-        <div class="tl-date">${note.date}</div>
-      </div>`;
-  }).join('') + `<div class="tl-spacer"></div>`;
-}
-
-function mindSearch(q) {
-  S.mindSearch = q;
-  if (S.mindView === 'cards') renderMindCards(q);
-}
-
-function toggleTodayOverlay() {
-  const o = $('#today-overlay'); if (!o) return;
-  o.classList.toggle('hidden');
-  if (!o.classList.contains('hidden')) {
-    const todayNotes = VAULT_NOTES.filter(n => n.date === '2026-03-19');
-    const typeColors = {Research:'#89b4fa',Vision:'#cba6f7',Architecture:'#f9e2af',Report:'#f38ba8',Code:'#a6e3a1',Operations:'#fab387'};
-    o.innerHTML = `
-      <h3>What changed today?
-        <button class="close-btn" onclick="toggleTodayOverlay()">✕</button>
-      </h3>
-      <p style="font-size:12px;color:var(--text-3);margin-bottom:16px">${todayNotes.length} notes modified or created today</p>
-      ${todayNotes.map(n => {
-        const a = ga(n.agent);
-        const tc = typeColors[n.type]||'#6c7086';
-        return `<div class="today-item">
-          <div class="today-dot" style="background:${tc}"></div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600">${n.title}</div>
-            <div style="font-size:11px;color:var(--text-3)">${a?.emoji} ${a?.name} · ${n.type}</div>
-          </div>
-          <button class="chip" onclick="showNoteModal_id('${n.id}');toggleTodayOverlay()">Open</button>
-        </div>`;
-      }).join('')}`;
+  hoveredNode = hitTestNode(mx, my);
+  graphCanvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+  const tip = $('graph-tooltip');
+  if (hoveredNode) {
+    tip.textContent = hoveredNode.label;
+    tip.style.left = (mx + 14) + 'px';
+    tip.style.top = (my - 8) + 'px';
+    tip.classList.remove('hidden');
+  } else {
+    tip.classList.add('hidden');
   }
 }
 
-function quickCapture() {
-  const m = $('#capture-modal'); if (m) m.classList.remove('hidden');
-  setTimeout(() => $('#capture-title')?.focus(), 50);
+function graphMouseDown(e) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const n = hitTestNode(e.clientX - rect.left, e.clientY - rect.top);
+  if (n) { draggingNode = n; graphCanvas.style.cursor = 'grabbing'; }
 }
-function closeCapture() { $('#capture-modal')?.classList.add('hidden'); }
-function saveCapture() {
-  const title = $('#capture-title')?.value.trim();
-  const body = $('#capture-body')?.value.trim();
-  if (!title) { toast('⚠️','Please enter a title'); return; }
-  VAULT_NOTES.unshift({
-    id: 'vc'+Date.now(), title, summary: body||'No content.', type:'Research',
-    confidence: 50, backlinks: 0, agent: 'righthand', date: '2026-03-19', tags: ['capture']
+
+function graphMouseUp() { draggingNode = null; graphCanvas.style.cursor = 'grab'; }
+
+function graphClick(e) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const n = hitTestNode(e.clientX - rect.left, e.clientY - rect.top);
+  if (n) { selectedNode = n; showGraphDetail(n); }
+  else { selectedNode = null; $('graph-detail').classList.add('hidden'); }
+}
+
+function showGraphDetail(node) {
+  const panel = $('graph-detail');
+  const note = GNOTES_MAP[node.id];
+  const conns = graphEdges.filter(e => e.source === node.id || e.target === node.id)
+    .map(e => graphNodes[e.source === node.id ? e.target : e.source]?.label)
+    .filter(Boolean);
+
+  panel.innerHTML = `
+    <button class="graph-detail-close" onclick="$('graph-detail').classList.add('hidden');selectedNode=null">✕</button>
+    <div class="graph-detail-title" style="color:${node.hex}">${node.label}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${node.type} · ${conns.length} connections</div>
+    <div class="graph-detail-body">${note || 'Click a node to see details.'}</div>
+    ${conns.length ? `
+      <div style="margin-top:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Connected to</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${conns.slice(0, 8).map(c => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">${c}</span>`).join('')}</div>
+      </div>` : ''}
+  `;
+  panel.classList.remove('hidden');
+}
+
+// ── Vault Cards ───────────────────────────────────────────
+function renderVaultCards(notes) {
+  const grid = $('vault-cards-grid');
+  const list = notes || VAULT_NOTES;
+  grid.innerHTML = '';
+  list.forEach(note => {
+    const agent = ga(note.agent) || { emoji: '🤖' };
+    const cc = note.confidence >= 80 ? 'confidence-high' : note.confidence >= 60 ? 'confidence-mid' : 'confidence-low';
+    const card = document.createElement('div');
+    card.className = 'vault-card';
+    card.onclick = () => openVaultNote(note);
+    card.innerHTML = `
+      <div class="vault-card-header">
+        <div class="vault-card-title">${note.title}</div>
+        <span class="vault-card-type">${note.type}</span>
+      </div>
+      <div class="vault-card-summary">${note.summary}</div>
+      <div class="vault-card-meta">
+        <div class="confidence-bar-outer"><div class="confidence-bar-inner ${cc}" style="width:${note.confidence}%"></div></div>
+        <span class="vault-backlinks">🔗 ${note.backlinks}</span>
+        <span class="vault-agent">${agent.emoji}</span>
+      </div>
+    `;
+    grid.appendChild(card);
   });
-  closeCapture();
-  toast('📚', 'Saved to vault');
-  addXP(15, 'note captured');
-  if (S.mindView === 'cards') renderMindCards();
-  $('#capture-title').value = '';
-  $('#capture-body').value = '';
 }
 
-// ── PULSE ─────────────────────────────────────────────────────────────────────
-function rPulse() {
-  const c = $('#pulse-inner'); if (!c) return;
-  const totalTokens = AGENTS.reduce((s,a) => s+a.tokens, 0);
-  const todayCost = COST_DATA[COST_DATA.length-1];
-  const costTotal = Object.entries(todayCost).filter(([k])=>k!=='day').reduce((s,[,v])=>s+v,0);
-  const activeAgents = AGENTS.filter(a=>a.status==='active').length;
-
-  c.innerHTML = `
-    <div class="pulse-metrics">
-      <div class="pulse-metric">
-        <div class="pulse-metric-value" style="color:var(--green)">$${costTotal.toFixed(2)}</div>
-        <div class="pulse-metric-label">Cost Today</div>
-        <div class="pulse-metric-delta" style="color:var(--text-3)">Budget: $10.00</div>
+function openVaultNote(note) {
+  const agent = ga(note.agent) || { emoji: '🤖', name: note.agent };
+  const modal = $('card-modal-content');
+  modal.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="font-size:24px">${agent.emoji}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:16px">${note.title}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${note.type} · ${note.date} · ${agent.name}</div>
       </div>
-      <div class="pulse-metric">
-        <div class="pulse-metric-value" style="color:var(--blue)">${activeAgents}</div>
-        <div class="pulse-metric-label">Active Agents</div>
-        <div class="pulse-metric-delta" style="color:var(--text-3)">${AGENTS.length} total</div>
-      </div>
-      <div class="pulse-metric">
-        <div class="pulse-metric-value" style="color:var(--accent)">${S.growth.total}</div>
-        <div class="pulse-metric-label">Tasks Completed</div>
-        <div class="pulse-metric-delta" style="color:var(--green)">▲ 12 today</div>
-      </div>
+      <button onclick="closeModal()" style="color:var(--text-muted);font-size:18px">✕</button>
     </div>
-    <div class="pulse-grid">
-      ${renderAgentHealth()}
-      ${renderCostChart()}
-      ${renderCronStatus()}
-      ${renderErrorLog()}
-      ${renderSystemLoad()}
-      ${renderQuickFix()}
-    </div>`;
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">${note.tags.map(t => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">#${t}</span>`).join('')}</div>
+    <div style="color:var(--text-dim);line-height:1.7;margin-bottom:16px">${note.summary}</div>
+    <div style="display:flex;gap:16px;font-size:12px;color:var(--text-muted)">
+      <span>Confidence: <strong style="color:var(--green)">${note.confidence}%</strong></span>
+      <span>Backlinks: <strong>${note.backlinks}</strong></span>
+    </div>
+  `;
+  $('card-modal').classList.remove('hidden');
+}
+
+function closeModal() { $('card-modal').classList.add('hidden'); }
+function closeModalIfOutside(e) { if (e.target === $('card-modal')) closeModal(); }
+
+function searchMind(query) {
+  if (mindMode !== 'cards') return;
+  const q = query.toLowerCase().trim();
+  if (!q) { renderVaultCards(); return; }
+  const filtered = VAULT_NOTES.filter(n =>
+    n.title.toLowerCase().includes(q) || n.summary.toLowerCase().includes(q) ||
+    n.tags.some(t => t.includes(q)) || n.type.toLowerCase().includes(q)
+  );
+  renderVaultCards(filtered);
+}
+
+// ── Timeline ──────────────────────────────────────────────
+function renderTimeline() {
+  const track = $('timeline-track');
+  if (!track) return;
+  const sorted = [...VAULT_NOTES].sort((a, b) => new Date(a.date) - new Date(b.date));
+  track.innerHTML = '<div class="timeline-axis"></div>';
+  const trackW = Math.max(1400, sorted.length * 100);
+  track.style.width = trackW + 'px';
+  const dates = sorted.map(n => new Date(n.date).getTime());
+  const minD = Math.min(...dates), maxD = Math.max(...dates);
+  const range = maxD - minD || 1;
+
+  sorted.forEach((note, i) => {
+    const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
+    const pct = (new Date(note.date).getTime() - minD) / range;
+    const x = 60 + pct * (trackW - 120);
+    const above = i % 2 === 0;
+    const item = document.createElement('div');
+    item.className = 'timeline-item';
+    item.style.left = x + 'px';
+    item.style.top = above ? '20%' : '55%';
+    item.onclick = () => openVaultNote(note);
+    item.innerHTML = `
+      <div class="timeline-label ${above ? 'above' : 'below'}">${agent.emoji} ${note.title.substring(0, 22)}${note.title.length > 22 ? '…' : ''}</div>
+      <div class="timeline-dot" style="background:${agent.color || '#cba6f7'}"></div>
+    `;
+    track.appendChild(item);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// PULSE PAGE
+// ═══════════════════════════════════════════════════════════
+
+function renderPulse() {
+  renderAgentHealth();
+  renderCostChart();
+  renderSystemLoad();
+  renderCrons();
+  renderHooks();
+  renderErrorLog();
 }
 
 function renderAgentHealth() {
-  const rows = AGENTS.map(a => {
-    const pct = Math.round(a.fitness*100);
-    const barColor = pct>=85?'var(--green)':pct>=70?'var(--yellow)':'var(--red)';
-    return `<div class="agent-health-row">
-      <div class="ah-avatar" style="background:${a.color}">${a.emoji}</div>
-      <div class="ah-info">
-        <div class="ah-name">${a.name}</div>
-        <div class="ah-task">${a.status==='active'?a.task:'Idle · '+a.role}</div>
-      </div>
-      <div class="status-dot ${a.status==='active'?'online':'idle'}"></div>
-      <div class="ah-bar-wrap">
-        <div class="ah-bar"><div class="ah-fill" style="width:${pct}%;background:${barColor}"></div></div>
-        <div class="ah-pct">${pct}%</div>
-      </div>
-    </div>`;
-  }).join('');
-  return `<div class="pulse-card pulse-card-full">
-    <div class="pulse-card-title">Agent Health <span class="badge" style="background:rgba(166,227,161,0.12);color:var(--green)">${AGENTS.filter(a=>a.status==='active').length} online</span></div>
-    ${rows}
-  </div>`;
+  const c = $('agent-health-table');
+  c.innerHTML = '';
+  AGENTS.forEach(a => {
+    const statusClr = a.status === 'active' ? 'var(--green)' : 'var(--text-muted)';
+    const fitClr = a.fitness > 0.8 ? 'var(--green)' : a.fitness > 0.6 ? 'var(--yellow)' : 'var(--red)';
+    const row = document.createElement('div');
+    row.className = 'health-row';
+    row.innerHTML = `
+      <div class="health-agent"><span class="health-status-dot" style="background:${statusClr}"></span>${a.emoji} ${a.name}</div>
+      <div class="health-task">${a.task || a.role}</div>
+      <div class="health-bar-outer"><div class="health-bar-inner" style="width:${a.fitness * 100}%;background:${fitClr}"></div></div>
+      <div class="health-tokens">${(a.tokens / 1000).toFixed(1)}K</div>
+    `;
+    c.appendChild(row);
+  });
 }
 
 function renderCostChart() {
-  const colors = {righthand:'#f9e2af',researcher:'#89b4fa',coder:'#a6e3a1',vault:'#cba6f7',other:'#fab387'};
-  const maxTotal = Math.max(...COST_DATA.map(d => Object.entries(d).filter(([k])=>k!=='day').reduce((s,[,v])=>s+v,0)));
-  const bars = COST_DATA.map(d => {
-    const total = Object.entries(d).filter(([k])=>k!=='day').reduce((s,[,v])=>s+v,0);
-    const h = Math.round((total/maxTotal)*88);
-    const segs = Object.entries(d).filter(([k])=>k!=='day').map(([k,v])=>{
-      const sh = Math.round((v/total)*h);
-      return `<div class="cost-bar-seg" style="height:${sh}px;background:${colors[k]||'#6c7086'}"></div>`;
-    }).join('');
-    return `<div class="cost-bar-col">
-      <div class="cost-bar-stack" style="height:${h}px">${segs}</div>
-      <div class="cost-bar-label">${d.day}</div>
-    </div>`;
-  }).join('');
-  return `<div class="pulse-card">
-    <div class="pulse-card-title">Cost Waterfall</div>
-    <div class="cost-chart">${bars}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      ${Object.entries(colors).map(([k,c])=>`<span style="font-size:10px;color:${c}">● ${k}</span>`).join('')}
-    </div>
-  </div>`;
-}
+  const svg = $('cost-chart');
+  if (!svg) return;
+  const W = svg.parentElement.clientWidth || 400;
+  const H = 160;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = '';
+  const agents = ['righthand', 'researcher', 'coder', 'vault', 'other'];
+  const colors = { righthand: '#f9e2af', researcher: '#89b4fa', coder: '#a6e3a1', vault: '#cba6f7', other: '#94e2d5' };
+  const barW = (W - 60) / COST_DATA.length;
+  const maxT = Math.max(...COST_DATA.map(d => agents.reduce((s, a) => s + (d[a] || 0), 0)));
 
-function renderCronStatus() {
-  const rows = CRONS.map(c => `<div class="cron-row">
-    <div class="cron-dot" style="background:${c.ok?'var(--green)':'var(--red)'}"></div>
-    <div class="cron-name">${c.n}</div>
-    <div class="cron-sched">${c.s}</div>
-  </div>`).join('');
-  const failing = CRONS.filter(c=>!c.ok).length;
-  return `<div class="pulse-card">
-    <div class="pulse-card-title">Cron Jobs <span class="badge" style="background:${failing?'rgba(243,139,168,0.12)':'rgba(166,227,161,0.12)'};color:${failing?'var(--red)':'var(--green)'}">${failing ? failing+' failing' : 'all OK'}</span></div>
-    <div class="cron-grid">${rows}</div>
-  </div>`;
-}
-
-function renderErrorLog() {
-  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn').slice(0,6);
-  const rows = errors.map(e => `<div class="error-row">
-    <span style="color:${e.level==='error'?'var(--red)':'var(--yellow)'};flex-shrink:0">${e.level==='error'?'ERR':'WRN'}</span>
-    <span style="color:var(--text-2)">${esc(e.text)}</span>
-  </div>`).join('');
-  return `<div class="pulse-card">
-    <div class="pulse-card-title">Error Log <span class="badge" style="background:rgba(243,139,168,0.12);color:var(--red)">${STREAM_EVENTS.filter(e=>e.level==='error').length} errors</span></div>
-    ${rows}
-  </div>`;
+  COST_DATA.forEach((d, i) => {
+    let y = H - 20;
+    agents.forEach(agent => {
+      const val = d[agent] || 0;
+      const bH = (val / maxT) * (H - 30);
+      y -= bH;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', 30 + i * barW + 4);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', barW - 8);
+      rect.setAttribute('height', bH);
+      rect.setAttribute('fill', colors[agent] || '#94e2d5');
+      rect.setAttribute('rx', '2');
+      svg.appendChild(rect);
+    });
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', 30 + (i + 0.5) * barW);
+    txt.setAttribute('y', H - 4);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('fill', '#6c7086');
+    txt.setAttribute('font-size', '10');
+    txt.textContent = d.day;
+    svg.appendChild(txt);
+  });
 }
 
 function renderSystemLoad() {
-  const metrics = [
-    {label:'CPU',pct:34,color:'var(--blue)'},
-    {label:'Memory',pct:61,color:'var(--peach)'},
-    {label:'Disk',pct:94,color:'var(--red)'},
-    {label:'Tokens',pct:Math.round(AGENTS.reduce((s,a)=>s+a.tokens,0)/1000),color:'var(--accent)'},
+  const loads = [
+    { label: 'CPU', val: 34, color: 'var(--accent)' },
+    { label: 'Mem', val: 67, color: 'var(--accent2)' },
+    { label: 'Disk', val: 94, color: 'var(--red)' },
+    { label: 'Net', val: 12, color: 'var(--green)' },
   ];
-  const rows = metrics.map(m => `<div class="load-row">
-    <div class="load-label">${m.label}</div>
-    <div class="load-bar-outer"><div class="load-bar-inner" style="width:${Math.min(m.pct,100)}%;background:${m.color}"></div></div>
-    <div class="load-pct">${m.pct}${m.label==='Tokens'?'k':'%'}</div>
-  </div>`).join('');
-  return `<div class="pulse-card">
-    <div class="pulse-card-title">System Load</div>
-    ${rows}
-    <div style="font-size:11px;color:var(--red);margin-top:8px">⚠ Disk at 94% — cleanup needed</div>
-  </div>`;
-}
-
-function renderQuickFix() {
-  return `<div class="pulse-card">
-    <div class="pulse-card-title">Quick Actions</div>
-    <div class="quick-fix-row">
-      <button class="btn-quickfix" onclick="pulseAction('restart')">🔄 Restart Gateway</button>
-      <button class="btn-quickfix" onclick="pulseAction('clear-queue')">🧹 Clear Queue</button>
-      <button class="btn-quickfix" onclick="pulseAction('restart-watchdog')">🐕 Fix Watchdog</button>
-      <button class="btn-quickfix" onclick="pulseAction('cleanup-disk')">💾 Cleanup Disk</button>
-      <button class="btn-quickfix" onclick="nav('stream')">📡 View Logs</button>
+  $('system-load').innerHTML = loads.map(l => `
+    <div class="load-row">
+      <span class="load-label">${l.label}</span>
+      <div class="load-bar-outer"><div class="load-bar-inner" style="width:${l.val}%;background:${l.color}"></div></div>
+      <span class="load-value">${l.val}%</span>
     </div>
-  </div>`;
+  `).join('');
 }
 
-function pulseAction(action) {
+function renderCrons() {
+  $('cron-status').innerHTML = CRONS.map(c => `
+    <div class="cron-row">
+      <span class="status-dot ${c.ok ? 'status-ok' : 'status-fail'}"></span>
+      <span class="cron-name">${c.n}</span>
+      <span class="cron-schedule">${c.s}</span>
+    </div>
+  `).join('');
+}
+
+function renderHooks() {
+  $('hook-status').innerHTML = HOOKS.map(h => `
+    <div class="hook-row">
+      <span class="status-dot ${h.s === 'ok' ? 'status-ok' : h.s === 'warn' ? 'status-warn' : 'status-fail'}"></span>
+      <span class="hook-name">${h.n}</span>
+      <span class="hook-latency">${h.l}</span>
+    </div>
+  `).join('');
+}
+
+function renderErrorLog() {
+  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn').slice(0, 8);
+  $('error-log').innerHTML = errors.map(e => {
+    const agent = ga(e.agent) || { emoji: '❓' };
+    return `
+      <div class="error-item">
+        <span class="error-time">${e.time}</span>
+        <span class="error-agent">${agent.emoji}</span>
+        <span class="error-text">${e.text}</span>
+      </div>`;
+  }).join('');
+}
+
+function quickAction(action) {
   const msgs = {
-    'restart':'🔄 Gateway restarting…',
-    'clear-queue':'🧹 Queue cleared',
-    'restart-watchdog':'🐕 Watchdog restarting on :8484…',
-    'cleanup-disk':'💾 Disk cleanup scheduled'
+    'restart-gateway': '🔄 Restarting gateway...',
+    'clear-queue':     '🗑️ Queue cleared',
+    'reindex':         '📚 Reindexing vault...',
+    'health-check':    '🩺 Running health check...',
   };
-  toast('⚙️', msgs[action] || action);
-  addXP(10, action);
-  if (action === 'restart-watchdog') {
-    const cron = CRONS.find(c=>c.n==='session-watchdog');
-    if (cron) {
-      setTimeout(() => { cron.ok = true; toast('✅','Watchdog restarted successfully'); rPulse(); }, 2000);
-    }
-  }
+  toast(msgs[action] || action, 'success');
+  addXP(5, 'quick action');
 }
 
-// ── BOARD ─────────────────────────────────────────────────────────────────────
-const BOARD_COLS = [
-  {id:'inbox',  label:'Inbox',       color:'var(--text-3)'},
-  {id:'queued', label:'Queued',      color:'var(--blue)'},
-  {id:'active', label:'In Progress', color:'var(--yellow)'},
-  {id:'review', label:'Review',      color:'var(--peach)'},
-  {id:'done',   label:'Done',        color:'var(--green)'},
+// ═══════════════════════════════════════════════════════════
+// BOARD PAGE
+// ═══════════════════════════════════════════════════════════
+
+const BOARD_COLUMNS = [
+  { id: 'inbox',  label: 'Inbox',  color: 'var(--text-muted)' },
+  { id: 'queued', label: 'Queued', color: 'var(--yellow)' },
+  { id: 'active', label: 'Active', color: 'var(--accent2)' },
+  { id: 'review', label: 'Review', color: 'var(--orange)' },
+  { id: 'done',   label: 'Done',   color: 'var(--green)' },
 ];
 
-function rBoard() {
-  const w = $('#board-wrap'); if (!w) return;
-  w.innerHTML = BOARD_COLS.map(col => {
+function renderBoard() {
+  const board = $('kanban-board');
+  board.innerHTML = '';
+  BOARD_COLUMNS.forEach(col => {
     const cards = BOARD_CARDS[col.id] || [];
-    const cardHtml = cards.map(card => {
-      const a = AGENTS.find(ag => ag.id === card.agent);
-      const prioClass = card.priority?.toLowerCase() || 'p2';
-      return `<div class="board-card" onclick="boardMoveCard('${card.id}','${col.id}')">
-        <div class="board-card-title">${esc(card.title)}</div>
-        <div class="board-card-meta">
-          <span class="board-priority ${prioClass}">${card.priority}</span>
-          <span class="board-card-agent">${a?.emoji||'🤖'} ${a?.name||card.agent}</span>
-        </div>
-        ${card.progress !== undefined ? `<div class="board-card-progress">
-          <div class="board-prog-bar"><div class="board-prog-fill" style="width:${card.progress}%"></div></div>
-          <div style="font-size:10px;color:var(--text-3);margin-top:2px">${card.progress}%</div>
-        </div>` : ''}
-      </div>`;
-    }).join('');
-    return `<div class="board-col">
-      <div class="board-col-header">
+    const el = document.createElement('div');
+    el.className = 'kanban-col';
+    el.innerHTML = `
+      <div class="kanban-col-header" style="border-top:2px solid ${col.color}">
         <span style="color:${col.color}">${col.label}</span>
-        <span class="board-col-count">${cards.length}</span>
+        <span class="col-count">${cards.length}</span>
       </div>
-      <div class="board-col-body" id="bc-${col.id}">${cardHtml}
-        <div style="text-align:center;padding:8px;color:var(--text-3);font-size:11px;cursor:pointer" onclick="boardAddCard('${col.id}')">+ Add card</div>
-      </div>
-    </div>`;
-  }).join('');
+      <div class="kanban-cards" id="cards-${col.id}"></div>
+    `;
+    board.appendChild(el);
+    const container = el.querySelector(`#cards-${col.id}`);
+    cards.forEach(card => container.appendChild(makeBoardCard(card, col.id)));
+  });
 }
 
-function boardMoveCard(cardId, currentCol) {
-  // Find the card and show a move dialog
-  const colOrder = ['inbox','queued','active','review','done'];
-  const curIdx = colOrder.indexOf(currentCol);
-  const nextCol = colOrder[curIdx+1];
-  if (!nextCol) { toast('✅','Already in Done'); return; }
-  // Move card
-  let card;
-  for (const col of colOrder) {
-    const idx = (BOARD_CARDS[col]||[]).findIndex(c=>c.id===cardId);
-    if (idx>=0) { card = BOARD_CARDS[col].splice(idx,1)[0]; break; }
+function makeBoardCard(card, colId) {
+  const agent = ga(card.agent) || { emoji: '🤖' };
+  const pCls = (card.priority || 'P3').toLowerCase();
+  const el = document.createElement('div');
+  el.className = 'board-card';
+  el.onclick = () => openBoardCard(card, colId);
+  let progressHTML = '';
+  if (card.progress !== undefined) {
+    progressHTML = `<div class="progress-bar-outer"><div class="progress-bar-inner" style="width:${card.progress}%"></div></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${card.progress}% complete</div>`;
   }
-  if (!card) return;
-  if (!BOARD_CARDS[nextCol]) BOARD_CARDS[nextCol] = [];
-  BOARD_CARDS[nextCol].push(card);
-  toast('📋', `Moved to ${BOARD_COLS.find(c=>c.id===nextCol)?.label||nextCol}`);
-  addXP(10, 'card moved');
-  rBoard();
+  el.innerHTML = `
+    <div class="board-card-title">${card.title}</div>
+    <div class="board-card-meta">
+      <span class="priority-badge ${pCls}">${card.priority}</span>
+      <span class="board-card-agent">${agent.emoji}</span>
+    </div>
+    ${progressHTML}
+    <div class="board-tags">${(card.tags || []).map(t => `<span class="board-tag">${t}</span>`).join('')}</div>
+  `;
+  return el;
 }
 
-function boardAddCard(col) {
+function openBoardCard(card, colId) {
+  const agent = ga(card.agent) || { emoji: '🤖', name: card.agent, color: '#cba6f7' };
+  const pCls = (card.priority || 'P3').toLowerCase();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  const modal = $('card-modal-content');
+  modal.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span class="priority-badge ${pCls}" style="font-size:14px;padding:4px 12px">${card.priority}</span>
+      <div style="font-weight:700;font-size:16px;flex:1">${card.title}</div>
+      <button onclick="closeModal()" style="color:var(--text-muted);font-size:18px">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:22px;border:2px solid ${agent.color};border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">${agent.emoji}</span>
+      <div>
+        <div style="font-weight:600">${agent.name}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${agent.role}</div>
+      </div>
+      <div style="margin-left:auto;padding:4px 10px;border-radius:8px;background:var(--bg-raised);font-size:12px;color:${col?.color || 'var(--text-muted)'}">${col?.label || colId}</div>
+    </div>
+    ${card.progress !== undefined ? `
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Progress: ${card.progress}%</div>
+        <div class="progress-bar-outer" style="height:6px"><div class="progress-bar-inner" style="width:${card.progress}%"></div></div>
+      </div>` : ''}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${(card.tags || []).map(t => `<span style="background:var(--bg-raised);padding:3px 10px;border-radius:10px;font-size:12px">${t}</span>`).join('')}</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="approve-btn" style="flex:none;padding:6px 14px;font-size:12px" onclick="moveBoardCard('${card.id}','${colId}','right');closeModal()">Move →</button>
+      <button class="reject-btn" style="flex:none;padding:6px 14px;font-size:12px" onclick="moveBoardCard('${card.id}','${colId}','left');closeModal()">← Move</button>
+    </div>
+  `;
+  $('card-modal').classList.remove('hidden');
+}
+
+function moveBoardCard(cardId, fromCol, direction) {
+  const colIds = BOARD_COLUMNS.map(c => c.id);
+  const idx = colIds.indexOf(fromCol);
+  const newIdx = direction === 'right' ? Math.min(idx + 1, colIds.length - 1) : Math.max(idx - 1, 0);
+  if (newIdx === idx) return;
+
+  const cards = BOARD_CARDS[fromCol];
+  const ci = cards.findIndex(c => c.id === cardId);
+  if (ci === -1) return;
+  const [card] = cards.splice(ci, 1);
+  BOARD_CARDS[colIds[newIdx]].push(card);
+  renderBoard();
+  toast(`Card moved to ${BOARD_COLUMNS[newIdx].label}`, 'success');
+  addXP(5, 'board action');
+}
+
+function addBoardCard() {
   const title = prompt('Card title:');
   if (!title) return;
-  const id = 'bc' + Date.now();
-  if (!BOARD_CARDS[col]) BOARD_CARDS[col] = [];
-  BOARD_CARDS[col].push({id, title, priority:'P2', agent:'righthand', tags:[]});
-  addXP(10, 'card added');
-  rBoard();
+  const newCard = {
+    id: 'b_' + Date.now(),
+    title,
+    priority: 'P2',
+    agent: AGENTS[Math.floor(Math.random() * AGENTS.length)].id,
+    tags: ['new'],
+  };
+  BOARD_CARDS.inbox.push(newCard);
+  renderBoard();
+  toast('📋 Card added to Inbox', 'success');
+  addXP(5, 'board card created');
 }
 
-// ── STREAM ────────────────────────────────────────────────────────────────────
-let streamAutoScroll = true;
+// ═══════════════════════════════════════════════════════════
+// STREAM PAGE
+// ═══════════════════════════════════════════════════════════
 
-function rStream() {
-  // Populate agent filter
-  const sel = $('#stream-agent');
-  if (sel && sel.options.length <= 1) {
-    AGENTS.forEach(a => {
-      const opt = document.createElement('option');
-      opt.value = a.id; opt.textContent = `${a.emoji} ${a.name}`;
-      sel.appendChild(opt);
-    });
-  }
+let streamEvents = [...STREAM_EVENTS];
+let streamLevels = new Set(['debug', 'info', 'warn', 'error']);
+let streamAgentFilter = 'all';
+
+function renderStream() {
+  renderStreamAgentFilters();
   renderStreamLog();
-
-  const log = $('#stream-log');
-  if (log) {
-    log.onscroll = () => {
-      streamAutoScroll = (log.scrollTop + log.clientHeight) >= (log.scrollHeight - 20);
-    };
-  }
 }
 
-function renderStreamLog(events) {
-  const log = $('#stream-log'); if (!log) return;
-  let evs = events || filterStreamEvents();
-  log.innerHTML = evs.map(e => {
-    const a = ga(e.agent);
-    const cls = e.level === 'error' ? 'stream-line stream-error' : e.level === 'warn' ? 'stream-line stream-warn' : 'stream-line';
-    return `<div class="${cls}">
-      <span class="stream-time">${e.time}</span>
-      <span class="stream-level ${e.level}">${e.level.toUpperCase()}</span>
-      <span class="stream-agent" title="${a?.name||e.agent}">${a?.emoji||''} ${a?.name?.split(' ')[0]||e.agent}</span>
-      <span class="stream-text">${esc(e.text)}</span>
+function renderStreamAgentFilters() {
+  const container = $('stream-agent-filters');
+  if (!container) return;
+  container.innerHTML = `<button class="stream-agent-chip ${streamAgentFilter === 'all' ? 'active' : ''}" onclick="setStreamAgent('all')">All</button>`;
+  const uniqueAgents = [...new Set(streamEvents.map(e => e.agent))];
+  uniqueAgents.forEach(agentId => {
+    const agent = ga(agentId);
+    if (!agent) return;
+    container.innerHTML += `<button class="stream-agent-chip ${streamAgentFilter === agentId ? 'active' : ''}" onclick="setStreamAgent('${agentId}')">${agent.emoji} ${agent.name}</button>`;
+  });
+}
+
+function setStreamAgent(agentId) {
+  streamAgentFilter = agentId;
+  renderStreamAgentFilters();
+  renderStreamLog();
+}
+
+function renderStreamLog() {
+  const log = $('stream-log');
+  if (!log) return;
+  const filtered = getFilteredStream();
+  log.innerHTML = filtered.map(e => {
+    const agent = ga(e.agent) || { emoji: '❓', name: e.agent };
+    return `<div class="log-line level-${e.level}">
+      <span class="log-time">${e.time}</span>
+      <span class="log-level ${e.level}">${e.level}</span>
+      <span class="log-agent">${agent.emoji} ${agent.name}</span>
+      <span class="log-text">${e.text}</span>
     </div>`;
   }).join('');
-  if (streamAutoScroll) log.scrollTop = log.scrollHeight;
+
+  // Auto-scroll
+  const autoScroll = $('autoscroll-toggle');
+  if (autoScroll && autoScroll.checked) {
+    log.scrollTop = log.scrollHeight;
+  }
 }
 
-function filterStreamEvents() {
-  const agentF = $('#stream-agent')?.value || 'all';
-  const search = $('#stream-search')?.value || '';
-  let evs = STREAM_EVENTS.filter(e => S.streamLevels.has(e.level));
-  if (agentF !== 'all') evs = evs.filter(e => e.agent === agentF);
+function getFilteredStream() {
+  const search = $('stream-search')?.value || '';
+  let evs = streamEvents.filter(e => streamLevels.has(e.level));
+  if (streamAgentFilter !== 'all') evs = evs.filter(e => e.agent === streamAgentFilter);
   if (search) {
     try {
       const re = new RegExp(search, 'i');
       evs = evs.filter(e => re.test(e.text) || re.test(e.agent));
-    } catch { evs = evs.filter(e => e.text.toLowerCase().includes(search.toLowerCase())); }
+    } catch {
+      evs = evs.filter(e => e.text.toLowerCase().includes(search.toLowerCase()));
+    }
   }
   return evs;
 }
 
-function streamFilter() {
+function filterStream(val) {
   renderStreamLog();
 }
 
-function toggleLevel(level, btn) {
-  if (S.streamLevels.has(level)) S.streamLevels.delete(level);
-  else S.streamLevels.add(level);
-  btn?.classList.toggle('active', S.streamLevels.has(level));
+function toggleLevelFilter(level, btn) {
+  if (streamLevels.has(level)) streamLevels.delete(level);
+  else streamLevels.add(level);
+  if (btn) btn.classList.toggle('active', streamLevels.has(level));
   renderStreamLog();
+}
+
+function addStreamEvent(event) {
+  streamEvents.unshift(event);
+  if (currentPage === 'stream') renderStreamLog();
 }
