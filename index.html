@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent OS v5</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#181825">
+  <title>Agent OS v7</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons (modern SVG icon set) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body>
   <!-- App Shell -->
@@ -13,56 +18,51 @@
     <!-- Desktop Sidebar -->
     <nav id="sidebar">
       <div class="sidebar-logo">
-        <span class="logo-icon">🤖</span>
+        <i data-lucide="bot" class="logo-icon-svg"></i>
         <span class="logo-text">Agent OS</span>
-        <span class="logo-version">v5</span>
+        <span class="logo-version">v7</span>
       </div>
       <div class="sidebar-nav">
         <button class="nav-item active" data-page="feed" onclick="nav('feed')">
-          <span class="nav-icon">🏠</span>
-          <span class="nav-label">Feed</span>
+          <i data-lucide="layout-dashboard" class="nav-icon-svg"></i>
+          <span class="nav-label">Home</span>
           <span class="nav-badge" id="feed-badge"></span>
         </button>
-        <button class="nav-item" data-page="queue" onclick="nav('queue')">
-          <span class="nav-icon">❓</span>
-          <span class="nav-label">Queue</span>
-          <span class="nav-badge" id="queue-badge">8</span>
-        </button>
         <button class="nav-item" data-page="talk" onclick="nav('talk')">
-          <span class="nav-icon">💬</span>
+          <i data-lucide="message-circle" class="nav-icon-svg"></i>
           <span class="nav-label">Talk</span>
           <span class="nav-badge" id="talk-badge">7</span>
         </button>
+        <button class="nav-item" data-page="queue" onclick="nav('queue')">
+          <i data-lucide="inbox" class="nav-icon-svg"></i>
+          <span class="nav-label">Queue</span>
+          <span class="nav-badge" id="queue-badge">8</span>
+        </button>
         <button class="nav-item" data-page="mind" onclick="nav('mind')">
-          <span class="nav-icon">🧠</span>
+          <i data-lucide="brain" class="nav-icon-svg"></i>
           <span class="nav-label">Mind</span>
           <span class="nav-badge" id="mind-badge"></span>
         </button>
         <button class="nav-item" data-page="pulse" onclick="nav('pulse')">
-          <span class="nav-icon">⚡</span>
-          <span class="nav-label">Pulse</span>
+          <i data-lucide="activity" class="nav-icon-svg"></i>
+          <span class="nav-label">System</span>
           <span class="nav-badge" id="pulse-badge">1</span>
         </button>
         <div class="nav-divider"></div>
-        <button class="nav-item" data-page="board" onclick="nav('board')">
-          <span class="nav-icon">📋</span>
-          <span class="nav-label">Board</span>
-          <span class="nav-badge" id="board-badge"></span>
+        <button class="nav-item" data-page="schedule" onclick="nav('schedule')">
+          <i data-lucide="calendar" class="nav-icon-svg"></i>
+          <span class="nav-label">Schedule</span>
+          <span class="nav-badge" id="schedule-badge"></span>
         </button>
-        <button class="nav-item" data-page="stream" onclick="nav('stream')">
-          <span class="nav-icon">📡</span>
-          <span class="nav-label">Stream</span>
-          <span class="nav-badge" id="stream-badge"></span>
+        <button class="nav-item" data-page="missions" onclick="nav('missions')">
+          <i data-lucide="trophy" class="nav-icon-svg"></i>
+          <span class="nav-label">Missions</span>
+          <span class="nav-badge" id="missions-badge">3</span>
         </button>
-        <button class="nav-item" data-page="command" onclick="nav('command')">
-          <span class="nav-icon">⌨️</span>
-          <span class="nav-label">Command</span>
-          <span class="nav-badge" id="command-badge"></span>
-        </button>
-        <button class="nav-item" data-page="config" onclick="nav('config')">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-label">Config</span>
-          <span class="nav-badge" id="config-badge"></span>
+        <button class="nav-item" data-page="explore" onclick="nav('explore')">
+          <i data-lucide="search" class="nav-icon-svg"></i>
+          <span class="nav-label">Explore</span>
+          <span class="nav-badge" id="explore-badge"></span>
         </button>
       </div>
       <div class="sidebar-footer">
@@ -143,6 +143,16 @@
               <span class="stat-label">Expired</span>
             </div>
           </div>
+          <div class="queue-batch-bar" id="queue-batch-bar">
+            <button class="batch-toggle-btn" id="batch-toggle-btn" onclick="toggleBatchMode()">☐ Batch Mode</button>
+            <div class="batch-actions hidden" id="batch-actions">
+              <button class="batch-action-btn" onclick="batchApproveAll()">✅ Approve All</button>
+              <button class="batch-action-btn" onclick="batchRejectAll()">❌ Reject All</button>
+              <button class="batch-action-btn" onclick="batchDelegateAll()">🔀 Delegate All</button>
+              <span class="batch-count" id="batch-count">0 selected</span>
+            </div>
+          </div>
+          <div id="queue-auto-stats"></div>
           <div id="queue-list" class="queue-list"></div>
           <div id="queue-empty" class="queue-empty hidden">
             <div class="empty-icon">🎯</div>
@@ -184,6 +194,7 @@
                 </div>
                 <span class="msg-channel-hash">#</span>
                 <span class="msg-channel-name" id="current-channel-name" onclick="openMobileChannelDrawer()">bridge</span>
+                <span class="channel-topic" id="channel-topic" style="display:none"></span>
               </div>
               <div class="message-topbar-actions">
                 <button class="msg-action-btn" onclick="togglePinned()" title="Pinned">📌</button>
@@ -207,9 +218,16 @@
               </div>
             </div>
 
+            <!-- Reply Preview -->
+            <div class="reply-preview hidden" id="reply-preview">
+              <div class="reply-preview-bar"></div>
+              <span class="reply-preview-text" id="reply-preview-text"></span>
+              <button class="reply-preview-close" onclick="cancelReply()">✕</button>
+            </div>
+
             <!-- Message Input -->
             <div class="message-input-area" id="message-input-area">
-              <button class="input-attach-btn" onclick="attachFile()">+</button>
+              <button class="input-attach-btn" onclick="attachFile()" title="Attach file">+</button>
               <div class="message-input-wrapper">
                 <input type="text" id="message-input" class="message-input" 
                   placeholder="Message #bridge" 
@@ -217,8 +235,15 @@
                   oninput="handleInputChange(event)">
                 <div class="input-autocomplete hidden" id="input-autocomplete"></div>
               </div>
-              <button class="emoji-btn" onclick="toggleEmojiPicker('message')">😊</button>
-              <button class="send-btn" onclick="sendMessage()">↑</button>
+              <button class="emoji-btn" onclick="toggleEmojiPicker('message')" title="Emoji">😊</button>
+              <button class="send-btn" onclick="sendMessage()" title="Send (Enter)">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.724 1.053a.5.5 0 0 1 .553-.05l12 6.5a.5.5 0 0 1 0 .894l-12 6.5A.5.5 0 0 1 1.5 14.5v-5l7-1.5-7-1.5v-5a.5.5 0 0 1 .224-.447z"/></svg>
+              </button>
+            </div>
+            <!-- Sync indicator -->
+            <div class="chat-sync-bar" id="chat-sync-bar">
+              <span class="sync-dot"></span>
+              <span class="sync-text">Connected to Discord</span>
             </div>
           </div>
 
@@ -249,6 +274,21 @@
             <input type="text" class="mind-search" id="mind-search" placeholder="🔍 Search vault..." oninput="searchMind(this.value)">
           </div>
 
+          <!-- Filter Pills (visible in cards/timeline modes) -->
+          <div class="mind-filters" id="mind-filters">
+            <div class="mind-filter-row" id="mind-filter-pills"></div>
+            <div class="mind-sort-row">
+              <span class="mind-sort-label">Sort:</span>
+              <select class="mind-sort-select" id="mind-sort" onchange="applyMindSort()">
+                <option value="recent">Most Recent</option>
+                <option value="confidence">Confidence</option>
+                <option value="backlinks">Most Linked</option>
+                <option value="alpha">A → Z</option>
+              </select>
+              <span class="mind-note-count" id="mind-note-count"></span>
+            </div>
+          </div>
+
           <!-- Graph Mode -->
           <div id="mind-graph" class="mind-panel active">
             <canvas id="graph-canvas"></canvas>
@@ -267,6 +307,9 @@
               <div class="timeline-track" id="timeline-track"></div>
             </div>
           </div>
+
+          <!-- Note Detail (mobile full-screen) -->
+          <div class="mind-note-detail hidden" id="mind-note-detail"></div>
         </div>
 
         <!-- PULSE VIEW -->
@@ -422,34 +465,82 @@
           </div>
         </div>
 
+        <!-- Schedule View -->
+        <div id="view-schedule" class="view hidden">
+          <div class="view-header"><h2>🗓️ Schedule</h2><span class="view-subtitle">Agent calendar & task timeline</span></div>
+          <div class="schedule-content" id="schedule-content"></div>
+        </div>
+
+        <!-- Missions View -->
+        <div id="view-missions" class="view hidden">
+          <div class="view-header"><h2>🏆 Missions</h2><span class="view-subtitle">Goals, streaks & achievements</span></div>
+          <div class="missions-content" id="missions-content"></div>
+        </div>
+
+        <!-- Explore View -->
+        <div id="view-explore" class="view hidden">
+          <div class="view-header"><h2>🔍 Explore</h2><span class="view-subtitle">Search everything</span></div>
+          <div class="explore-content" id="explore-content"></div>
+        </div>
+
       </div><!-- /views -->
     </div><!-- /main -->
   </div><!-- /app -->
 
+  <!-- Quick Actions FAB -->
+  <div class="quick-actions-fab" id="quick-actions-fab" onclick="toggleQuickActions()">⚡</div>
+  <div class="quick-actions-menu hidden" id="quick-actions-menu"></div>
+
   <!-- Mobile Bottom Bar -->
   <nav id="mobile-bar">
+    <button class="mobile-nav-item" data-page="menu" onclick="toggleMobileMenu()">
+      <i data-lucide="menu" class="mobile-icon-svg" id="mobile-menu-lucide"></i>
+      <span class="mobile-label">More</span>
+    </button>
     <button class="mobile-nav-item active" data-page="feed" onclick="nav('feed')">
-      <span class="mobile-icon">🏠</span>
-      <span class="mobile-label">Feed</span>
+      <i data-lucide="layout-dashboard" class="mobile-icon-svg"></i>
+      <span class="mobile-label">Home</span>
+    </button>
+    <button class="mobile-nav-item" data-page="talk" onclick="nav('talk')">
+      <i data-lucide="message-circle" class="mobile-icon-svg"></i>
+      <span class="mobile-label">Talk</span>
+      <span class="mobile-badge" id="talk-mobile-badge">7</span>
     </button>
     <button class="mobile-nav-item" data-page="queue" onclick="nav('queue')">
-      <span class="mobile-icon">❓</span>
+      <i data-lucide="inbox" class="mobile-icon-svg"></i>
       <span class="mobile-label">Queue</span>
       <span class="mobile-badge">8</span>
     </button>
-    <button class="mobile-nav-item" data-page="talk" onclick="nav('talk')">
-      <span class="mobile-icon">💬</span>
-      <span class="mobile-label">Talk</span>
-    </button>
     <button class="mobile-nav-item" data-page="mind" onclick="nav('mind')">
-      <span class="mobile-icon">🧠</span>
+      <i data-lucide="brain" class="mobile-icon-svg"></i>
       <span class="mobile-label">Mind</span>
     </button>
-    <button class="mobile-nav-item" data-page="pulse" onclick="nav('pulse')">
-      <span class="mobile-icon">⚡</span>
-      <span class="mobile-label">Pulse</span>
-    </button>
   </nav>
+
+  <!-- Mobile Menu Drawer -->
+  <div class="mobile-menu-drawer hidden" id="mobile-menu-drawer">
+    <div class="mobile-menu-header">
+      <div class="mobile-menu-title-row">
+        <i data-lucide="bot" style="width:22px;height:22px;color:var(--accent)"></i>
+        <span class="mobile-menu-title">Agent OS</span>
+        <span class="mobile-menu-version">v7</span>
+      </div>
+      <button class="mobile-menu-close" onclick="toggleMobileMenu()">
+        <i data-lucide="x" style="width:18px;height:18px"></i>
+      </button>
+    </div>
+    <div class="mobile-menu-items">
+      <button class="mobile-menu-item" onclick="nav('pulse');toggleMobileMenu()"><i data-lucide="activity" class="menu-item-icon"></i> System</button>
+      <button class="mobile-menu-item" onclick="nav('board');toggleMobileMenu()"><i data-lucide="kanban" class="menu-item-icon"></i> Board</button>
+      <button class="mobile-menu-item" onclick="nav('schedule');toggleMobileMenu()"><i data-lucide="calendar" class="menu-item-icon"></i> Schedule</button>
+      <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()"><i data-lucide="trophy" class="menu-item-icon"></i> Missions</button>
+      <button class="mobile-menu-item" onclick="nav('explore');toggleMobileMenu()"><i data-lucide="search" class="menu-item-icon"></i> Explore</button>
+      <div class="mobile-menu-divider"></div>
+      <button class="mobile-menu-item" onclick="nav('stream');toggleMobileMenu()"><i data-lucide="terminal" class="menu-item-icon"></i> Stream</button>
+      <button class="mobile-menu-item" onclick="nav('command');toggleMobileMenu()"><i data-lucide="command" class="menu-item-icon"></i> Command</button>
+      <button class="mobile-menu-item" onclick="nav('config');toggleMobileMenu()"><i data-lucide="settings" class="menu-item-icon"></i> Config</button>
+    </div>
+  </div>
 
   <!-- Command Palette Overlay -->
   <div class="overlay hidden" id="cmd-palette-overlay" onclick="closeCmdPaletteIfOutside(event)">
@@ -503,5 +594,6 @@
   <script src="app.js"></script>
   <script src="app2.js"></script>
   <script src="app3.js"></script>
+  <script src="live.js"></script>
 </body>
 </html>

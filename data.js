@@ -154,24 +154,80 @@ const DM_MESSAGES = {
 
 // ── DISCORD CHANNEL CONFIG ─────────────────────────────────────────────────────
 const DC_CHANNELS = {
+  categories: [
+    {
+      id:'cat-active', name:'⚡ ACTIVE', channels: [
+        {id:'agent-os-demo-launch', name:'🔥-agent-os-demo-launch', unread:2, type:'text', topic:'Agent OS demo — build, host, deploy.'},
+        {id:'discord-server-v5',    name:'🏗️-discord-server-v5-1',   unread:0, type:'text', topic:'Discord architecture v5.1'},
+        {id:'agent-os-frontend',    name:'🧠-agent-os-frontend',     unread:0, type:'text', topic:'Future Frontend Layer — native app to replace Discord.'},
+        {id:'red-team-fixes',       name:'⚠️-red-team-fixes',        unread:1, type:'text', topic:'3 criticals from v5.1 red team'},
+        {id:'wilson-premier',       name:'🏢-wilson-premier-revenue', unread:0, type:'text', topic:'Wilson Premier Agent Platform — THE revenue play.'},
+        {id:'knowledge-graph',      name:'🧊-knowledge-graph',       unread:0, type:'text', topic:'Neo4j graph activation'},
+      ]
+    },
+    {
+      id:'cat-bridge', name:'🛎️ BRIDGE', channels: [
+        {id:'concierge', name:'concierge',         unread:3, type:'text', topic:'Primary Trajan↔agent interface. Talk to Right Hand here.'},
+        {id:'dispatch',  name:'📋-dispatch',        unread:0, type:'text', topic:'Issue agent commands here.'},
+        {id:'daily-brief',name:'📢-daily-brief',    unread:1, type:'text', topic:'07:00 UTC daily digest.'},
+      ]
+    },
+    {
+      id:'cat-command', name:'🧠 COMMAND', channels: [
+        {id:'desk',      name:'🗂️-desk',            unread:2, type:'forum', topic:'Task board. One thread per task.', count:14},
+        {id:'decisions', name:'⚖️-decisions',        unread:0, type:'forum', topic:'Decision log. One thread per decision.', count:8},
+        {id:'prompt-lab',name:'🧠-prompt-lab',       unread:0, type:'forum', topic:'Prompt engineering workshop.', count:5},
+      ]
+    },
+    {
+      id:'cat-signals', name:'📡 SIGNALS', channels: [
+        {id:'links',        name:'🔗-links',           unread:0, type:'text', topic:'Drop links for analysis.'},
+        {id:'ingestor-feed',name:'📡-ingestor-feed',    unread:4, type:'text', topic:'Hourly Reddit/GitHub/HN intel.'},
+        {id:'vault-feed',   name:'📦-vault-feed',       unread:1, type:'text', topic:'Vault writes, knowledge updates.'},
+      ]
+    },
+    {
+      id:'cat-system', name:'🔧 SYSTEM', channels: [
+        {id:'ops-log',    name:'⚙️-ops-log',          unread:0, type:'text', topic:'System operations, cron output, dispatch cycles.'},
+        {id:'raw-logs',   name:'📜-raw-logs',          unread:0, type:'text', topic:'Cron runs, dispatch cycles, completion hooks.'},
+        {id:'heartbeat',  name:'🫀-heartbeat',         unread:0, type:'text', topic:'System health at a glance.'},
+        {id:'alerts',     name:'🚨-alerts',            unread:0, type:'text', topic:'Critical alerts only.'},
+        {id:'security',   name:'🔒-security',          unread:0, type:'text', topic:'Security agent output.'},
+        {id:'agent-status',name:'💬-agent-status',     unread:0, type:'voice'},
+      ]
+    },
+    {
+      id:'cat-projects', name:'🚀 PROJECTS', channels: [
+        {id:'projects',  name:'🚀-projects',         unread:1, type:'forum', topic:'One thread per project.', count:6},
+      ]
+    },
+    {
+      id:'cat-agent-work', name:'🤖 AGENT WORK', channels: [
+        {id:'agent-feed',    name:'🤖-agent-feed',     unread:3, type:'text', topic:'Dispatches, handoffs, general agent activity.'},
+        {id:'research-feed', name:'🔬-research-feed',  unread:2, type:'text', topic:'Researcher output.'},
+        {id:'code-output',   name:'💻-code-output',    unread:0, type:'text', topic:'Builds, commits, code results.'},
+        {id:'devils-corner', name:'😈-devils-corner',  unread:1, type:'text', topic:'Debate outputs, critiques, red-teaming.'},
+      ]
+    },
+  ],
+  // Flat list for backward compat
   text: [
-    {id:'bridge',       name:'bridge',          unread:4,  topic:'Main agent communication hub'},
-    {id:'dev',          name:'dev',              unread:0,  topic:'Development work and code output'},
-    {id:'research-feed',name:'research-feed',   unread:2,  topic:'Research outputs and findings'},
-    {id:'devils-corner',name:'devils-corner',   unread:1,  topic:'Red team critiques and adversarial analysis'},
-    {id:'ops-log',      name:'ops-log',          unread:0,  topic:'System operations and health'},
-    {id:'dispatch',     name:'dispatch',         unread:0,  topic:'Task routing and dispatch log'},
-    {id:'code-output',  name:'code-output',      unread:0,  topic:'Code artifacts and deploy logs'},
-    {id:'agent-feed',   name:'agent-feed',       unread:3,  topic:'Automated activity feed from all agents'},
+    {id:'concierge',    name:'concierge',         unread:3, topic:'Primary Trajan↔agent interface.'},
+    {id:'dispatch',     name:'📋-dispatch',        unread:0, topic:'Issue agent commands here.'},
+    {id:'research-feed',name:'🔬-research-feed',  unread:2, topic:'Researcher output.'},
+    {id:'devils-corner',name:'😈-devils-corner',  unread:1, topic:'Debate outputs, critiques.'},
+    {id:'ops-log',      name:'⚙️-ops-log',        unread:0, topic:'System operations and health.'},
+    {id:'code-output',  name:'💻-code-output',    unread:0, topic:'Builds, commits, code results.'},
+    {id:'agent-feed',   name:'🤖-agent-feed',     unread:3, topic:'Dispatches, handoffs, general agent activity.'},
   ],
   voice: [
-    {id:'standup', name:'standup', users:['🤝','🔬'], limit:null},
-    {id:'focus',   name:'focus',   users:[],           limit:null},
+    {id:'agent-status', name:'💬-agent-status', users:['🤝','🔬'], limit:null},
   ],
   forums: [
-    {id:'ideas',   name:'ideas',   icon:'💡', count:8},
-    {id:'rfcs',    name:'rfcs',    icon:'📋', count:3},
-    {id:'shipped', name:'shipped', icon:'🚀', count:12},
+    {id:'desk',      name:'🗂️-desk',       icon:'📋', count:14},
+    {id:'decisions', name:'⚖️-decisions',   icon:'⚖️', count:8},
+    {id:'projects',  name:'🚀-projects',    icon:'🚀', count:6},
+    {id:'prompt-lab',name:'🧠-prompt-lab',  icon:'🧠', count:5},
   ],
 };
 

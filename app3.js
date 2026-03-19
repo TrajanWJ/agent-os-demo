@@ -346,6 +346,7 @@ function toggleAgent(agentId, enabled) {
   if (agent) {
     agent.status = enabled ? 'idle' : 'offline';
     toast(`${agent.emoji} ${agent.name} ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'success' : 'info');
+    updateActiveAgents();
   }
 }
 
@@ -399,30 +400,309 @@ function toggleCron(name, enabled) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SIMULATION ENGINE
+// EVENT BUS — Bidirectional Mirroring
+// ═══════════════════════════════════════════════════════════
+
+const EventBus = {
+  _handlers: {},
+  on(event, fn) {
+    (this._handlers[event] = this._handlers[event] || []).push(fn);
+  },
+  emit(event, data) {
+    (this._handlers[event] || []).forEach(fn => fn(data));
+  }
+};
+
+// Wire up cross-view mirroring
+EventBus.on('chat:message', data => {
+  // Chat message → Feed event
+  prependFeedCard({
+    id: 'feed_chat_' + Date.now(),
+    agent: data.agent,
+    type: data.agent === 'user' ? 'question_asked' : 'task_completed',
+    time: data.time,
+    content: `[#${data.channel || 'DM'}] ${data.text.substring(0, 150)}`,
+  });
+  // Chat message → Stream event
+  if (typeof addStreamEvent === 'function') {
+    addStreamEvent({
+      id: 'str_chat_' + Date.now(),
+      level: 'info',
+      agent: data.agent === 'user' ? 'righthand' : data.agent,
+      time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      text: `Message in #${data.channel || 'DM'}: ${data.text.substring(0, 80)}`,
+    });
+  }
+  // Update unread badges
+  if (data.channel && data.channel !== currentChannel) {
+    updateUnreadBadge(data.channel);
+  }
+});
+
+EventBus.on('queue:answered', data => {
+  // Queue answer → Chat message in #dispatch
+  const newMsg = {
+    id: 'qans_' + Date.now(),
+    agent: 'user',
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    ts: Date.now() / 1000,
+    text: `📋 **Queue Decision:** ${data.question.substring(0, 80)}\n→ \`${data.answer}\``,
+    reactions: [],
+  };
+  if (!DC_MESSAGES['dispatch']) DC_MESSAGES['dispatch'] = [];
+  DC_MESSAGES['dispatch'].push(newMsg);
+  if (currentPage === 'talk' && currentChannel === 'dispatch') renderMessages('dispatch');
+
+  // Queue answer → agent response in relevant channel
+  const agentReply = {
+    id: 'qreply_' + Date.now(),
+    agent: data.agent,
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    ts: Date.now() / 1000,
+    text: `Acknowledged. Acting on your decision: \`${data.answer}\``,
+    reactions: [{e:'✅', n:1, mine:false}],
+  };
+  const agentChannel = getAgentChannel(data.agent);
+  if (!DC_MESSAGES[agentChannel]) DC_MESSAGES[agentChannel] = [];
+  DC_MESSAGES[agentChannel].push(agentReply);
+  if (currentPage === 'talk' && currentChannel === agentChannel) renderMessages(agentChannel);
+  updateUnreadBadge(agentChannel);
+});
+
+EventBus.on('agent:statusChange', data => {
+  // Agent status → Feed event
+  const verb = data.status === 'active' ? 'started working' : 'went idle';
+  prependFeedCard({
+    id: 'feed_status_' + Date.now(),
+    agent: data.agentId,
+    type: data.status === 'active' ? 'task_started' : 'task_completed',
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    content: `${verb}${data.task ? ': ' + data.task : ''}`,
+  });
+  // Agent status → Stream
+  if (typeof addStreamEvent === 'function') {
+    addStreamEvent({
+      id: 'str_status_' + Date.now(),
+      level: 'info',
+      agent: data.agentId,
+      time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      text: `Agent ${verb}${data.task ? ': ' + data.task : ''}`,
+    });
+  }
+  // Status → agent-feed chat
+  const statusMsg = {
+    id: 'af_status_' + Date.now(),
+    agent: data.agentId,
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    ts: Date.now() / 1000,
+    text: `[STATUS] ${verb}${data.task ? ': ' + data.task : ''}`,
+    reactions: [],
+  };
+  if (!DC_MESSAGES['agent-feed']) DC_MESSAGES['agent-feed'] = [];
+  DC_MESSAGES['agent-feed'].push(statusMsg);
+  if (currentPage === 'talk' && currentChannel === 'agent-feed') renderMessages('agent-feed');
+  updateUnreadBadge('agent-feed');
+  // Update pulse if visible
+  if (currentPage === 'pulse') renderAgentHealth();
+});
+
+function getAgentChannel(agentId) {
+  const map = {
+    researcher: 'research-feed', coder: 'code-output', devil: 'devils-corner',
+    ops: 'ops-log', security: 'ops-log', vault: 'agent-feed',
+    prompt: 'agent-feed', righthand: 'bridge',
+  };
+  return map[agentId] || 'agent-feed';
+}
+
+function updateUnreadBadge(channelId) {
+  // Update data
+  const allChannels = DC_CHANNELS.categories
+    ? DC_CHANNELS.categories.flatMap(c => c.channels)
+    : DC_CHANNELS.text;
+  const ch = allChannels.find(c => c.id === channelId);
+  if (ch) ch.unread = (ch.unread || 0) + 1;
+  // Update DOM
+  const item = document.querySelector(`.channel-item[data-chid="${channelId}"]`);
+  if (item) {
+    item.classList.add('has-unread');
+    let badge = item.querySelector('.channel-unread');
+    if (badge) {
+      badge.textContent = ch ? ch.unread : '•';
+    } else {
+      badge = document.createElement('span');
+      badge.className = 'channel-unread';
+      badge.textContent = ch ? ch.unread : '•';
+      item.appendChild(badge);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIMULATION ENGINE (Live Updates)
 // ═══════════════════════════════════════════════════════════
 
 let simTimers = {};
 
+// Rich chat messages for simulation
+const SIM_CHAT_MESSAGES = {
+  bridge: [
+    { agent: 'righthand', texts: [
+      'Morning batch complete. All agents checked in.',
+      'Vault freshness scan done — 3 notes need updates.',
+      'Dispatch queue clear. Standing by for instructions.',
+      'Session health check passed. All connections stable.',
+      'Memory pressure at 62% — comfortable headroom.',
+    ]},
+    { agent: 'researcher', texts: [
+      'New finding from competitive scan — updating vault.',
+      'Cross-referenced 4 sources on multi-agent patterns.',
+      'Published analysis to #research-feed.',
+    ]},
+  ],
+  dev: [
+    { agent: 'coder', texts: [
+      '```bash\ngit push origin main\n# All tests passing ✅\n```',
+      'Refactored dispatch engine — 30% fewer lines.',
+      'New streaming component deployed. Check #code-output.',
+      'Bug fix: race condition in concurrent dispatch.',
+    ]},
+    { agent: 'ops', texts: [
+      'Deploy verified — no latency spikes.',
+      'CI pipeline green. 47/47 tests passed.',
+    ]},
+  ],
+  'research-feed': [
+    { agent: 'researcher', texts: [
+      '**Key Insight:** Agent frameworks converging on tool-use patterns. Three distinct approaches emerging:\n1. Function calling (OpenAI)\n2. MCP (Anthropic)\n3. Custom protocols',
+      'Completed teardown of Cursor UX. Notes saved to vault.',
+      'Market gap confirmed — no unified control surface exists.',
+      '**Source Tier:** T1 (peer-reviewed) — new paper on multi-agent coordination benchmarks.',
+    ]},
+    { agent: 'vault', texts: [
+      'Research notes indexed. 4 new cross-links created.',
+    ]},
+  ],
+  'devils-corner': [
+    { agent: 'devil', texts: [
+      '**Counter-point:** The "no competitor" claim assumes static market. 3 startups raised in Q1 targeting similar space.',
+      'Pre-mortem: If deployment fails, fallback is... what exactly?',
+      'Assumption check: we\'re assuming users want control. Enterprise data says otherwise — 70% prefer guardrails.',
+    ]},
+  ],
+  'ops-log': [
+    { agent: 'ops', texts: [
+      '✅ All 7 cron jobs nominal\n✅ Disk: 67% used\n✅ Memory: 4.2GB/14GB\n❌ Token budget: 82% consumed',
+      'Heartbeat check: 8/8 agents responding.',
+      'Auto-scaling triggered — spawning additional executor.',
+      'Vault sync complete: 0 conflicts, 3 files updated.',
+    ]},
+  ],
+  'code-output': [
+    { agent: 'coder', texts: [
+      '```js\n// New streaming progress component\nclass StreamProgress {\n  update(pct) {\n    this.bar.style.width = pct + "%";\n  }\n}\n```\nDeploy ready. Awaiting review.',
+      'Build artifact: `agent-os-v7.min.js` (48KB gzipped)',
+      'Integration tests: 12/12 passed. Coverage: 89%.',
+    ]},
+  ],
+  'agent-feed': [
+    { agent: 'righthand', texts: [
+      '[DISPATCH] Researcher → competitive deep-dive (P1, 12K budget)',
+      '[DISPATCH] Coder → streaming UI polish (P2, 8K budget)',
+      '[STATUS] All agents healthy. Queue depth: 0.',
+    ]},
+    { agent: 'ops', texts: [
+      '[METRIC] Token usage: 52K/100K daily budget.',
+      '[CRON] vault-sync completed in 2.1s.',
+    ]},
+  ],
+};
+
 function startSimulation() {
-  // Agent status changes every 8s
+  // Agent status changes every 8s — with event bus
   simTimers.agents = setInterval(() => {
     AGENTS.forEach(a => {
-      if (Math.random() < 0.15) {
-        if (a.status === 'active') {
+      if (Math.random() < 0.12) {
+        const wasActive = a.status === 'active';
+        if (wasActive) {
           a.status = 'idle';
           a.task = '';
-        } else if (a.status === 'idle') {
+          EventBus.emit('agent:statusChange', { agentId: a.id, status: 'idle', task: '' });
+        } else {
           a.status = 'active';
-          const tasks = ['Processing batch...', 'Scanning vault...', 'Running analysis...', 'Reviewing output...', 'Indexing documents...'];
+          const tasks = [
+            'Processing dispatch batch...', 'Scanning vault for gaps...', 
+            'Running competitive analysis...', 'Reviewing agent output...', 
+            'Indexing new documents...', 'Generating report...',
+            'Cross-referencing sources...', 'Optimizing prompts...',
+          ];
           a.task = tasks[Math.floor(Math.random() * tasks.length)];
+          EventBus.emit('agent:statusChange', { agentId: a.id, status: 'active', task: a.task });
         }
       }
     });
     updateActiveAgents();
   }, 8000);
 
-  // Feed update every 15s
+  // Chat messages — the big new one. Every 12s, post a message to a channel
+  simTimers.chat = setInterval(() => {
+    const channels = Object.keys(SIM_CHAT_MESSAGES);
+    const channel = channels[Math.floor(Math.random() * channels.length)];
+    const speakers = SIM_CHAT_MESSAGES[channel];
+    const speaker = speakers[Math.floor(Math.random() * speakers.length)];
+    const text = speaker.texts[Math.floor(Math.random() * speaker.texts.length)];
+    const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+    const msg = {
+      id: 'sim_msg_' + Date.now(),
+      agent: speaker.agent,
+      time,
+      ts: Date.now() / 1000,
+      text,
+      reactions: Math.random() > 0.7 ? [{e: ['👍','🔥','✅','💡'][Math.floor(Math.random()*4)], n: 1, mine: false}] : [],
+    };
+
+    // Add to data
+    if (!DC_MESSAGES[channel]) DC_MESSAGES[channel] = [];
+    DC_MESSAGES[channel].push(msg);
+
+    // Live-update if user is viewing this channel
+    if (currentPage === 'talk' && currentChannel === channel && !currentDM) {
+      // Append message to DOM without full re-render
+      const container = $('messages-list');
+      if (container) {
+        const existing = DC_MESSAGES[channel];
+        const prevMsg = existing.length > 1 ? existing[existing.length - 2] : null;
+        const collapsed = prevMsg && prevMsg.agent === msg.agent && 
+          msg.ts - prevMsg.ts < 300;
+        container.appendChild(makeMessageGroup(msg, collapsed, channel));
+        const msgContainer = $('messages-container');
+        // Auto-scroll only if near bottom
+        if (msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight < 100) {
+          msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+      }
+    }
+
+    // Show typing indicator briefly before message appears (visual flair)
+    // Update unread if not current channel
+    if (currentPage !== 'talk' || currentChannel !== channel || currentDM) {
+      updateUnreadBadge(channel);
+    }
+
+    // Mirror to event bus (but skip feed mirroring for sim messages to avoid spam)
+    if (typeof addStreamEvent === 'function') {
+      addStreamEvent({
+        id: 'str_sim_' + Date.now(),
+        level: 'info',
+        agent: speaker.agent,
+        time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+        text: `#${channel}: ${text.substring(0, 60).replace(/\n/g,' ')}`,
+      });
+    }
+  }, 12000);
+
+  // Feed update every 20s (slower now since chat drives feed events too)
   simTimers.feed = setInterval(() => {
     const agent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
     const types = ['task_started', 'task_completed', 'insight', 'vault_write', 'file_changed'];
@@ -443,35 +723,65 @@ function startSimulation() {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       content: contentList[Math.floor(Math.random() * contentList.length)],
     });
-  }, 15000);
+  }, 20000);
 
-  // Queue cards every 25s
+  // Queue cards every 30s
   simTimers.queue = setInterval(() => {
     if (typeof generateQueueCard === 'function') generateQueueCard();
-  }, 25000);
+  }, 30000);
 
-  // Stream events every 10s
+  // Stream events every 8s
   simTimers.stream = setInterval(() => {
     const agent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
     const levels = ['debug', 'info', 'info', 'info', 'warn'];
     const level = levels[Math.floor(Math.random() * levels.length)];
     const texts = {
-      debug: ['Heartbeat OK', 'Vault sync complete', 'Token ledger updated', 'Memory compactor idle'],
-      info:  ['Task checkpoint reached', 'Dispatch acknowledged', 'Agent registered', 'Scan cycle complete'],
-      warn:  ['Latency spike detected', 'Approaching token limit', 'Retry queued'],
+      debug: ['Heartbeat OK — all agents responding', 'Vault sync: 0 changes', 'Token ledger: balanced', 'Memory compactor: idle', 'Session pool: 3 active'],
+      info:  ['Task checkpoint reached', 'Dispatch acknowledged', 'Agent slot acquired (2/3)', 'Scan cycle complete — 0 issues', 'Backlink index refreshed'],
+      warn:  ['Latency spike: 1.8s on agent-bus', 'Token budget at 78%', 'Retry queued for failed webhook', 'Disk I/O elevated'],
     };
     const textList = texts[level] || texts.info;
 
-    const event = {
+    addStreamEvent({
       id: 'ss_' + Date.now(),
       level,
       agent: agent.id,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       text: textList[Math.floor(Math.random() * textList.length)],
-    };
+    });
+  }, 8000);
 
-    if (typeof addStreamEvent === 'function') addStreamEvent(event);
-  }, 10000);
+  // DM simulation — agents occasionally DM
+  simTimers.dms = setInterval(() => {
+    const agent = AGENTS.filter(a => a.status === 'active')[0] || AGENTS[0];
+    const dmTexts = [
+      'Quick update — task is progressing well. ETA 20 minutes.',
+      'Found an edge case. Handling it now, no action needed from you.',
+      'Results are in. Summary posted to the relevant channel.',
+      'Heads up — I noticed something in the vault that might need attention.',
+      'Task complete. Moving to next item in queue.',
+    ];
+    const text = dmTexts[Math.floor(Math.random() * dmTexts.length)];
+    const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+    if (!DM_MESSAGES[agent.id]) DM_MESSAGES[agent.id] = [];
+    DM_MESSAGES[agent.id].push({
+      id: 'sim_dm_' + Date.now(),
+      agent: agent.id,
+      time,
+      ts: Date.now() / 1000,
+      text,
+      reactions: [],
+    });
+
+    // Live update if viewing this DM
+    if (currentPage === 'talk' && currentDM === agent.id) {
+      renderMessages(null, agent.id);
+    }
+
+    // Notification
+    addNotification(`DM from ${agent.name}`, text.substring(0, 60), agent.emoji);
+  }, 35000);
 }
 
 function updateActiveAgents() {
@@ -485,6 +795,9 @@ function updateActiveAgents() {
   const metricEl = $('metric-agents');
   if (metricEl) metricEl.textContent = count;
 }
+
+// Alias for clarity
+const updateTopbarAgentCount = updateActiveAgents;
 
 // ═══════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════
@@ -554,22 +867,31 @@ function renderMobileDrawerChannels() {
   if (!list) return;
 
   if (talkMode === 'channels') {
-    const categories = {};
-    DC_CHANNELS.text.forEach(ch => {
-      const cat = ch.category || 'general';
-      if (!categories[cat]) categories[cat] = [];
-      categories[cat].push(ch);
-    });
-
     let html = '';
-    for (const [cat, channels] of Object.entries(categories)) {
-      html += `<div style="padding:8px 12px 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">${cat}</div>`;
-      channels.forEach(ch => {
+    if (DC_CHANNELS.categories) {
+      DC_CHANNELS.categories.forEach(cat => {
+        html += `<div style="padding:10px 12px 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px">${cat.name}</div>`;
+        cat.channels.forEach(ch => {
+          const chType = ch.type || 'text';
+          if (chType === 'voice') return; // skip voice on mobile
+          const active = ch.id === currentChannel ? 'background:var(--bg-raised);color:var(--accent)' : '';
+          const unread = ch.unread ? `<span style="background:var(--accent);color:var(--bg);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:auto">${ch.unread}</span>` : '';
+          const icon = chType === 'forum' ? '💬' : '#';
+          html += `<div onclick="switchChannel('${ch.id}');closeMobileDrawer()" 
+            style="display:flex;align-items:center;gap:8px;padding:9px 16px;cursor:pointer;border-radius:4px;margin:1px 8px;${active}">
+            <span style="color:var(--text-muted);font-size:14px">${icon}</span>
+            <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.name}</span>
+            ${unread}
+          </div>`;
+        });
+      });
+    } else {
+      DC_CHANNELS.text.forEach(ch => {
         const active = ch.id === currentChannel ? 'background:var(--bg-raised);color:var(--accent)' : '';
         const unread = ch.unread ? `<span style="background:var(--accent);color:var(--bg);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:auto">${ch.unread}</span>` : '';
         html += `<div onclick="switchChannel('${ch.id}');closeMobileDrawer()" 
           style="display:flex;align-items:center;gap:8px;padding:8px 16px;cursor:pointer;border-radius:4px;margin:1px 8px;${active}">
-          <span style="color:var(--text-muted);font-size:14px">${ch.type==='voice'?'🔊':ch.type==='forum'?'💬':'#'}</span>
+          <span style="color:var(--text-muted);font-size:14px">#</span>
           <span style="font-size:14px">${ch.id}</span>
           ${unread}
         </div>`;
@@ -609,6 +931,9 @@ function closeMobileDrawer() {
 // ═══════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize Lucide icons
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
   // Set initial XP display
   updateXPDisplay();
 
@@ -638,7 +963,310 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paletteOpen) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    const map = { '1': 'feed', '2': 'queue', '3': 'talk', '4': 'mind', '5': 'pulse', '6': 'board', '7': 'stream', '8': 'command', '9': 'config' };
+    const map = { '1': 'feed', '2': 'talk', '3': 'queue', '4': 'mind', '5': 'pulse' };
     if (map[e.key]) { nav(map[e.key]); }
   });
+
+  // Init Quick Actions
+  updateQuickActions();
 });
+
+// ═══════════════════════════════════════════════════════════
+// QUICK ACTIONS FAB
+// ═══════════════════════════════════════════════════════════
+
+const QUICK_ACTIONS = {
+  feed: [
+    { icon: '🔬', label: 'Research Topic', action: 'research' },
+    { icon: '📊', label: 'Analyze Gaps', action: 'gaps' },
+    { icon: '🎯', label: 'Generate 6 Proposals', action: 'proposals' },
+    { icon: '📝', label: 'Summarize Today', action: 'summarize' },
+  ],
+  talk: [
+    { icon: '📨', label: 'Deploy Update', action: 'deploy' },
+    { icon: '📢', label: 'Broadcast to All', action: 'broadcast' },
+    { icon: '🤖', label: 'Summon Agent', action: 'summon' },
+  ],
+  queue: [
+    { icon: '⚡', label: 'Auto-Prioritize All', action: 'auto-prioritize' },
+    { icon: '✅', label: 'Batch Approve', action: 'batch-approve' },
+    { icon: '🗑️', label: 'Clear Answered', action: 'clear-done' },
+  ],
+  mind: [
+    { icon: '🧠', label: 'Find Gaps', action: 'find-gaps' },
+    { icon: '🔗', label: 'Auto-Link Notes', action: 'auto-link' },
+    { icon: '📊', label: 'Coverage Report', action: 'coverage' },
+  ],
+  pulse: [
+    { icon: '🔄', label: 'Refresh All Metrics', action: 'refresh-metrics' },
+    { icon: '🚨', label: 'Run Health Check', action: 'health-check' },
+    { icon: '📉', label: 'Cost Analysis', action: 'cost-analysis' },
+  ],
+};
+
+let quickActionsOpen = false;
+
+function toggleQuickActions() {
+  quickActionsOpen = !quickActionsOpen;
+  const fab = $('quick-actions-fab');
+  const menu = $('quick-actions-menu');
+  fab.classList.toggle('open', quickActionsOpen);
+  if (quickActionsOpen) {
+    menu.classList.remove('hidden');
+    updateQuickActions();
+  } else {
+    menu.classList.add('hidden');
+  }
+}
+
+function updateQuickActions() {
+  const menu = $('quick-actions-menu');
+  if (!menu || !quickActionsOpen) return;
+  const page = currentPage || 'feed';
+  const actions = QUICK_ACTIONS[page] || QUICK_ACTIONS.feed;
+  menu.innerHTML = actions.map(a =>
+    `<button class="qa-btn" onclick="runQuickAction('${a.action}')">
+      <span class="qa-btn-icon">${a.icon}</span>
+      <span class="qa-btn-label">${a.label}</span>
+    </button>`
+  ).join('');
+}
+
+function runQuickAction(action) {
+  toggleQuickActions(); // close menu
+
+  // Simulate the action with streaming progress
+  const actionNames = {
+    'research': '🔬 Researching topic...',
+    'gaps': '📊 Analyzing gaps across vault...',
+    'proposals': '🎯 Generating 6 proposals...',
+    'summarize': '📝 Summarizing today\'s activity...',
+    'deploy': '📨 Deploying update to agents...',
+    'broadcast': '📢 Broadcasting to all channels...',
+    'summon': '🤖 Summoning agent...',
+    'auto-prioritize': '⚡ Auto-prioritizing queue...',
+    'batch-approve': '✅ Batch approving items...',
+    'clear-done': '🗑️ Clearing answered items...',
+    'find-gaps': '🧠 Scanning vault for gaps...',
+    'auto-link': '🔗 Auto-linking related notes...',
+    'coverage': '📊 Generating coverage report...',
+    'refresh-metrics': '🔄 Refreshing all metrics...',
+    'health-check': '🚨 Running health check...',
+    'cost-analysis': '📉 Analyzing token costs...',
+  };
+
+  const name = actionNames[action] || 'Running action...';
+  toast(name, 'info', 2000);
+  
+  // Sync to Discord
+  syncToDiscord('agent-feed', `⚡ Quick Action: ${name}`, 'righthand');
+  addXP(20, 'quick action');
+
+  // Simulate result after delay
+  setTimeout(() => {
+    const results = {
+      'proposals': '✅ 6 proposals generated and posted to #dispatch',
+      'gaps': '✅ Gap analysis complete — 3 areas identified',
+      'research': '✅ Research task dispatched to 🔬 Researcher',
+      'summarize': '✅ Daily summary posted to #daily-brief',
+      'auto-prioritize': '✅ Queue reordered by urgency × impact',
+      'batch-approve': '✅ 3 items approved, synced to Discord',
+      'find-gaps': '✅ Found 4 uncovered topics in vault',
+      'coverage': '✅ Coverage: 73% — weak in Operations, strong in Architecture',
+    };
+    toast(results[action] || '✅ Action complete', 'success', 3500);
+    addNotification('Quick Action', results[action] || 'Complete', '⚡');
+  }, 2000 + Math.random() * 1500);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MOBILE MENU
+// ═══════════════════════════════════════════════════════════
+
+let mobileMenuOpen = false;
+
+function toggleMobileMenu() {
+  mobileMenuOpen = !mobileMenuOpen;
+  const drawer = $('mobile-menu-drawer');
+  if (mobileMenuOpen) {
+    drawer.classList.remove('hidden');
+    // Re-render Lucide icons in the drawer
+    if (typeof lucide !== 'undefined') lucide.createIcons({ nameAttr: 'data-lucide' });
+  } else {
+    drawer.classList.add('hidden');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCHEDULE VIEW
+// ═══════════════════════════════════════════════════════════
+
+const SCHEDULE_DATA = [
+  { time: '06:00', events: [] },
+  { time: '06:30', events: [{ label: 'QMD vault index', agent: 'ops', color: 'var(--orange)' }] },
+  { time: '07:00', events: [{ label: '📢 Daily Brief generation', agent: 'righthand', color: 'var(--accent)' }] },
+  { time: '07:15', events: [{ label: 'Heartbeat check', agent: 'ops', color: 'var(--orange)' }] },
+  { time: '07:30', events: [] },
+  { time: '08:00', events: [{ label: 'Dispatch queue scan', agent: 'righthand', color: 'var(--accent)' }, { label: 'Ingestor feed pull', agent: 'researcher', color: 'var(--accent2)' }] },
+  { time: '08:30', events: [{ label: 'Session health check', agent: 'ops', color: 'var(--orange)' }] },
+  { time: '09:00', events: [{ label: 'Morning batch dispatch', agent: 'righthand', color: 'var(--accent)', now: true }] },
+  { time: '09:30', events: [{ label: 'Vault freshness scan', agent: 'ops', color: 'var(--orange)' }] },
+  { time: '10:00', events: [{ label: 'Ontology sync', agent: 'ops', color: 'var(--orange)' }] },
+  { time: '10:30', events: [] },
+  { time: '11:00', events: [{ label: 'Competitive scan', agent: 'researcher', color: 'var(--accent2)' }] },
+  { time: '12:00', events: [{ label: 'Memory pressure check', agent: 'righthand', color: 'var(--accent)' }] },
+  { time: '13:00', events: [{ label: 'Agent fitness review', agent: 'righthand', color: 'var(--accent)' }] },
+  { time: '14:00', events: [{ label: 'Red team sweep', agent: 'devil', color: 'var(--red)' }] },
+  { time: '15:00', events: [{ label: 'Auto-knowledge capture', agent: 'ops', color: 'var(--orange)' }] },
+];
+
+function renderSchedule() {
+  const el = $('schedule-content');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:16px;font-weight:700">Today — ${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${SCHEDULE_DATA.reduce((s,h)=>s+h.events.length,0)} scheduled tasks · 3 cron jobs</div>
+      </div>
+      <button class="qa-btn" onclick="runQuickAction('summarize')" style="box-shadow:none">📅 Schedule Task</button>
+    </div>
+    <div class="schedule-timeline">
+      ${SCHEDULE_DATA.map(h => `
+        <div class="schedule-hour">
+          <div class="schedule-time">${h.time}</div>
+          <div class="schedule-events">
+            ${h.events.length ? h.events.map(e => `
+              <div class="schedule-event${e.now?' schedule-now':''}" style="border-left-color:${e.color}">
+                ${e.label}
+                <span style="font-size:11px;color:var(--text-muted);margin-left:8px">${(ga(e.agent)||{}).emoji||'🤖'}</span>
+              </div>
+            `).join('') : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MISSIONS VIEW
+// ═══════════════════════════════════════════════════════════
+
+const MISSIONS_DATA = [
+  { id:'m1', icon:'🎯', title:'Competitive Dominance', desc:'Complete analysis of all 60+ competitors', progress:73, status:'active',
+    milestones:['Surface scan ✓','Deep dive: 3/13','Final report'] },
+  { id:'m2', icon:'🏗️', title:'Frontend Vision', desc:'Build the Agent OS cockpit — replace Discord', progress:35, status:'active',
+    milestones:['Design spec ✓','Demo v6 ✓','Mobile QA','Deploy live'] },
+  { id:'m3', icon:'💰', title:'Wilson Premier Revenue', desc:'Ship Phase 0 feasibility for Wilson Premier', progress:15, status:'active',
+    milestones:['Research','Architecture','Prototype','Pitch deck'] },
+  { id:'m4', icon:'🧠', title:'Vault Mastery', desc:'500 vault notes, all cross-linked, confidence calibrated', progress:88, status:'active',
+    milestones:['100 notes ✓','250 notes ✓','Backlinks ✓','500 notes'] },
+  { id:'m5', icon:'🔒', title:'Zero Security Criticals', desc:'Clear all security audit findings', progress:100, status:'completed',
+    milestones:['Port scan ✓','SSH hardened ✓','Firewall ✓','All clear ✓'] },
+];
+
+const STREAKS_DATA = [
+  { icon:'🔥', number:14, label:'Days uptime' },
+  { icon:'⚡', number:847, label:'Tasks dispatched' },
+  { icon:'🧠', number:312, label:'Vault notes' },
+  { icon:'🎯', number:23, label:'Day streak' },
+];
+
+function renderMissions() {
+  const el = $('missions-content');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="streaks-row">
+      ${STREAKS_DATA.map(s => `
+        <div class="streak-card">
+          <div class="streak-icon">${s.icon}</div>
+          <div class="streak-number">${s.number}</div>
+          <div class="streak-label">${s.label}</div>
+        </div>
+      `).join('')}
+    </div>
+    ${MISSIONS_DATA.map(m => {
+      const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
+      return `
+        <div class="mission-card">
+          <div class="mission-header">
+            <span class="mission-icon">${m.icon}</span>
+            <span class="mission-title">${m.title}</span>
+            <span class="mission-status ${m.status === 'completed' ? 'mission-completed' : 'mission-active'}">${m.status === 'completed' ? '✓ Done' : `${m.progress}%`}</span>
+          </div>
+          <div class="mission-progress-bar">
+            <div class="mission-progress-fill" style="width:${m.progress}%;background:${progressColor}"></div>
+          </div>
+          <div class="mission-detail">${m.desc}</div>
+          <div class="mission-milestones">
+            ${m.milestones.map(ms => `<span class="milestone-badge${ms.includes('✓')?' earned':''}">${ms}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPLORE VIEW
+// ═══════════════════════════════════════════════════════════
+
+function renderExplore() {
+  const el = $('explore-content');
+  if (!el) return;
+  
+  const trending = [
+    { icon:'🔬', title:'Competitive Analysis', type:'Research', desc:'60+ product survey across IDE agents, frameworks' },
+    { icon:'🏗️', title:'Agent OS Frontend', type:'Architecture', desc:'North star document for the cockpit' },
+    { icon:'💰', title:'Wilson Premier Platform', type:'Project', desc:'Multi-agent AI for real estate + hospitality' },
+    { icon:'⚡', title:'Dispatch Engine v3', type:'Architecture', desc:'Priority queue, agent capability matrix, load balancer' },
+    { icon:'📊', title:'Agent Performance Tracking', type:'Operations', desc:'Fitness scores, outcome tracker, workflow patterns' },
+  ];
+
+  const recentSearches = ['rate limiter', 'vault indexing', 'Discord migration', 'token budget'];
+  const quickFilters = ['📝 Notes', '💬 Messages', '📋 Tasks', '⚙️ Config', '🤖 Agents', '🔬 Research'];
+
+  el.innerHTML = `
+    <div class="explore-search-box">
+      <span class="explore-search-icon">🔍</span>
+      <input class="explore-search-input" placeholder="Search notes, messages, tasks, agents..." oninput="handleExploreSearch(this.value)">
+    </div>
+
+    <div class="explore-section">
+      <div class="explore-section-title">Quick Filters</div>
+      <div class="explore-chips">
+        ${quickFilters.map(f => `<button class="explore-chip" onclick="toast('Filtering: ${f}','info')">${f}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="explore-section">
+      <div class="explore-section-title">Recent Searches</div>
+      <div class="explore-chips">
+        ${recentSearches.map(s => `<button class="explore-chip" onclick="toast('Searching: ${s}','info')">🕐 ${s}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="explore-section">
+      <div class="explore-section-title">Trending Now</div>
+      ${trending.map(t => `
+        <div class="explore-result" onclick="toast('Opening: ${t.title}','info')">
+          <span class="explore-result-icon">${t.icon}</span>
+          <div class="explore-result-body">
+            <div class="explore-result-title">${t.title}</div>
+            <div class="explore-result-desc">${t.desc}</div>
+            <div class="explore-result-meta">${t.type} · Updated today</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function handleExploreSearch(q) {
+  if (!q.trim()) return;
+  // Simulate search results
+  if (q.length > 2) {
+    toast(`🔍 Found ${Math.floor(Math.random()*20+5)} results for "${q}"`, 'info', 1500);
+  }
+}

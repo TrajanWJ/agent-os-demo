@@ -5,7 +5,9 @@
 // MIND PAGE
 // ═══════════════════════════════════════════════════════════
 
-let mindMode = 'graph';
+let mindMode = 'cards'; // default to cards (most usable on mobile)
+let mindFilter = 'all';
+let mindSortBy = 'recent';
 let graphNodes = [];
 let graphEdges = [];
 let graphCanvas = null;
@@ -15,14 +17,69 @@ let selectedNode = null;
 let draggingNode = null;
 let graphAnimId = null;
 
+const MIND_TYPES = ['all','Research','Architecture','Vision','Operations','Report','Code'];
+const TYPE_COLORS = {
+  Research:'#89b4fa', Architecture:'#f9e2af', Vision:'#cba6f7',
+  Operations:'#fab387', Report:'#f38ba8', Code:'#a6e3a1'
+};
+
 function initMind() {
-  if (mindMode === 'graph') {
-    requestAnimationFrame(() => initGraph());
-  } else if (mindMode === 'cards') {
-    renderVaultCards();
-  } else {
-    renderTimeline();
+  // Default to cards on mobile, graph on desktop
+  if (window.innerWidth <= 768 && mindMode === 'graph') {
+    mindMode = 'cards';
   }
+  renderMindFilterPills();
+  setMindMode(mindMode);
+}
+
+function renderMindFilterPills() {
+  const row = $('mind-filter-pills');
+  if (!row) return;
+  row.innerHTML = MIND_TYPES.map(t => {
+    const active = mindFilter === (t === 'all' ? 'all' : t);
+    const color = t === 'all' ? 'var(--accent)' : (TYPE_COLORS[t] || 'var(--text-dim)');
+    return `<button class="mind-pill${active ? ' active' : ''}"
+      style="${active ? `background:${color};color:var(--bg-base)` : ''}"
+      data-filter="${t === 'all' ? 'all' : t}"
+      onclick="setMindFilter('${t === 'all' ? 'all' : t}')">${t === 'all' ? 'All' : t}</button>`;
+  }).join('');
+}
+
+function setMindFilter(type) {
+  mindFilter = type;
+  renderMindFilterPills();
+  if (mindMode === 'cards') renderVaultCards();
+  else if (mindMode === 'timeline') renderTimeline();
+}
+
+function applyMindSort() {
+  mindSortBy = $('mind-sort').value;
+  if (mindMode === 'cards') renderVaultCards();
+  else if (mindMode === 'timeline') renderTimeline();
+}
+
+function getFilteredNotes() {
+  let notes = [...VAULT_NOTES];
+  // Filter
+  if (mindFilter !== 'all') {
+    notes = notes.filter(n => n.type === mindFilter);
+  }
+  // Search
+  const q = ($('mind-search')?.value || '').toLowerCase().trim();
+  if (q) {
+    notes = notes.filter(n =>
+      n.title.toLowerCase().includes(q) || n.summary.toLowerCase().includes(q) ||
+      n.tags.some(t => t.includes(q)) || n.type.toLowerCase().includes(q)
+    );
+  }
+  // Sort
+  switch (mindSortBy) {
+    case 'confidence': notes.sort((a,b) => b.confidence - a.confidence); break;
+    case 'backlinks': notes.sort((a,b) => b.backlinks - a.backlinks); break;
+    case 'alpha': notes.sort((a,b) => a.title.localeCompare(b.title)); break;
+    default: notes.sort((a,b) => new Date(b.date) - new Date(a.date)); break;
+  }
+  return notes;
 }
 
 function setMindMode(mode) {
@@ -40,6 +97,10 @@ function setMindMode(mode) {
   const target = mode === 'graph' ? 'mind-graph' : mode === 'cards' ? 'mind-cards' : 'mind-timeline';
   $(target).classList.add('active');
   $(target).classList.remove('hidden');
+
+  // Show/hide filters (not for graph)
+  const filters = $('mind-filters');
+  if (filters) filters.style.display = mode === 'graph' ? 'none' : '';
 
   if (mode === 'graph') initGraph();
   else if (mode === 'cards') renderVaultCards();
@@ -74,8 +135,13 @@ function initGraph() {
   graphCanvas.onclick = graphClick;
 
   if (graphAnimId) cancelAnimationFrame(graphAnimId);
+  graphSimTick = 0;
+  graphSettled = false;
   runGraphSim();
 }
+
+let graphSimTick = 0;
+let graphSettled = false;
 
 function runGraphSim() {
   if (mindMode !== 'graph' || !graphCtx) return;
@@ -120,19 +186,30 @@ function runGraphSim() {
     n.fy += (H / 2 - n.y) * 0.12;
   });
 
-  // Integrate
+  // Integrate + measure total kinetic energy
+  let totalEnergy = 0;
   graphNodes.forEach(n => {
     if (n === draggingNode) return;
     n.vx = (n.vx + n.fx) * 0.85;
     n.vy = (n.vy + n.fy) * 0.85;
     n.x += n.vx;
     n.y += n.vy;
-    const pad = 60; // padding for labels
+    const pad = 60;
     n.x = Math.max(pad, Math.min(W - pad, n.x));
     n.y = Math.max(pad, Math.min(H - pad, n.y));
+    totalEnergy += n.vx * n.vx + n.vy * n.vy;
   });
 
+  graphSimTick++;
   drawGraph();
+
+  // Stop animating once settled (energy near zero or max 300 ticks)
+  if ((totalEnergy < 0.01 && graphSimTick > 50) || graphSimTick > 300) {
+    graphSettled = true;
+    drawGraph(); // final frame
+    return; // stop the loop
+  }
+
   graphAnimId = requestAnimationFrame(runGraphSim);
 }
 
@@ -222,7 +299,16 @@ function graphMouseDown(e) {
   if (n) { draggingNode = n; graphCanvas.style.cursor = 'grabbing'; }
 }
 
-function graphMouseUp() { draggingNode = null; graphCanvas.style.cursor = 'grab'; }
+function graphMouseUp() {
+  if (draggingNode && graphSettled) {
+    // Restart sim to re-settle after drag
+    graphSettled = false;
+    graphSimTick = 0;
+    runGraphSim();
+  }
+  draggingNode = null;
+  graphCanvas.style.cursor = 'grab';
+}
 
 function graphClick(e) {
   const rect = graphCanvas.getBoundingClientRect();
@@ -253,81 +339,137 @@ function showGraphDetail(node) {
 }
 
 // ── Vault Cards ───────────────────────────────────────────
-function renderVaultCards(notes) {
+function renderVaultCards() {
   const grid = $('vault-cards-grid');
-  const list = notes || VAULT_NOTES;
+  const list = getFilteredNotes();
   grid.innerHTML = '';
+  updateNoteCount(list.length);
+
   list.forEach(note => {
     const agent = ga(note.agent) || { emoji: '🤖' };
     const cc = note.confidence >= 80 ? 'confidence-high' : note.confidence >= 60 ? 'confidence-mid' : 'confidence-low';
+    const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
     const card = document.createElement('div');
     card.className = 'vault-card';
     card.onclick = () => openVaultNote(note);
     card.innerHTML = `
       <div class="vault-card-header">
         <div class="vault-card-title">${note.title}</div>
-        <span class="vault-card-type">${note.type}</span>
+        <span class="vault-card-type" style="color:${typeColor};border-color:${typeColor}40">${note.type}</span>
       </div>
       <div class="vault-card-summary">${note.summary}</div>
       <div class="vault-card-meta">
         <div class="confidence-bar-outer"><div class="confidence-bar-inner ${cc}" style="width:${note.confidence}%"></div></div>
         <span class="vault-backlinks">🔗 ${note.backlinks}</span>
         <span class="vault-agent">${agent.emoji}</span>
+        <span class="vault-date">${note.date.slice(5)}</span>
       </div>
     `;
     grid.appendChild(card);
   });
 }
 
+function updateNoteCount(count) {
+  const el = $('mind-note-count');
+  if (el) el.textContent = `${count} note${count !== 1 ? 's' : ''}`;
+}
+
 function openVaultNote(note) {
   const agent = ga(note.agent) || { emoji: '🤖', name: note.agent };
+  const cc = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
+  const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
+
+  // Find related notes via shared tags
+  const related = VAULT_NOTES.filter(n => n.id !== note.id && n.tags.some(t => note.tags.includes(t))).slice(0, 4);
+
+  // On mobile, use full-screen detail; on desktop, use modal
+  if (window.innerWidth <= 768) {
+    const detail = $('mind-note-detail');
+    detail.innerHTML = renderNoteDetailContent(note, agent, cc, typeColor, related, true);
+    detail.classList.remove('hidden');
+    return;
+  }
+
   const modal = $('card-modal-content');
-  modal.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <div style="font-size:24px">${agent.emoji}</div>
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:16px">${note.title}</div>
-        <div style="font-size:12px;color:var(--text-muted)">${note.type} · ${note.date} · ${agent.name}</div>
-      </div>
-      <button onclick="closeModal()" style="color:var(--text-muted);font-size:18px">✕</button>
+  modal.innerHTML = renderNoteDetailContent(note, agent, cc, typeColor, related, false);
+  $('card-modal').classList.remove('hidden');
+}
+
+function renderNoteDetailContent(note, agent, cc, typeColor, related, isMobile) {
+  const closeAction = isMobile ? 'closeMobileNoteDetail()' : 'closeModal()';
+  return `
+    <div class="note-detail-header">
+      <button class="note-detail-back" onclick="${closeAction}">${isMobile ? '← Back' : '✕'}</button>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">${note.tags.map(t => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">#${t}</span>`).join('')}</div>
-    <div style="color:var(--text-dim);line-height:1.7;margin-bottom:16px">${note.summary}</div>
-    <div style="display:flex;gap:16px;font-size:12px;color:var(--text-muted)">
-      <span>Confidence: <strong style="color:var(--green)">${note.confidence}%</strong></span>
-      <span>Backlinks: <strong>${note.backlinks}</strong></span>
+    <div class="note-detail-body">
+      <div class="note-detail-type-badge" style="color:${typeColor};border-color:${typeColor}">${note.type}</div>
+      <h2 class="note-detail-title">${note.title}</h2>
+      <div class="note-detail-meta-row">
+        <span>${agent.emoji} ${agent.name || note.agent}</span>
+        <span>·</span>
+        <span>${note.date}</span>
+        <span>·</span>
+        <span style="color:${cc}">⬤ ${note.confidence}%</span>
+        <span>·</span>
+        <span>🔗 ${note.backlinks} links</span>
+      </div>
+      <div class="note-detail-tags">${note.tags.map(t => `<span class="note-tag">#${t}</span>`).join('')}</div>
+      <div class="note-detail-content">${note.summary}</div>
+      ${related.length ? `
+        <div class="note-detail-related">
+          <h3>Related Notes</h3>
+          ${related.map(r => {
+            const ra = ga(r.agent) || { emoji:'🤖' };
+            return `<div class="note-related-item" onclick="openVaultNote(VAULT_NOTES.find(n=>n.id==='${r.id}'))">
+              <span>${ra.emoji}</span>
+              <span class="note-related-title">${r.title}</span>
+              <span class="note-related-type" style="color:${TYPE_COLORS[r.type]||'var(--text-dim)'}">${r.type}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
     </div>
   `;
-  $('card-modal').classList.remove('hidden');
+}
+
+function closeMobileNoteDetail() {
+  $('mind-note-detail').classList.add('hidden');
 }
 
 function closeModal() { $('card-modal').classList.add('hidden'); }
 function closeModalIfOutside(e) { if (e.target === $('card-modal')) closeModal(); }
 
 function searchMind(query) {
-  if (mindMode !== 'cards') return;
-  const q = query.toLowerCase().trim();
-  if (!q) { renderVaultCards(); return; }
-  const filtered = VAULT_NOTES.filter(n =>
-    n.title.toLowerCase().includes(q) || n.summary.toLowerCase().includes(q) ||
-    n.tags.some(t => t.includes(q)) || n.type.toLowerCase().includes(q)
-  );
-  renderVaultCards(filtered);
+  if (mindMode === 'cards') renderVaultCards();
+  else if (mindMode === 'timeline') renderTimeline();
 }
 
 // ── Timeline ──────────────────────────────────────────────
 function renderTimeline() {
   const track = $('timeline-track');
   if (!track) return;
-  const sorted = [...VAULT_NOTES].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const notes = getFilteredNotes();
+  const sorted = [...notes].sort((a, b) => new Date(b.date) - new Date(a.date)); // newest first
+  updateNoteCount(sorted.length);
+
+  // On mobile: vertical timeline
+  if (window.innerWidth <= 768) {
+    renderVerticalTimeline(track, sorted);
+    return;
+  }
+
+  // Desktop: horizontal timeline
   track.innerHTML = '<div class="timeline-axis"></div>';
   const trackW = Math.max(1400, sorted.length * 100);
   track.style.width = trackW + 'px';
-  const dates = sorted.map(n => new Date(n.date).getTime());
+  track.style.height = '';
+
+  const desktopSorted = [...notes].sort((a,b) => new Date(a.date) - new Date(b.date));
+  const dates = desktopSorted.map(n => new Date(n.date).getTime());
   const minD = Math.min(...dates), maxD = Math.max(...dates);
   const range = maxD - minD || 1;
 
-  sorted.forEach((note, i) => {
+  desktopSorted.forEach((note, i) => {
     const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
     const pct = (new Date(note.date).getTime() - minD) / range;
     const x = 60 + pct * (trackW - 120);
@@ -345,17 +487,117 @@ function renderTimeline() {
   });
 }
 
+function renderVerticalTimeline(track, sorted) {
+  track.style.width = '100%';
+  track.style.height = 'auto';
+  track.innerHTML = '';
+
+  let lastDate = '';
+  sorted.forEach(note => {
+    const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
+    const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
+    const cc = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
+
+    // Date separator
+    if (note.date !== lastDate) {
+      lastDate = note.date;
+      const sep = document.createElement('div');
+      sep.className = 'vtl-date';
+      sep.textContent = note.date;
+      track.appendChild(sep);
+    }
+
+    const item = document.createElement('div');
+    item.className = 'vtl-item';
+    item.onclick = () => openVaultNote(note);
+    item.innerHTML = `
+      <div class="vtl-dot" style="background:${typeColor}"></div>
+      <div class="vtl-content">
+        <div class="vtl-title">${note.title}</div>
+        <div class="vtl-summary">${note.summary.substring(0, 80)}${note.summary.length > 80 ? '…' : ''}</div>
+        <div class="vtl-meta">
+          <span>${agent.emoji}</span>
+          <span style="color:${cc}">●${note.confidence}%</span>
+          <span>🔗${note.backlinks}</span>
+          <span class="vtl-type" style="color:${typeColor}">${note.type}</span>
+        </div>
+      </div>
+    `;
+    track.appendChild(item);
+  });
+}
+
 // ═══════════════════════════════════════════════════════════
 // PULSE PAGE
 // ═══════════════════════════════════════════════════════════
 
 function renderPulse() {
+  if (window.innerWidth <= 768) {
+    renderPulseMobileAccordion();
+  } else {
+    renderAgentHealth();
+    renderCostChart();
+    renderSystemLoad();
+    renderCrons();
+    renderHooks();
+    renderErrorLog();
+  }
+}
+
+function renderPulseMobileAccordion() {
+  const grid = document.querySelector('.pulse-grid');
+  if (!grid) return;
+
+  // Render content into temporary containers
   renderAgentHealth();
   renderCostChart();
   renderSystemLoad();
   renderCrons();
   renderHooks();
   renderErrorLog();
+
+  const sections = [
+    { icon: '\u{1F916}', title: 'Agent Health', contentId: 'agent-health-table' },
+    { icon: '\u{1F4B0}', title: 'Cost (7 days)', contentId: 'cost-chart', isParent: '.cost-chart-container' },
+    { icon: '\u{1F4CA}', title: 'System Load', contentId: 'system-load' },
+    { icon: '\u23F0', title: 'Cron Jobs', contentId: 'cron-status' },
+    { icon: '\u{1F517}', title: 'Webhooks', contentId: 'hook-status' },
+    { icon: '\u{1F6A8}', title: 'Recent Errors', contentId: 'error-log' },
+  ];
+
+  // Wrap each pulse-section in accordion markup
+  const pulseSections = grid.querySelectorAll('.pulse-section');
+  sections.forEach((sec, i) => {
+    const psEl = pulseSections[i];
+    if (!psEl || psEl.dataset.accordion === 'done') return;
+
+    psEl.dataset.accordion = 'done';
+    const title = psEl.querySelector('.section-title');
+    if (!title) return;
+
+    // Wrap children (except title) in accordion-body
+    const body = document.createElement('div');
+    body.className = 'accordion-body';
+    const children = [...psEl.children].filter(c => c !== title);
+    children.forEach(c => body.appendChild(c));
+
+    // Create accordion header
+    const header = document.createElement('div');
+    header.className = 'accordion-header';
+    header.innerHTML = `<span>${sec.icon} ${sec.title}</span><span class="accordion-arrow">\u25B6</span>`;
+    header.onclick = function() { toggleAccordion(this); };
+
+    psEl.innerHTML = '';
+    psEl.classList.add('accordion-section');
+    if (i === 0) psEl.classList.add('open');
+    psEl.appendChild(header);
+    psEl.appendChild(body);
+  });
+}
+
+function toggleAccordion(header) {
+  const section = header.parentElement;
+  section.classList.toggle('open');
 }
 
 function renderAgentHealth() {
@@ -451,11 +693,12 @@ function renderHooks() {
 }
 
 function renderErrorLog() {
-  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn').slice(0, 8);
+  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn' || e.level === 'info').slice(0, 8);
   $('error-log').innerHTML = errors.map(e => {
     const agent = ga(e.agent) || { emoji: '❓' };
+    const levelClass = e.level === 'error' ? 'error' : e.level === 'warn' ? 'warn' : 'info';
     return `
-      <div class="error-item">
+      <div class="error-item error-line ${levelClass}">
         <span class="error-time">${e.time}</span>
         <span class="error-agent">${agent.emoji}</span>
         <span class="error-text">${e.text}</span>

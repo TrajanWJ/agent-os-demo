@@ -14,9 +14,10 @@ let notifications = [];
 
 // Page titles
 const PAGE_TITLES = {
-  feed: 'Feed', queue: 'Queue', talk: 'Talk',
-  mind: 'Mind', pulse: 'Pulse', board: 'Board',
-  stream: 'Stream', command: 'Command', config: 'Config'
+  feed: 'Home', queue: 'Queue', talk: 'Talk',
+  mind: 'Mind', pulse: 'System', board: 'Board',
+  stream: 'Stream', command: 'Command', config: 'Config',
+  schedule: 'Schedule', missions: 'Missions', explore: 'Explore'
 };
 
 // ── Navigation ────────────────────────────────────────────
@@ -34,6 +35,7 @@ function nav(page) {
   // Activate new
   const newView = $('view-' + page);
   if (newView) {
+    newView.classList.remove('hidden');
     newView.style.display = '';
     newView.classList.add('active');
   }
@@ -42,12 +44,18 @@ function nav(page) {
   $('page-title').textContent = PAGE_TITLES[page] || page;
 
   // Lazy init pages
-  if (page === 'mind')    initMind();
-  if (page === 'pulse')   renderPulse();
-  if (page === 'board')   renderBoard();
-  if (page === 'stream')  renderStream();
-  if (page === 'config')  renderConfig();
-  if (page === 'command') initCommand();
+  if (page === 'mind')     initMind();
+  if (page === 'pulse')    renderPulse();
+  if (page === 'board')    renderBoard();
+  if (page === 'stream')   renderStream();
+  if (page === 'config')   renderConfig();
+  if (page === 'command')  initCommand();
+  if (page === 'schedule') renderSchedule();
+  if (page === 'missions') renderMissions();
+  if (page === 'explore')  renderExplore();
+
+  // Update quick actions for new page
+  if (typeof updateQuickActions === 'function') updateQuickActions();
 
   // Close mobile sidebar
   const sidebar = $('sidebar');
@@ -68,6 +76,33 @@ function toast(msg, type = 'info', duration = 3000) {
   t.textContent = msg;
   container.appendChild(t);
   setTimeout(() => t.remove(), duration);
+}
+
+// ── Discord Sync ──────────────────────────────────────────
+function syncToDiscord(channel, content, agent) {
+  // Simulated sync — shows a Discord sync toast
+  const agentObj = ga(agent);
+  const emoji = agentObj?.emoji || '👤';
+  const ch = channel || 'dispatch';
+  
+  // Add to agent-feed as a sync record
+  if (!DC_MESSAGES['agent-feed']) DC_MESSAGES['agent-feed'] = [];
+  DC_MESSAGES['agent-feed'].push({
+    id: 'sync_' + Date.now(),
+    agent: agent === 'user' ? 'righthand' : agent,
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    ts: Date.now()/1000,
+    text: `📡 **Synced from Agent OS** → #${ch}\n${content.substring(0,120)}${content.length>120?'...':''}`,
+    reactions: [],
+  });
+
+  // Show sync toast
+  const container = $('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast discord-sync';
+  t.innerHTML = `<span style="font-size:16px">📡</span> <span>Synced to Discord <strong>#${ch}</strong></span>`;
+  container.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
 }
 
 // ── Notifications ─────────────────────────────────────────
@@ -326,6 +361,7 @@ function makeQueueCard(q) {
 
   const card = document.createElement('div');
   card.className = `queue-card priority-${q.priority}`;
+  card.style.boxShadow = `0 0 12px ${agent.color}25`;
   card.id = `qcard-${q.id}`;
 
   let answerHTML = '';
@@ -394,6 +430,9 @@ function makeQueueCard(q) {
     <div class="queue-question">${q.question}</div>
     <div class="queue-context">${q.context}</div>
     <div class="queue-answer-area">${answerHTML}</div>
+    <div class="queue-card-actions">
+      <button class="delegate-btn" onclick="delegateQueueCard('${q.id}')">🔀 Delegate</button>
+    </div>
     <div class="countdown-timer" id="timer-${q.id}">⏱ ${timeStr} remaining</div>
   `;
   return card;
@@ -455,6 +494,12 @@ function answerQueue(qId, answer) {
   if (queueCards.length === 0) {
     $('queue-empty').classList.remove('hidden');
   }
+  // Mirror to Discord #dispatch
+  syncToDiscord('dispatch', `📋 Queue decision: **${q.question?.substring(0,60)||qId}** → \`${answer}\``, q.agent);
+  // Bidirectional: emit to event bus
+  if (typeof EventBus !== 'undefined') {
+    EventBus.emit('queue:answered', { agent: q.agent, question: q.question || qId, answer, qId });
+  }
 }
 
 function answerQueueFreetext(qId) {
@@ -486,6 +531,75 @@ function removeQueueCard(qId, reason) {
     el.style.transition = 'all 0.4s ease';
     setTimeout(() => el.remove(), 400);
   }
+}
+
+function delegateQueueCard(qId) {
+  const q = queueCards.find(c => c.id === qId);
+  if (!q) return;
+  const otherAgents = AGENTS.filter(a => a.id !== q.agent);
+  const target = otherAgents[Math.floor(Math.random() * otherAgents.length)];
+  q.agent = target.id;
+  toast(`🔀 Delegated to ${target.emoji} ${target.name}`, 'success');
+  renderQueue();
+}
+
+let batchMode = false;
+let batchSelected = new Set();
+
+function toggleBatchMode() {
+  batchMode = !batchMode;
+  batchSelected.clear();
+  const btn = $('batch-toggle-btn');
+  btn.textContent = batchMode ? '☑ Batch Mode' : '☐ Batch Mode';
+  btn.classList.toggle('active', batchMode);
+  const actions = $('batch-actions');
+  if (actions) actions.classList.toggle('hidden', !batchMode);
+  // Toggle checkboxes on cards
+  $$('.queue-card').forEach(card => {
+    let cb = card.querySelector('.batch-checkbox');
+    if (batchMode && !cb) {
+      cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'batch-checkbox';
+      cb.onclick = (e) => { e.stopPropagation(); toggleBatchSelect(card.id.replace('qcard-',''), cb.checked); };
+      card.prepend(cb);
+    } else if (!batchMode && cb) {
+      cb.remove();
+    }
+  });
+  updateBatchCount();
+}
+
+function toggleBatchSelect(qId, checked) {
+  if (checked) batchSelected.add(qId);
+  else batchSelected.delete(qId);
+  updateBatchCount();
+}
+
+function updateBatchCount() {
+  const el = $('batch-count');
+  if (el) el.textContent = `${batchSelected.size} selected`;
+}
+
+function batchApproveAll() {
+  batchSelected.forEach(qId => answerQueue(qId, 'approved'));
+  batchMode = false;
+  batchSelected.clear();
+  toggleBatchMode();
+}
+
+function batchRejectAll() {
+  batchSelected.forEach(qId => answerQueue(qId, 'rejected'));
+  batchMode = false;
+  batchSelected.clear();
+  toggleBatchMode();
+}
+
+function batchDelegateAll() {
+  batchSelected.forEach(qId => delegateQueueCard(qId));
+  batchMode = false;
+  batchSelected.clear();
+  toggleBatchMode();
 }
 
 function updateQueueStats() {
@@ -551,6 +665,8 @@ let threadPanelVisible = false;
 let replyingTo = null;
 let typingTimer = null;
 
+const THREAD_REPLIES = {};
+
 const CHANNEL_COLOR = {
   bridge: '#cba6f7', dev: '#a6e3a1', 'research-feed': '#89b4fa',
   'devils-corner': '#f38ba8', 'ops-log': '#fab387', dispatch: '#f9e2af',
@@ -566,17 +682,21 @@ function renderChannelList() {
     return;
   }
 
-  // Text channels
-  const textCat = makeCategorySection('TEXT CHANNELS', DC_CHANNELS.text, 'text');
-  list.appendChild(textCat);
-
-  // Voice
-  const voiceCat = makeCategorySection('VOICE', DC_CHANNELS.voice, 'voice');
-  list.appendChild(voiceCat);
-
-  // Forums
-  const forumCat = makeCategorySection('FORUMS', DC_CHANNELS.forums, 'forum');
-  list.appendChild(forumCat);
+  // Use real Discord categories
+  if (DC_CHANNELS.categories) {
+    DC_CHANNELS.categories.forEach(cat => {
+      const section = makeCategorySection(cat.name, cat.channels, 'mixed');
+      list.appendChild(section);
+    });
+  } else {
+    // Fallback to flat lists
+    const textCat = makeCategorySection('TEXT CHANNELS', DC_CHANNELS.text, 'text');
+    list.appendChild(textCat);
+    const voiceCat = makeCategorySection('VOICE', DC_CHANNELS.voice, 'voice');
+    list.appendChild(voiceCat);
+    const forumCat = makeCategorySection('FORUMS', DC_CHANNELS.forums, 'forum');
+    list.appendChild(forumCat);
+  }
 
   // Sessions at bottom
   renderSessionList();
@@ -593,29 +713,32 @@ function makeCategorySection(label, channels, type) {
   const channelsDiv = document.createElement('div');
 
   channels.forEach(ch => {
+    const chType = ch.type || type;
     const item = document.createElement('div');
     item.className = `channel-item${ch.id === currentChannel ? ' active' : ''}${ch.unread > 0 ? ' has-unread' : ''}`;
     item.dataset.chid = ch.id;
 
-    if (type === 'text') {
+    if (chType === 'voice') {
+      item.innerHTML = `
+        <span>🔊</span>
+        <span class="channel-name">${ch.name}</span>
+        ${ch.users?.length > 0 ? `<span class="voice-users">${ch.users.join('')}</span>` : ''}
+      `;
+    } else if (chType === 'forum') {
+      item.innerHTML = `
+        <span>💬</span>
+        <span class="channel-name">${ch.name}</span>
+        <span class="forum-count">${ch.count || 0}</span>
+      `;
+      item.onclick = () => switchChannel(ch.id);
+    } else {
+      // text or mixed
       item.innerHTML = `
         <span class="channel-hash">#</span>
         <span class="channel-name">${ch.name}</span>
         ${ch.unread > 0 ? `<span class="channel-unread">${ch.unread}</span>` : ''}
       `;
       item.onclick = () => switchChannel(ch.id);
-    } else if (type === 'voice') {
-      item.innerHTML = `
-        <span>🔊</span>
-        <span class="channel-name">${ch.name}</span>
-        ${ch.users.length > 0 ? `<span class="voice-users">${ch.users.join('')}</span>` : ''}
-      `;
-    } else if (type === 'forum') {
-      item.innerHTML = `
-        <span>${ch.icon}</span>
-        <span class="channel-name">${ch.name}</span>
-        <span class="forum-count">${ch.count}</span>
-      `;
     }
     channelsDiv.appendChild(item);
   });
@@ -676,7 +799,16 @@ function setTalkMode(mode) {
   const serverIcons = $$('.server-icon');
   serverIcons[0].classList.toggle('active', mode === 'channels');
   $('dm-icon').classList.toggle('active', mode === 'dms');
+  // Update mobile tab active states
+  $$('.mobile-talk-tab').forEach((tab, i) => {
+    tab.classList.toggle('active', (i === 0 && mode === 'channels') || (i === 1 && mode === 'dms'));
+  });
   renderChannelList();
+  // On mobile, open the channel drawer
+  if (window.innerWidth <= 768 && typeof openMobileChannelDrawer === 'function') {
+    openMobileChannelDrawer();
+    return; // don't switch channel/DM yet — let drawer handle it
+  }
   if (mode === 'channels') {
     switchChannel(currentChannel);
   } else {
@@ -703,6 +835,19 @@ function switchChannel(chId) {
   // Update topbar
   const color = CHANNEL_COLOR[chId] || '#cba6f7';
   $('current-channel-name').style.color = color;
+
+  // Show channel topic
+  const allChannels = DC_CHANNELS.categories
+    ? DC_CHANNELS.categories.flatMap(c => c.channels)
+    : DC_CHANNELS.text;
+  const chData = allChannels.find(c => c.id === chId);
+  const topicEl = $('channel-topic');
+  if (topicEl && chData?.topic) {
+    topicEl.textContent = chData.topic;
+    topicEl.style.display = '';
+  } else if (topicEl) {
+    topicEl.style.display = 'none';
+  }
 
   renderMessages(chId);
   renderPinnedMessages(chId);
@@ -764,7 +909,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
   const agent = isUser ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : (ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' });
 
   const group = document.createElement('div');
-  group.className = `msg-group${collapsed ? ' collapsed' : ''}`;
+  group.className = `msg-group${collapsed ? ' collapsed' : ''}${isUser ? ' msg-user' : ''}`;
   group.id = `msg-${msg.id}`;
 
   // Reply reference
@@ -822,6 +967,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
     <div class="msg-header">
       <span class="msg-author" style="color:${agent.color}" onclick="openMemberProfile('${msg.agent}')">${agent.name}</span>
       <span class="msg-timestamp">${msg.time}</span>
+      ${isUser ? '<span class="msg-sync-check">✓ synced</span>' : ''}
     </div>
   ` : '';
 
@@ -830,7 +976,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
     <div class="msg-body">
       ${headerSection}
       ${replyHTML}
-      <div class="msg-text">${formattedText}</div>
+      <div class="msg-text">${collapsed ? `<span class="msg-timestamp-hover">${msg.time}</span>` : ''}${formattedText}</div>
       ${embedHTML}
       ${reactHTML}
       <div class="msg-actions-bar">
@@ -839,6 +985,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
         <button class="msg-action-mini" onclick="pinMessage('${msg.id}','${channelId || ''}')">📌</button>
         <button class="msg-action-mini" onclick="threadFromMessage('${msg.id}')">🧵 Thread</button>
       </div>
+      ${THREAD_REPLIES[msg.id]?.length ? `<div class="thread-badge" onclick="threadFromMessage('${msg.id}')">🧵 ${THREAD_REPLIES[msg.id].length} replies</div>` : ''}
     </div>
   `;
   return group;
@@ -853,6 +1000,13 @@ function formatMessageText(text) {
   text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
   // Bold
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic (single * — but not inside ** pairs)
+  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  // Strikethrough
+  text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  // Blockquote (lines starting with >)
+  text = text.replace(/(^|\n)&gt; ?(.+)/g, '$1<blockquote class="msg-blockquote">$2</blockquote>');
+  text = text.replace(/(^|\n)> ?(.+)/g, '$1<blockquote class="msg-blockquote">$2</blockquote>');
   // Newlines
   text = text.replace(/\n/g, '<br>');
   return text;
@@ -880,7 +1034,7 @@ function handleMessageInput(e) {
     e.preventDefault();
     sendMessage();
   }
-  if (e.key === 'Escape') replyingTo = null;
+  if (e.key === 'Escape') cancelReply();
 }
 
 function handleInputChange(e) {
@@ -915,6 +1069,13 @@ function sendMessage() {
   const text = input.value.trim();
   if (!text) return;
 
+  // Handle slash commands
+  if (text.startsWith('/')) {
+    handleSlashCommand(text);
+    input.value = '';
+    return;
+  }
+
   const newMsg = {
     id: 'user_' + Date.now(),
     agent: 'user',
@@ -938,7 +1099,18 @@ function sendMessage() {
 
   input.value = '';
   replyingTo = null;
+  const rp = $('reply-preview');
+  if (rp) rp.classList.add('hidden');
   addXP(5, 'message sent');
+
+  // Mirror to Discord
+  const target = currentDM ? `DM @${currentDM}` : `#${currentChannel}`;
+  syncToDiscord(currentChannel || currentDM, text, 'user');
+
+  // Bidirectional: emit to event bus
+  if (typeof EventBus !== 'undefined') {
+    EventBus.emit('chat:message', { agent: 'user', text, channel: currentChannel, dm: currentDM, time: newMsg.time });
+  }
 
   // Agent auto-reply
   const replyDelay = 1500 + Math.random() * 2000;
@@ -947,6 +1119,52 @@ function sendMessage() {
     hideTypingIndicator();
     agentAutoReply(text);
   }, replyDelay);
+}
+
+function handleSlashCommand(text) {
+  const parts = text.split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1).join(' ');
+
+  switch(cmd) {
+    case '/dispatch':
+      toast(`🚀 Dispatching: ${args || 'new task'}`, 'success');
+      addXP(10, 'dispatch command');
+      // Add system message
+      appendSystemMessage(`Dispatch command received: ${args || 'awaiting task details'}`);
+      break;
+    case '/status':
+      const active = AGENTS.filter(a => a.status === 'active');
+      appendSystemMessage(`**System Status**\n${active.length} agents active, ${queueCards.length} items in queue\n${active.map(a => `${a.emoji} ${a.name}: ${a.task || 'standing by'}`).join('\n')}`);
+      break;
+    case '/search':
+      toast(`🔍 Searching: ${args || '...'}`, 'info');
+      appendSystemMessage(`Search results for "${args}":\n• 3 vault notes matched\n• 2 recent conversations\n• 1 dispatched task`);
+      break;
+    default:
+      toast(`Unknown command: ${cmd}`, 'error');
+      return;
+  }
+}
+
+function appendSystemMessage(text) {
+  const msg = {
+    id: 'sys_' + Date.now(),
+    agent: 'righthand',
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    ts: Date.now() / 1000,
+    text,
+    reactions: [],
+  };
+  if (currentDM) {
+    if (!DM_MESSAGES[currentDM]) DM_MESSAGES[currentDM] = [];
+    DM_MESSAGES[currentDM].push(msg);
+    renderMessages(null, currentDM);
+  } else {
+    if (!DC_MESSAGES[currentChannel]) DC_MESSAGES[currentChannel] = [];
+    DC_MESSAGES[currentChannel].push(msg);
+    renderMessages(currentChannel);
+  }
 }
 
 function showTypingIndicator() {
@@ -958,7 +1176,7 @@ function showTypingIndicator() {
   } else {
     // Random agent in channel
     const agents = AGENTS.filter(a => a.status === 'active');
-    if (agents.length > 0) agentName = agents[0].name;
+    if (agents.length > 0) agentName = `${agents[0].emoji} ${agents[0].name}`;
   }
   $('typing-who').textContent = `${agentName} is typing...`;
   indicator.classList.remove('hidden');
@@ -977,15 +1195,63 @@ function agentAutoReply(userText) {
     respondingAgent = activeAgents[Math.floor(Math.random() * activeAgents.length)] || AGENTS[0];
   }
 
-  const replies = [
-    `Got it. I'll look into that now.`,
-    `Understood. Processing your request.`,
-    `On it — I'll have results shortly.`,
-    `Noted. Dispatching task now.`,
-    `Acknowledged. Updating my work queue.`,
-    `Received. Cross-referencing with vault...`,
-  ];
-  const reply = replies[Math.floor(Math.random() * replies.length)];
+  const lowerText = userText.toLowerCase();
+  let replyPool;
+
+  if (lowerText.includes('status')) {
+    replyPool = [
+      'Current task is 78% complete. Estimated 12 minutes remaining.',
+      'All systems nominal. Processing queue at steady pace.',
+      'Status: active on 2 tasks, 1 pending review. No blockers.',
+      'Running smoothly — last checkpoint was 3 minutes ago.',
+    ];
+  } else if (lowerText.includes('vault')) {
+    replyPool = [
+      'Vault updated 4 minutes ago. 3 new cross-links detected.',
+      'Recent vault activity: 2 notes modified, 1 new note created.',
+      'Vault health at 94%. Recommending a reindex to catch orphaned links.',
+      'Checked vault — found 2 notes matching your recent work.',
+    ];
+  } else if (lowerText.includes('dispatch') || lowerText.includes('task')) {
+    replyPool = [
+      'Task queued. Estimated start in ~2 minutes.',
+      'Dispatching now. I\'ll report back when there\'s progress.',
+      'Added to my queue — priority set based on current workload.',
+      'Task acknowledged. Running parallel with current work.',
+    ];
+  } else if (lowerText.includes('error') || lowerText.includes('bug')) {
+    replyPool = [
+      'Investigating now. Pulling recent logs for context.',
+      'I see the error. Cross-referencing with known issues...',
+      'Bug acknowledged. Checking if this matches a known pattern.',
+      'On it — running diagnostics. Will report findings shortly.',
+    ];
+  } else if (lowerText.includes('?')) {
+    replyPool = [
+      'Good question. Let me check the latest data before answering.',
+      'Hmm, I have a partial answer. Want me to do a deeper search?',
+      'Let me cross-reference that with what I have in the vault.',
+      'Interesting question — checking multiple sources now.',
+    ];
+  } else {
+    replyPool = [
+      'Got it. I\'ll look into that now.',
+      'Understood. Processing your request.',
+      'On it — I\'ll have results shortly.',
+      'Noted. Dispatching task now.',
+      'Acknowledged. Updating my work queue.',
+      'Received. Cross-referencing with vault...',
+      'Copy that. Adding to my current batch.',
+      'Roger. Spinning up analysis now.',
+      'Affirmative. I\'ll ping you when there\'s an update.',
+      'On my radar. Prioritizing based on current workload.',
+      'Queued up. Working through items sequentially.',
+      'Message received. Integrating into my workflow.',
+      'Taking action on this now.',
+      'Will handle this. Stand by for results.',
+    ];
+  }
+  const reply = replyPool[Math.floor(Math.random() * replyPool.length)];
 
   const replyMsg = {
     id: 'reply_' + Date.now(),
@@ -1003,6 +1269,10 @@ function agentAutoReply(userText) {
     DC_MESSAGES[currentChannel].push(replyMsg);
     renderMessages(currentChannel);
   }
+  // Bidirectional: emit agent reply
+  if (typeof EventBus !== 'undefined') {
+    EventBus.emit('chat:message', { agent: respondingAgent.id, text: reply, channel: currentChannel, dm: currentDM, time: replyMsg.time });
+  }
 }
 
 function replyToMessage(msgId, agentId) {
@@ -1012,6 +1282,22 @@ function replyToMessage(msgId, agentId) {
   const agent = ga(agentId) || { name: agentId };
   $('message-input').placeholder = `Replying to ${agent.name}...`;
   $('message-input').focus();
+
+  // Show reply preview
+  const preview = $('reply-preview');
+  const previewText = $('reply-preview-text');
+  if (preview && previewText) {
+    previewText.innerHTML = `Replying to <strong style="color:${agent.color||'var(--accent)'}">${agent.name}</strong>: ${msg.text.substring(0,80)}${msg.text.length>80?'...':''}`;
+    preview.classList.remove('hidden');
+  }
+}
+
+function cancelReply() {
+  replyingTo = null;
+  const preview = $('reply-preview');
+  if (preview) preview.classList.add('hidden');
+  const ch = currentDM ? `@${currentDM}` : `#${currentChannel}`;
+  $('message-input').placeholder = `Message ${ch}`;
 }
 
 function toggleReaction(msgId, emoji) {
@@ -1053,7 +1339,96 @@ function pinMessage(msgId, channelId) {
 function threadFromMessage(msgId) {
   const msg = findMessage(msgId);
   if (!msg) return;
-  toggleThreadPanel(msg);
+
+  // Initialize thread if needed
+  if (!THREAD_REPLIES[msgId]) {
+    THREAD_REPLIES[msgId] = [];
+    // Seed with 2-3 fake replies for demo
+    const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#cba6f7' };
+    const otherAgents = AGENTS.filter(a => a.id !== msg.agent).slice(0, 2);
+    const fakeReplies = [
+      { id: 'tr_' + msgId + '_1', agent: otherAgents[0]?.id || 'researcher', text: 'Good point — I\'ll factor this into my analysis.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 60 },
+      { id: 'tr_' + msgId + '_2', agent: agent.id, text: 'Updated. Check the latest revision when ready.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 180 },
+    ];
+    if (otherAgents[1]) {
+      fakeReplies.push({ id: 'tr_' + msgId + '_3', agent: otherAgents[1].id, text: 'Looks good from my side. Proceeding with integration.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 300 });
+    }
+    THREAD_REPLIES[msgId] = fakeReplies;
+  }
+
+  // Show thread panel
+  threadPanelVisible = true;
+  const tp = $('thread-panel');
+  tp.classList.remove('hidden');
+  tp.dataset.msgId = msgId;
+  renderThreadPanel(msgId, msg);
+}
+
+function renderThreadPanel(msgId, msg) {
+  const agent = ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' };
+  const replies = THREAD_REPLIES[msgId] || [];
+
+  const repliesHTML = replies.map(r => {
+    const ra = ga(r.agent) || { emoji: '🤖', name: r.agent, color: '#cba6f7' };
+    const time = r.time || new Date(r.ts * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return `
+      <div class="thread-reply">
+        <div class="thread-reply-avatar" style="background:${ra.color}20;border-color:${ra.color}">${ra.emoji}</div>
+        <div class="thread-reply-body">
+          <div class="thread-reply-header">
+            <span class="thread-reply-name" style="color:${ra.color}">${ra.name}</span>
+            <span class="thread-reply-time">${time}</span>
+          </div>
+          <div class="thread-reply-text">${formatMessageText(r.text)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  $('thread-panel').innerHTML = `
+    <div class="thread-panel-header">
+      <span>🧵 Thread</span>
+      <button onclick="toggleThreadPanel()">✕</button>
+    </div>
+    <div id="thread-content">
+      <div class="thread-original-msg" style="border-left: 3px solid ${agent.color}">
+        <div class="thread-original-header">
+          <span style="color:${agent.color};font-weight:700">${agent.emoji} ${agent.name}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${msg.time}</span>
+        </div>
+        <div style="font-size:13px;margin-top:4px">${formatMessageText(msg.text)}</div>
+      </div>
+      <div class="thread-reply-count">${replies.length} repl${replies.length !== 1 ? 'ies' : 'y'}</div>
+      <div class="thread-replies-list">${repliesHTML}</div>
+      <div class="thread-input-bar">
+        <input type="text" class="thread-input" id="thread-input" placeholder="Reply in thread..." onkeydown="if(event.key==='Enter'){sendThreadReply('${msgId}');event.preventDefault();}">
+        <button class="send-btn" onclick="sendThreadReply('${msgId}')">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.724 1.053a.5.5 0 0 1 .553-.05l12 6.5a.5.5 0 0 1 0 .894l-12 6.5A.5.5 0 0 1 1.5 14.5v-5l7-1.5-7-1.5v-5a.5.5 0 0 1 .224-.447z"/></svg>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function sendThreadReply(msgId) {
+  const input = $('thread-input');
+  if (!input || !input.value.trim()) return;
+  const text = input.value.trim();
+
+  if (!THREAD_REPLIES[msgId]) THREAD_REPLIES[msgId] = [];
+  THREAD_REPLIES[msgId].push({
+    id: 'tr_' + Date.now(),
+    agent: 'user',
+    text,
+    time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    ts: Date.now() / 1000,
+  });
+
+  input.value = '';
+  const msg = findMessage(msgId);
+  if (msg) renderThreadPanel(msgId, msg);
+  addXP(5, 'thread reply');
+  toast('🧵 Reply added to thread', 'success');
 }
 
 function togglePinned() {
@@ -1105,19 +1480,13 @@ function renderMemberList() {
 }
 
 function toggleThreadPanel(msg = null) {
+  if (msg) {
+    threadFromMessage(msg.id || msg);
+    return;
+  }
   threadPanelVisible = !threadPanelVisible;
   const tp = $('thread-panel');
   tp.classList.toggle('hidden', !threadPanelVisible);
-  if (threadPanelVisible && msg) {
-    const agent = ga(msg.agent) || { name: msg.agent };
-    $('thread-content').innerHTML = `
-      <div style="background:var(--bg-raised);border-radius:8px;padding:12px;margin-bottom:12px">
-        <div style="font-weight:700;color:${agent.color}">${agent.name}</div>
-        <div style="font-size:13px;margin-top:4px">${formatMessageText(msg.text)}</div>
-      </div>
-      <div style="color:var(--text-muted);font-size:13px;padding:8px">No replies yet. Start a thread!</div>
-    `;
-  }
 }
 
 function toggleServerSettings() {
