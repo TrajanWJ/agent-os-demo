@@ -1,239 +1,503 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f0f12" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Agent OS</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent OS v5</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- App Shell -->
+  <div id="app">
 
-<!-- ============================================================
-     APP SHELL
-============================================================ -->
-<div id="app">
-
-  <!-- SIDEBAR (desktop) -->
-  <nav id="sidebar">
-    <div class="sidebar-header">
-      <span class="sidebar-logo">🤖</span>
-      <span class="sidebar-title">Agent OS</span>
-    </div>
-    <ul class="sidebar-nav">
-      <li class="nav-item active" data-view="bridge">
-        <span class="nav-icon">📡</span>
-        <span class="nav-label">Bridge</span>
-      </li>
-      <li class="nav-item" data-view="tasks">
-        <span class="nav-icon">✅</span>
-        <span class="nav-label">Tasks</span>
-        <span class="nav-badge">3</span>
-      </li>
-      <li class="nav-item" data-view="graph">
-        <span class="nav-icon">🕸️</span>
-        <span class="nav-label">Graph</span>
-      </li>
-      <li class="nav-item" data-view="agents">
-        <span class="nav-icon">🤖</span>
-        <span class="nav-label">Agents</span>
-      </li>
-      <li class="nav-item" data-view="system">
-        <span class="nav-icon">⚙️</span>
-        <span class="nav-label">System</span>
-      </li>
-    </ul>
-  </nav>
-
-  <!-- MAIN CONTENT -->
-  <div id="main">
-
-    <!-- TOP HEADER -->
-    <header id="topbar">
-      <div class="topbar-title">🤖 Agent OS</div>
-      <div class="topbar-status" id="topbar-status">
-        <span class="status-dot pulse-green"></span>
-        <span id="topbar-active-count">2 active</span>
+    <!-- Desktop Sidebar -->
+    <nav id="sidebar">
+      <div class="sidebar-logo">
+        <span class="logo-icon">🤖</span>
+        <span class="logo-text">Agent OS</span>
+        <span class="logo-version">v5</span>
       </div>
-    </header>
+      <div class="sidebar-nav">
+        <button class="nav-item active" data-page="feed" onclick="nav('feed')">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-label">Feed</span>
+          <span class="nav-badge" id="feed-badge"></span>
+        </button>
+        <button class="nav-item" data-page="queue" onclick="nav('queue')">
+          <span class="nav-icon">❓</span>
+          <span class="nav-label">Queue</span>
+          <span class="nav-badge" id="queue-badge">8</span>
+        </button>
+        <button class="nav-item" data-page="talk" onclick="nav('talk')">
+          <span class="nav-icon">💬</span>
+          <span class="nav-label">Talk</span>
+          <span class="nav-badge" id="talk-badge">7</span>
+        </button>
+        <button class="nav-item" data-page="mind" onclick="nav('mind')">
+          <span class="nav-icon">🧠</span>
+          <span class="nav-label">Mind</span>
+          <span class="nav-badge" id="mind-badge"></span>
+        </button>
+        <button class="nav-item" data-page="pulse" onclick="nav('pulse')">
+          <span class="nav-icon">⚡</span>
+          <span class="nav-label">Pulse</span>
+          <span class="nav-badge" id="pulse-badge">1</span>
+        </button>
+        <div class="nav-divider"></div>
+        <button class="nav-item" data-page="board" onclick="nav('board')">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">Board</span>
+          <span class="nav-badge" id="board-badge"></span>
+        </button>
+        <button class="nav-item" data-page="stream" onclick="nav('stream')">
+          <span class="nav-icon">📡</span>
+          <span class="nav-label">Stream</span>
+          <span class="nav-badge" id="stream-badge"></span>
+        </button>
+        <button class="nav-item" data-page="command" onclick="nav('command')">
+          <span class="nav-icon">⌨️</span>
+          <span class="nav-label">Command</span>
+          <span class="nav-badge" id="command-badge"></span>
+        </button>
+        <button class="nav-item" data-page="config" onclick="nav('config')">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Config</span>
+          <span class="nav-badge" id="config-badge"></span>
+        </button>
+      </div>
+      <div class="sidebar-footer">
+        <div class="sidebar-agents">
+          <span class="agents-dot active"></span>
+          <span id="sidebar-active-count">2 active</span>
+        </div>
+        <div class="sidebar-xp">
+          <span class="xp-icon">⭐</span>
+          <span id="sidebar-xp">Lv3 · 2840 XP</span>
+        </div>
+      </div>
+    </nav>
 
-    <!-- VIEWS -->
-    <div id="view-bridge" class="view active">
-      <!-- Bridge 3-col layout -->
-      <div class="bridge-layout">
+    <!-- Main Content -->
+    <div id="main">
 
-        <!-- LEFT: Conversation list -->
-        <div class="bridge-conversations">
-          <div class="panel-header">Conversations</div>
-          <div class="conv-list" id="conv-list"></div>
+      <!-- Topbar -->
+      <header id="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()">
+            <span></span><span></span><span></span>
+          </button>
+          <h1 class="page-title" id="page-title">Feed</h1>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-agents" id="topbar-agents">
+            <span class="agent-dot-active"></span>
+            <span id="active-agents-text">2 agents active</span>
+          </div>
+          <div class="xp-badge" id="xp-badge" onclick="showLevelPanel()">
+            <span>⭐ Lv3</span>
+            <div class="xp-bar-mini">
+              <div class="xp-bar-fill" id="xp-bar-mini-fill"></div>
+            </div>
+          </div>
+          <button class="topbar-btn" id="notif-btn" onclick="toggleNotifications()">
+            🔔
+            <span class="notif-count" id="notif-count">3</span>
+          </button>
+          <button class="topbar-btn cmd-k-btn" onclick="openCommandPalette()">
+            <span>⌘K</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Views -->
+      <div id="views">
+
+        <!-- FEED VIEW -->
+        <div id="view-feed" class="view active">
+          <div class="feed-toolbar">
+            <div class="filter-chips" id="feed-filters">
+              <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>
+              <button class="chip" data-filter="error" onclick="filterFeed('error')">🔴 Errors</button>
+              <button class="chip" data-filter="question_asked" onclick="filterFeed('question_asked')">❓ Questions</button>
+              <button class="chip" data-filter="task_completed" onclick="filterFeed('task_completed')">✅ Completed</button>
+              <button class="chip" data-filter="vault_write" onclick="filterFeed('vault_write')">📚 Vault</button>
+              <button class="chip" data-filter="insight" onclick="filterFeed('insight')">💡 Insights</button>
+            </div>
+          </div>
+          <div id="feed-list" class="feed-list"></div>
         </div>
 
-        <!-- CENTER: Feed -->
-        <div class="bridge-feed-wrap">
-          <div class="feed" id="feed"></div>
-          <!-- Input area -->
-          <div class="input-area">
-            <div class="route-selector" id="route-selector"></div>
-            <div class="input-row">
-              <input type="text" class="msg-input" id="msg-input" placeholder="Message agents…" />
-              <button class="send-btn" onclick="sendMessage()">▶</button>
+        <!-- QUEUE VIEW -->
+        <div id="view-queue" class="view">
+          <div class="queue-stats" id="queue-stats">
+            <div class="stat-item">
+              <span class="stat-num" id="q-answered">0</span>
+              <span class="stat-label">Answered</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-num" id="q-autoresolved">0</span>
+              <span class="stat-label">Auto-resolved</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-num" id="q-expired">0</span>
+              <span class="stat-label">Expired</span>
+            </div>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+          <div id="queue-empty" class="queue-empty hidden">
+            <div class="empty-icon">🎯</div>
+            <div class="empty-title">All clear!</div>
+            <div class="empty-desc">Agents are handling everything</div>
+          </div>
+        </div>
+
+        <!-- TALK VIEW (Discord Clone) -->
+        <div id="view-talk" class="view talk-layout">
+          <!-- Server Rail -->
+          <div class="server-rail" id="server-rail">
+            <button class="server-icon active" onclick="setTalkMode('channels')" title="Agent OS Server">
+              🤖
+            </button>
+            <div class="server-divider"></div>
+            <button class="server-icon" onclick="setTalkMode('dms')" title="Direct Messages" id="dm-icon">
+              💬
+            </button>
+          </div>
+
+          <!-- Channel Sidebar -->
+          <div class="channel-sidebar" id="channel-sidebar">
+            <div class="channel-server-name">
+              <span>Agent OS</span>
+              <button class="channel-settings-btn" onclick="toggleServerSettings()">⚙️</button>
+            </div>
+            <div class="channel-list" id="channel-list"></div>
+            <div class="channel-sessions" id="channel-sessions"></div>
+          </div>
+
+          <!-- Message Area -->
+          <div class="message-area" id="message-area">
+            <div class="message-topbar" id="message-topbar">
+              <div class="msg-channel-info">
+                <span class="msg-channel-hash">#</span>
+                <span class="msg-channel-name" id="current-channel-name">bridge</span>
+              </div>
+              <div class="message-topbar-actions">
+                <button class="msg-action-btn" onclick="togglePinned()" title="Pinned">📌</button>
+                <button class="msg-action-btn" onclick="toggleMemberList()" title="Members">👥</button>
+                <button class="msg-action-btn" onclick="toggleThreadPanel()" title="Threads">🧵</button>
+              </div>
+            </div>
+
+            <!-- Pinned Messages Panel -->
+            <div class="pinned-panel hidden" id="pinned-panel">
+              <div class="pinned-header">📌 Pinned Messages</div>
+              <div id="pinned-list"></div>
+            </div>
+
+            <!-- Messages -->
+            <div class="messages-container" id="messages-container">
+              <div id="messages-list"></div>
+              <div class="typing-indicator hidden" id="typing-indicator">
+                <span class="typing-dots"><span></span><span></span><span></span></span>
+                <span id="typing-who">Agent is typing...</span>
+              </div>
+            </div>
+
+            <!-- Message Input -->
+            <div class="message-input-area" id="message-input-area">
+              <button class="input-attach-btn" onclick="attachFile()">+</button>
+              <div class="message-input-wrapper">
+                <input type="text" id="message-input" class="message-input" 
+                  placeholder="Message #bridge" 
+                  onkeydown="handleMessageInput(event)"
+                  oninput="handleInputChange(event)">
+                <div class="input-autocomplete hidden" id="input-autocomplete"></div>
+              </div>
+              <button class="emoji-btn" onclick="toggleEmojiPicker('message')">😊</button>
+              <button class="send-btn" onclick="sendMessage()">↑</button>
+            </div>
+          </div>
+
+          <!-- Member List (right side) -->
+          <div class="member-list hidden" id="member-list">
+            <div class="member-list-header">Members</div>
+            <div id="member-list-content"></div>
+          </div>
+
+          <!-- Thread Panel (right side) -->
+          <div class="thread-panel hidden" id="thread-panel">
+            <div class="thread-panel-header">
+              <span>Thread</span>
+              <button onclick="toggleThreadPanel()">✕</button>
+            </div>
+            <div id="thread-content"></div>
+          </div>
+        </div>
+
+        <!-- MIND VIEW -->
+        <div id="view-mind" class="view">
+          <div class="mind-toolbar">
+            <div class="view-toggle-group">
+              <button class="view-toggle active" data-mode="graph" onclick="setMindMode('graph')">Graph</button>
+              <button class="view-toggle" data-mode="cards" onclick="setMindMode('cards')">Cards</button>
+              <button class="view-toggle" data-mode="timeline" onclick="setMindMode('timeline')">Timeline</button>
+            </div>
+            <input type="text" class="mind-search" id="mind-search" placeholder="🔍 Search vault..." oninput="searchMind(this.value)">
+          </div>
+
+          <!-- Graph Mode -->
+          <div id="mind-graph" class="mind-panel active">
+            <canvas id="graph-canvas"></canvas>
+            <div class="graph-detail-panel hidden" id="graph-detail"></div>
+            <div class="graph-tooltip hidden" id="graph-tooltip"></div>
+          </div>
+
+          <!-- Cards Mode -->
+          <div id="mind-cards" class="mind-panel hidden">
+            <div class="vault-cards-grid" id="vault-cards-grid"></div>
+          </div>
+
+          <!-- Timeline Mode -->
+          <div id="mind-timeline" class="mind-panel hidden">
+            <div class="timeline-scroll" id="timeline-scroll">
+              <div class="timeline-track" id="timeline-track"></div>
             </div>
           </div>
         </div>
 
-        <!-- RIGHT: Active agents + stats -->
-        <div class="bridge-agents-panel">
-          <div class="panel-header">Active Agents</div>
-          <div id="agents-status-list"></div>
-          <div class="stats-block">
-            <div class="stats-title">Today</div>
-            <div class="stat-row"><span>Tasks</span><span class="stat-val">12</span></div>
-            <div class="stat-row"><span>Queue</span><span class="stat-val">3</span></div>
-            <div class="stat-row"><span>Tokens</span><span class="stat-val">48k</span></div>
+        <!-- PULSE VIEW -->
+        <div id="view-pulse" class="view">
+          <div class="pulse-metrics" id="pulse-metrics">
+            <div class="metric-card">
+              <div class="metric-value" id="metric-cost">$3.10</div>
+              <div class="metric-label">Cost today</div>
+              <div class="metric-sub">↑ $0.40/hr</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value" id="metric-agents">2</div>
+              <div class="metric-label">Active agents</div>
+              <div class="metric-sub">8 total</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value" id="metric-tasks">14</div>
+              <div class="metric-label">Tasks done</div>
+              <div class="metric-sub">today</div>
+            </div>
+          </div>
+
+          <div class="pulse-grid">
+            <!-- Agent Health -->
+            <div class="pulse-section">
+              <div class="section-title">Agent Health</div>
+              <div id="agent-health-table"></div>
+            </div>
+
+            <!-- Cost Chart -->
+            <div class="pulse-section">
+              <div class="section-title">Cost (7 days)</div>
+              <div class="cost-chart-container">
+                <svg id="cost-chart" class="cost-chart"></svg>
+              </div>
+            </div>
+
+            <!-- System Load -->
+            <div class="pulse-section">
+              <div class="section-title">System Load</div>
+              <div id="system-load"></div>
+            </div>
+
+            <!-- Cron Status -->
+            <div class="pulse-section">
+              <div class="section-title">Cron Jobs</div>
+              <div id="cron-status"></div>
+            </div>
+
+            <!-- Webhook Status -->
+            <div class="pulse-section">
+              <div class="section-title">Webhooks</div>
+              <div id="hook-status"></div>
+            </div>
+
+            <!-- Error Log -->
+            <div class="pulse-section pulse-section-wide">
+              <div class="section-title">Recent Errors</div>
+              <div id="error-log"></div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="quick-actions">
+            <button class="quick-btn" onclick="quickAction('restart-gateway')">🔄 Restart Gateway</button>
+            <button class="quick-btn" onclick="quickAction('clear-queue')">🗑️ Clear Queue</button>
+            <button class="quick-btn" onclick="quickAction('reindex')">📚 Reindex Vault</button>
+            <button class="quick-btn" onclick="quickAction('health-check')">🩺 Health Check</button>
           </div>
         </div>
-      </div>
-    </div><!-- /bridge -->
 
-    <!-- VIEW 2: TASKS -->
-    <div id="view-tasks" class="view">
-      <!-- Mobile tabs at TOP -->
-      <div class="mobile-tabs" id="tasks-mobile-tabs">
-        <button class="mobile-tab active" data-tab="active">Active</button>
-        <button class="mobile-tab" data-tab="queue">Queue</button>
-        <button class="mobile-tab" data-tab="done">Done</button>
-      </div>
+        <!-- BOARD VIEW -->
+        <div id="view-board" class="view">
+          <div class="board-header">
+            <h2>Task Board</h2>
+            <button class="board-add-btn" onclick="addBoardCard()">+ New Card</button>
+          </div>
+          <div class="kanban-board" id="kanban-board"></div>
+        </div>
 
-      <div class="tasks-layout">
-        <!-- LEFT: Queue -->
-        <div class="tasks-queue-panel" id="tasks-queue-panel">
-          <div class="panel-header">Queue</div>
-          <div id="queue-list"></div>
+        <!-- STREAM VIEW -->
+        <div id="view-stream" class="view">
+          <div class="stream-toolbar">
+            <input type="text" class="stream-search" id="stream-search" placeholder="🔍 Regex filter..." oninput="filterStream(this.value)">
+            <div class="stream-filters" id="stream-agent-filters"></div>
+            <div class="stream-level-filters">
+              <button class="level-chip debug active" data-level="debug" onclick="toggleLevelFilter('debug', this)">debug</button>
+              <button class="level-chip info active" data-level="info" onclick="toggleLevelFilter('info', this)">info</button>
+              <button class="level-chip warn active" data-level="warn" onclick="toggleLevelFilter('warn', this)">warn</button>
+              <button class="level-chip error active" data-level="error" onclick="toggleLevelFilter('error', this)">error</button>
+            </div>
+            <label class="autoscroll-toggle">
+              <input type="checkbox" id="autoscroll-toggle" checked> Auto-scroll
+            </label>
+          </div>
+          <div class="stream-log" id="stream-log"></div>
         </div>
-        <!-- CENTER: Active + Completed -->
-        <div class="tasks-center">
-          <div class="panel-header">Active Task</div>
-          <div id="active-task-card" class="active-task-card"></div>
-          <div class="panel-header" style="margin-top:16px">Completed</div>
-          <div id="completed-tasks"></div>
-        </div>
-        <!-- RIGHT: Vault Outputs -->
-        <div class="tasks-vault-panel" id="tasks-vault-panel">
-          <div class="panel-header">Vault Outputs</div>
-          <div id="vault-outputs"></div>
-        </div>
-      </div>
-    </div><!-- /tasks -->
 
-    <!-- VIEW 3: GRAPH -->
-    <div id="view-graph" class="view">
-      <div class="graph-toolbar">
-        <input type="text" id="graph-search" class="graph-search" placeholder="Search nodes…" />
-        <div class="filter-chips" id="filter-chips">
-          <button class="chip active" data-filter="all">All</button>
-          <button class="chip" data-filter="vision">Vision</button>
-          <button class="chip" data-filter="research">Research</button>
-          <button class="chip" data-filter="architecture">Architecture</button>
-          <button class="chip" data-filter="project">Project</button>
-          <button class="chip" data-filter="ops">Ops</button>
+        <!-- COMMAND VIEW -->
+        <div id="view-command" class="view command-view">
+          <div class="command-mode-indicator" id="cmd-mode-indicator">
+            <span class="mode-badge search">🔍 Search</span>
+          </div>
+          <div class="command-input-wrapper">
+            <div class="command-prefix" id="cmd-prefix">→</div>
+            <input type="text" id="command-input" class="command-input" 
+              placeholder="Search, > command, @ agent, / system..." 
+              oninput="handleCommandInput(this.value)"
+              onkeydown="handleCommandKey(event)">
+          </div>
+          <div class="command-results" id="command-results"></div>
+          <div class="command-preview" id="command-preview"></div>
         </div>
-      </div>
-      <div class="graph-container">
-        <canvas id="graph-canvas"></canvas>
-        <canvas id="minimap-canvas"></canvas>
-        <div id="graph-hint" style="position:absolute;bottom:52px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--text2);background:rgba(22,22,26,0.85);padding:6px 16px;border-radius:20px;pointer-events:none;white-space:nowrap;border:1px solid var(--border);">
-          Hover nodes to explore · Click to open detail
-        </div>
-        <div id="graph-tooltip" class="graph-tooltip hidden"></div>
-        <div id="node-panel" class="node-panel hidden"></div>
-      </div>
-      <!-- Mobile: list view -->
-      <div class="graph-list-mobile" id="graph-list-mobile"></div>
-      <button class="show-graph-btn" id="show-graph-btn">🕸️ Show Graph</button>
-    </div><!-- /graph -->
 
-    <!-- VIEW 4: AGENTS -->
-    <div id="view-agents" class="view">
-      <div class="agents-stats-bar" id="agents-stats-bar"></div>
-      <div class="agents-layout">
-        <div class="agents-grid" id="agents-grid"></div>
-        <div class="agent-detail-panel hidden" id="agent-detail-panel"></div>
+        <!-- CONFIG VIEW -->
+        <div id="view-config" class="view">
+          <div class="config-sections">
+            <div class="config-section">
+              <div class="section-title">Agent Configuration</div>
+              <div id="agent-config-cards"></div>
+            </div>
+            <div class="config-section">
+              <div class="section-title">Theme</div>
+              <div class="theme-options">
+                <label class="theme-option active" onclick="setTheme('mocha')">
+                  <div class="theme-preview mocha"></div>
+                  <span>Mocha</span>
+                </label>
+                <label class="theme-option" onclick="setTheme('latte')">
+                  <div class="theme-preview latte"></div>
+                  <span>Latte</span>
+                </label>
+                <label class="theme-option" onclick="setTheme('macchiato')">
+                  <div class="theme-preview macchiato"></div>
+                  <span>Macchiato</span>
+                </label>
+              </div>
+            </div>
+            <div class="config-section">
+              <div class="section-title">Cron Schedule</div>
+              <div id="config-crons"></div>
+            </div>
+            <div class="config-section">
+              <div class="section-title">Skills</div>
+              <div id="config-skills" class="skills-list">
+                <div class="skill-item"><span>🔬</span> Research Agent</div>
+                <div class="skill-item"><span>💻</span> Code Review</div>
+                <div class="skill-item"><span>📚</span> Vault Keeper</div>
+                <div class="skill-item"><span>😈</span> Devil's Advocate</div>
+                <div class="skill-item"><span>🛡️</span> Security Audit</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /views -->
+    </div><!-- /main -->
+  </div><!-- /app -->
+
+  <!-- Mobile Bottom Bar -->
+  <nav id="mobile-bar">
+    <button class="mobile-nav-item active" data-page="feed" onclick="nav('feed')">
+      <span class="mobile-icon">🏠</span>
+      <span class="mobile-label">Feed</span>
+    </button>
+    <button class="mobile-nav-item" data-page="queue" onclick="nav('queue')">
+      <span class="mobile-icon">❓</span>
+      <span class="mobile-label">Queue</span>
+      <span class="mobile-badge">8</span>
+    </button>
+    <button class="mobile-nav-item" data-page="talk" onclick="nav('talk')">
+      <span class="mobile-icon">💬</span>
+      <span class="mobile-label">Talk</span>
+    </button>
+    <button class="mobile-nav-item" data-page="mind" onclick="nav('mind')">
+      <span class="mobile-icon">🧠</span>
+      <span class="mobile-label">Mind</span>
+    </button>
+    <button class="mobile-nav-item" data-page="pulse" onclick="nav('pulse')">
+      <span class="mobile-icon">⚡</span>
+      <span class="mobile-label">Pulse</span>
+    </button>
+  </nav>
+
+  <!-- Command Palette Overlay -->
+  <div class="overlay hidden" id="cmd-palette-overlay" onclick="closeCmdPaletteIfOutside(event)">
+    <div class="cmd-palette" id="cmd-palette">
+      <div class="cmd-palette-input-row">
+        <span class="cmd-palette-prefix" id="palette-prefix">🔍</span>
+        <input type="text" id="palette-input" class="cmd-palette-input" 
+          placeholder="Search or type > command, @ agent, / system..."
+          oninput="handlePaletteInput(this.value)"
+          onkeydown="handlePaletteKey(event)"
+          autocomplete="off">
+        <button class="palette-close" onclick="closeCommandPalette()">✕</button>
       </div>
-    </div><!-- /agents -->
-
-    <!-- VIEW 5: SYSTEM -->
-    <div id="view-system" class="view">
-      <div class="system-health-badge" id="system-health-badge">
-        ⚠️ 1 Error — session-watchdog failing
-      </div>
-      <div class="system-grid">
-        <!-- Cron table -->
-        <div class="system-card">
-          <div class="panel-header">Cron Jobs</div>
-          <div id="cron-table"></div>
-        </div>
-        <!-- Token budget -->
-        <div class="system-card">
-          <div class="panel-header">Token Budget</div>
-          <div id="token-budget"></div>
-        </div>
-        <!-- Error log -->
-        <div class="system-card">
-          <div class="panel-header">Error Stream</div>
-          <div id="error-log" class="error-log"></div>
-        </div>
-        <!-- Webhook health -->
-        <div class="system-card">
-          <div class="panel-header">Webhook Health</div>
-          <div id="webhook-health"></div>
-        </div>
-      </div>
-      <!-- Mobile accordion placeholders rendered by JS -->
-    </div><!-- /system -->
-
-  </div><!-- /main -->
-</div><!-- /app -->
-
-<!-- MOBILE BOTTOM NAV -->
-<nav id="mobile-nav">
-  <button class="mobile-nav-btn active" data-view="bridge">
-    <span>📡</span><span>Bridge</span>
-  </button>
-  <button class="mobile-nav-btn" data-view="tasks">
-    <span>✅</span><span>Tasks</span>
-    <span class="mob-badge">3</span>
-  </button>
-  <button class="mobile-nav-btn" data-view="graph">
-    <span>🕸️</span><span>Graph</span>
-  </button>
-  <button class="mobile-nav-btn" data-view="agents">
-    <span>🤖</span><span>Agents</span>
-  </button>
-  <button class="mobile-nav-btn" data-view="system">
-    <span>⚙️</span><span>System</span>
-  </button>
-</nav>
-
-<!-- Mobile input bottom sheet -->
-<div id="input-sheet" class="input-sheet hidden">
-  <div class="sheet-handle"></div>
-  <div class="route-selector" id="route-selector-mobile"></div>
-  <div class="input-row">
-    <input type="text" class="msg-input" id="msg-input-mobile" placeholder="Message agents…" />
-    <button class="send-btn" onclick="sendMessage()">▶</button>
+      <div class="palette-results" id="palette-results"></div>
+    </div>
   </div>
-</div>
 
-<div id="graph-modal" class="graph-modal hidden">
-  <div class="graph-modal-header">
-    <span>Knowledge Graph</span>
-    <button id="close-graph-modal">✕</button>
+  <!-- Notification Panel -->
+  <div class="notif-panel hidden" id="notif-panel">
+    <div class="notif-panel-header">
+      <span>Notifications</span>
+      <button onclick="clearNotifications()">Clear all</button>
+    </div>
+    <div id="notif-list"></div>
   </div>
-  <canvas id="graph-canvas-mobile"></canvas>
-</div>
 
-<script src="app.js"></script>
+  <!-- Emoji Picker -->
+  <div class="emoji-picker hidden" id="emoji-picker">
+    <div class="emoji-grid" id="emoji-grid"></div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Level Up Overlay -->
+  <div class="levelup-overlay hidden" id="levelup-overlay">
+    <div class="levelup-card">
+      <div class="levelup-icon">⭐</div>
+      <div class="levelup-title">Level Up!</div>
+      <div class="levelup-text" id="levelup-text">You reached Level 4!</div>
+      <button onclick="closeLevelUp()">Awesome!</button>
+    </div>
+  </div>
+
+  <!-- Card Detail Modal -->
+  <div class="modal-overlay hidden" id="card-modal" onclick="closeModalIfOutside(event)">
+    <div class="card-modal" id="card-modal-content"></div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script src="app2.js"></script>
+  <script src="app3.js"></script>
 </body>
 </html>
