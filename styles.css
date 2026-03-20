@@ -12869,3 +12869,245 @@ textarea:focus-visible,
   .topbar-connection-status { display: none; }
   .topbar-clock { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ORG CHART — Department View
+   ═══════════════════════════════════════════════════════════ */
+
+.orgchart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.orgchart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.orgchart-search {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.orgchart-search:focus { border-color: var(--accent); }
+
+.orgchart-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.orgchart-filter-toggle input { accent-color: var(--accent); }
+.orgchart-filter-label { user-select: none; }
+
+.orgchart-stats {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.orgchart-stat-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.orgchart-stat-active { color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
+
+/* Orchestrator banner */
+.orgchart-orchestrator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+.orgchart-orchestrator-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: var(--bg-raised);
+  border: 2px solid #E8A838;
+  border-radius: var(--radius);
+  position: relative;
+  z-index: 1;
+}
+.orgchart-orchestrator-emoji { font-size: 28px; }
+.orgchart-orchestrator-info { display: flex; flex-direction: column; }
+.orgchart-orchestrator-name { font-size: 15px; font-weight: 800; color: var(--text); }
+.orgchart-orchestrator-role { font-size: 11px; color: var(--text-muted); }
+.orgchart-status-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.orgchart-orchestrator-line {
+  display: none; /* hidden; the grid layout implies hierarchy */
+}
+
+/* Department grid */
+.orgchart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.orgchart-dept-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  border-top: 3px solid var(--dept-color, var(--border));
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.orgchart-dept-card:hover { border-color: var(--dept-color); }
+.orgchart-dept-card.orgchart-drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg-surface));
+}
+
+.orgchart-dept-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  gap: 8px;
+}
+.orgchart-dept-header:hover { background: var(--bg-overlay); }
+
+.orgchart-dept-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.orgchart-dept-emoji { font-size: 16px; flex-shrink: 0; }
+.orgchart-dept-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orgchart-dept-count {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.orgchart-dept-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.orgchart-dept-health {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.orgchart-health-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-base);
+  overflow: hidden;
+}
+.orgchart-health-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.orgchart-health-pct {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.orgchart-dept-chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.orgchart-dept-chevron.open { transform: rotate(90deg); }
+
+/* Agent rows */
+.orgchart-dept-agents {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+.orgchart-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.orgchart-agent-row:hover { background: var(--bg-overlay); }
+.orgchart-agent-row[draggable="true"] { cursor: grab; }
+.orgchart-agent-row[draggable="true"]:active { cursor: grabbing; }
+
+.orgchart-agent-emoji { font-size: 16px; flex-shrink: 0; }
+
+.orgchart-agent-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.orgchart-agent-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orgchart-agent-role {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.orgchart-agent-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.orgchart-agent-status.orgchart-active {
+  background: var(--green);
+  box-shadow: 0 0 5px var(--green);
+}
+.orgchart-agent-status.orgchart-idle {
+  background: var(--text-muted);
+}
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .orgchart-grid {
+    grid-template-columns: 1fr;
+  }
+  .orgchart-stats { display: none; }
+}

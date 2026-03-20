@@ -263,6 +263,7 @@
               <button class="stream-chip" data-filter="errors" onclick="filterStream2('errors')">⚠️ Errors <span class="chip-count" id="chip-count-errors"></span></button>
               <button class="stream-chip" data-filter="vault" onclick="filterStream2('vault')">📚 Vault <span class="chip-count" id="chip-count-vault"></span></button>
               <button class="stream-chip" data-filter="insights" onclick="filterStream2('insights')">💡 Insights <span class="chip-count" id="chip-count-insights"></span></button>
+              <button class="stream-chip timeline-toggle" id="timeline-toggle-btn" onclick="toggleTimelineView()">🕐 Timeline</button>
             </div>
             <div class="stream-batch-bar" id="stream-batch-bar" style="display:none">
               <label class="stream-select-all"><input type="checkbox" id="stream-select-all" onchange="toggleSelectAllStream(this.checked)"> Select All</label>
@@ -273,6 +274,7 @@
             </div>
           </div>
           <div id="stream-list" class="stream-list"></div>
+          <div id="timeline-view" class="timeline-view" style="display:none"></div>
         </div>
 
         <!-- QUEUE VIEW -->
@@ -1068,5 +1070,6 @@
   <script src="bridge.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
   <script src="help.js?v=1773994100"></script>
+  <script src="timeline.js?v=1773994200"></script>
 </body>
 </html>

@@ -1378,6 +1378,159 @@ function renderHistoryTab(el, agent) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ORG CHART TAB — Department View
+// ═══════════════════════════════════════════════════════════
+
+function getAgentDept(agentId) {
+  return orgChartDeptOverrides[agentId] || (AGENTS.find(a => a.id === agentId) || {}).dept || 'core';
+}
+
+function getOrgDepartments() {
+  const depts = {};
+  AGENTS.forEach(a => {
+    const d = getAgentDept(a.id);
+    if (!depts[d]) depts[d] = [];
+    depts[d].push(a);
+  });
+  return depts;
+}
+
+function getDeptHealth(agents) {
+  if (!agents || agents.length === 0) return 0;
+  return agents.reduce((sum, a) => sum + (a.fitness || 0), 0) / agents.length;
+}
+
+function renderOrgChartTab(el) {
+  const depts = getOrgDepartments();
+  const deptKeys = Object.keys(DEPT_META).filter(k => depts[k] && depts[k].length > 0);
+  const totalAgents = AGENTS.length;
+  const activeCount = AGENTS.filter(a => a.status === 'active').length;
+
+  el.innerHTML = `
+    <div class="orgchart-container">
+      <div class="orgchart-toolbar">
+        <input type="text" class="orgchart-search" placeholder="🔍 Search agents..." value="${orgChartSearch}"
+          oninput="orgChartSearch=this.value;renderOrgChartTab($('acenter-tab-content'))">
+        <label class="orgchart-filter-toggle">
+          <input type="checkbox" ${orgChartFilterActive ? 'checked' : ''}
+            onchange="orgChartFilterActive=this.checked;renderOrgChartTab($('acenter-tab-content'))">
+          <span class="orgchart-filter-label">Active only</span>
+        </label>
+        <div class="orgchart-stats">
+          <span class="orgchart-stat-badge">${totalAgents} agents</span>
+          <span class="orgchart-stat-badge orgchart-stat-active">${activeCount} active</span>
+          <span class="orgchart-stat-badge">${deptKeys.length} depts</span>
+        </div>
+      </div>
+
+      <div class="orgchart-orchestrator">
+        <div class="orgchart-orchestrator-line"></div>
+        <div class="orgchart-orchestrator-card" style="border-color:#E8A838">
+          <span class="orgchart-orchestrator-emoji">🤝</span>
+          <div class="orgchart-orchestrator-info">
+            <div class="orgchart-orchestrator-name">Right Hand</div>
+            <div class="orgchart-orchestrator-role">Orchestrator</div>
+          </div>
+          <span class="orgchart-status-dot" style="background:var(--green);box-shadow:0 0 6px var(--green)"></span>
+        </div>
+      </div>
+
+      <div class="orgchart-grid" id="orgchart-grid">
+        ${deptKeys.map(deptKey => renderOrgDeptCard(deptKey, depts[deptKey])).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderOrgDeptCard(deptKey, agents) {
+  const meta = DEPT_META[deptKey] || { emoji: '📁', label: deptKey, color: '#6c7086' };
+  const isCollapsed = orgChartCollapsed[deptKey] || false;
+  const health = getDeptHealth(agents);
+  const healthColor = health >= 0.9 ? 'var(--green)' : health >= 0.8 ? 'var(--yellow)' : 'var(--red)';
+  const healthPct = Math.round(health * 100);
+
+  // Apply search and filter
+  let filtered = agents;
+  if (orgChartSearch) {
+    const q = orgChartSearch.toLowerCase();
+    filtered = filtered.filter(a => a.name.toLowerCase().includes(q) || a.role.toLowerCase().includes(q));
+  }
+  if (orgChartFilterActive) {
+    filtered = filtered.filter(a => a.status === 'active');
+  }
+
+  // Hide department if all agents filtered out
+  if (filtered.length === 0 && (orgChartSearch || orgChartFilterActive)) return '';
+
+  return `
+    <div class="orgchart-dept-card" style="--dept-color:${meta.color}"
+      ondragover="event.preventDefault();this.classList.add('orgchart-drag-over')"
+      ondragleave="this.classList.remove('orgchart-drag-over')"
+      ondrop="orgChartDrop(event,'${deptKey}')">
+      <div class="orgchart-dept-header" onclick="toggleOrgDept('${deptKey}')">
+        <div class="orgchart-dept-title">
+          <span class="orgchart-dept-emoji">${meta.emoji}</span>
+          <span class="orgchart-dept-name">${meta.label}</span>
+          <span class="orgchart-dept-count">${agents.length}</span>
+        </div>
+        <div class="orgchart-dept-right">
+          <div class="orgchart-dept-health" title="Avg fitness: ${healthPct}%">
+            <div class="orgchart-health-bar">
+              <div class="orgchart-health-fill" style="width:${healthPct}%;background:${healthColor}"></div>
+            </div>
+            <span class="orgchart-health-pct" style="color:${healthColor}">${healthPct}%</span>
+          </div>
+          <span class="orgchart-dept-chevron${isCollapsed ? '' : ' open'}">▸</span>
+        </div>
+      </div>
+      ${isCollapsed ? '' : `
+        <div class="orgchart-dept-agents">
+          ${filtered.map(a => `
+            <div class="orgchart-agent-row" draggable="true"
+              ondragstart="orgChartDragStart(event,'${a.id}','${deptKey}')"
+              onclick="selectAgent('${a.id}');setAgentTab('overview')">
+              <span class="orgchart-agent-emoji">${a.emoji}</span>
+              <div class="orgchart-agent-info">
+                <span class="orgchart-agent-name">${a.name}</span>
+                <span class="orgchart-agent-role">${a.role}</span>
+              </div>
+              <span class="orgchart-agent-status ${a.status === 'active' ? 'orgchart-active' : 'orgchart-idle'}"></span>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function toggleOrgDept(deptKey) {
+  orgChartCollapsed[deptKey] = !orgChartCollapsed[deptKey];
+  localStorage.setItem('agent-os-orgchart-collapsed', JSON.stringify(orgChartCollapsed));
+  renderOrgChartTab($('acenter-tab-content'));
+}
+
+function orgChartDragStart(e, agentId, sourceDept) {
+  orgDragAgent = agentId;
+  orgDragSourceDept = sourceDept;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', agentId);
+}
+
+function orgChartDrop(e, targetDept) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('orgchart-drag-over');
+  if (!orgDragAgent || orgDragSourceDept === targetDept) { orgDragAgent = null; return; }
+  orgChartDeptOverrides[orgDragAgent] = targetDept;
+  localStorage.setItem('agent-os-orgchart-depts', JSON.stringify(orgChartDeptOverrides));
+  const agentName = (AGENTS.find(a => a.id === orgDragAgent) || {}).name || orgDragAgent;
+  const deptLabel = (DEPT_META[targetDept] || {}).label || targetDept;
+  toast(`Moved ${agentName} → ${deptLabel}`, 'success');
+  orgDragAgent = null;
+  orgDragSourceDept = null;
+  renderOrgChartTab($('acenter-tab-content'));
+}
+
+// ═══════════════════════════════════════════════════════════
 // NAV HOOK — Lazy init for new pages
 // ═══════════════════════════════════════════════════════════
 
