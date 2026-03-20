@@ -268,14 +268,36 @@ async function bridgeGoLive() {
 
   // 5) Wire WebSocket events
   Bridge.on('message', (msg) => {
+    // Skip if we already have this message (dedup with optimistic sends)
+    const existing = document.querySelector(`[data-msg-id="${msg.data?.id}"]`);
+    if (existing) return;
+    
     if (currentPage === 'talk' && msg.channel === currentChannel) {
       // Append to current messages
       const converted = bridgeMsgToLocal(msg.data);
       const container = document.getElementById('messages-list');
-      if (container) {
-        container.appendChild(makeMessageGroup(converted, false, currentChannel));
+      if (container && typeof makeMessageGroup === 'function') {
+        const el = makeMessageGroup(converted, false, currentChannel);
+        // Add a subtle highlight for new messages
+        el.style.animation = 'fadeIn 0.3s ease';
+        container.appendChild(el);
         const mc = document.getElementById('messages-container');
         if (mc) setTimeout(() => { mc.scrollTop = mc.scrollHeight; }, 50);
+      }
+    } else if (msg.channel && msg.channel !== currentChannel) {
+      // Update unread count for other channels
+      const chItem = document.querySelector(`.channel-item[data-chid="${msg.channel}"]`);
+      if (chItem && !chItem.classList.contains('active')) {
+        chItem.classList.add('has-unread');
+        let badge = chItem.querySelector('.channel-unread');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'channel-unread';
+          badge.textContent = '1';
+          chItem.appendChild(badge);
+        } else {
+          badge.textContent = String(Math.min(99, parseInt(badge.textContent || '0') + 1));
+        }
       }
     }
   });
@@ -416,12 +438,46 @@ async function bridgeSendMessage() {
   const text = input?.value?.trim();
   if (!text || !currentChannel) return;
   
+  input.value = '';
+  
+  // Optimistic: show message immediately with pending state
+  const tempId = 'pending-' + Date.now();
+  const optimistic = {
+    id: tempId,
+    agent: 'user',
+    text: text,
+    time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+    ts: Date.now() / 1000,
+    reactions: [],
+    replyTo: null,
+    embed: null,
+    attachments: [],
+    _authorName: 'You',
+    _authorAvatar: null,
+    _isBot: false,
+    _pending: true,
+  };
+  
+  const container = document.getElementById('messages-list');
+  if (container && typeof makeMessageGroup === 'function') {
+    container.appendChild(makeMessageGroup(optimistic, false, currentChannel));
+    const mc = document.getElementById('messages-container');
+    if (mc) mc.scrollTop = mc.scrollHeight;
+  }
+  
   try {
-    await Bridge.sendMessage(currentChannel, text);
-    input.value = '';
-    // Reload messages
-    await loadLiveMessages(currentChannel);
+    const result = await Bridge.sendMessage(currentChannel, text);
+    // Replace pending message with real one (the WS broadcast will handle it,
+    // but remove the optimistic one to avoid duplicates)
+    const pendingEl = container?.querySelector(`[data-msg-id="${tempId}"]`);
+    if (pendingEl) pendingEl.remove();
   } catch (e) {
+    // Remove optimistic message and show error
+    const pendingEl = container?.querySelector(`[data-msg-id="${tempId}"]`);
+    if (pendingEl) {
+      pendingEl.style.opacity = '0.5';
+      pendingEl.title = 'Send failed: ' + e.message;
+    }
     toast('Send failed: ' + e.message, 'error');
   }
 }
