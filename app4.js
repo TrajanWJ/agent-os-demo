@@ -802,6 +802,29 @@ let agentConfigs = JSON.parse(localStorage.getItem('agent-os-agent-configs') || 
 let selectedAgentId = AGENTS[0]?.id || null;
 let activeAgentTab = 'overview';
 
+// ── Org Chart Department Config ──
+const DEPT_META = {
+  core:     { emoji: '🤝', label: 'Core Team',          color: '#E8A838' },
+  content:  { emoji: '📝', label: 'Content & Knowledge', color: '#89b4fa' },
+  design:   { emoji: '🎨', label: 'Design & Strategy',   color: '#f5c2e7' },
+  ai:       { emoji: '🧠', label: 'AI & Agent',          color: '#cba6f7' },
+  dev:      { emoji: '💻', label: 'Development',         color: '#a6e3a1' },
+  infra:    { emoji: '⚙️', label: 'Infrastructure',      color: '#6c7086' },
+  data:     { emoji: '📊', label: 'Data',                color: '#fab387' },
+  csuite:   { emoji: '👔', label: 'C-Suite',             color: '#cba6f7' },
+  dept:     { emoji: '🏢', label: 'Department Heads',    color: '#94e2d5' },
+  ops:      { emoji: '📋', label: 'Operations',          color: '#f9e2af' },
+  growth:   { emoji: '🚀', label: 'Strategy & Growth',   color: '#a6e3a1' },
+  creative: { emoji: '✏️', label: 'Creative',            color: '#89b4fa' },
+};
+
+let orgChartCollapsed = JSON.parse(localStorage.getItem('agent-os-orgchart-collapsed') || '{}');
+let orgChartSearch = '';
+let orgChartFilterActive = false;
+let orgChartDeptOverrides = JSON.parse(localStorage.getItem('agent-os-orgchart-depts') || '{}');
+let orgDragAgent = null;
+let orgDragSourceDept = null;
+
 // Generate simulated history for agents
 const AGENT_HISTORY = {};
 AGENTS.forEach(a => {
