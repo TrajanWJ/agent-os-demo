@@ -55,6 +55,20 @@ function nav(page) {
   if (page === 'missions') renderMissions();
   if (page === 'explore')  renderExplore();
   if (page === 'plans')    { if (typeof renderPlansPage === 'function') renderPlansPage(); }
+  if (page === 'queue') {
+    // Load live proposals if bridge is active, then render
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode && typeof loadLiveProposals === 'function') {
+      loadLiveProposals();
+    } else {
+      renderQueue();
+    }
+  }
+  if (page === 'talk') {
+    renderChannelList();
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode && typeof loadLiveMessages === 'function' && currentChannel) {
+      loadLiveMessages(currentChannel);
+    }
+  }
 
   // Update quick actions for new page
   if (typeof updateQuickActions === 'function') updateQuickActions();
@@ -1166,11 +1180,12 @@ function resolveProposalAction(qId, action) {
     toast('✏️ Edit not yet implemented', 'info');
     return;
   }
-  // approve or reject
-  if (Bridge.liveMode) {
-    Bridge.resolveProposal(qId, action).then(() => {
+  // approve or reject → map 'reject' to 'dismiss' for bridge API
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    const apiAction = action === 'reject' ? 'dismiss' : action;
+    Bridge.resolveProposal(qId, apiAction).then(() => {
       loadLiveProposals();
-      toast(action === 'approve' ? '✅ Proposal approved' : '❌ Proposal rejected', action === 'approve' ? 'success' : 'info');
+      toast(action === 'approve' ? '✅ Proposal approved' : '❌ Proposal dismissed', action === 'approve' ? 'success' : 'info');
     }).catch(e => toast('Failed: ' + e.message, 'error'));
   } else {
     answerQueue(qId, action === 'approve' ? 'approved' : 'rejected');
@@ -1689,18 +1704,19 @@ function switchChannel(chId) {
   const ch = DC_CHANNELS.text.find(c => c.id === chId);
   if (ch) ch.unread = 0;
 
-  $('current-channel-name').textContent = chId;
-  $('message-input').placeholder = `Message #${chId}`;
-
-  // Update topbar
-  const color = CHANNEL_COLOR[chId] || '#cba6f7';
-  $('current-channel-name').style.color = color;
-
-  // Show channel topic
+  // Resolve display name: use channel name from categories, or fallback to chId
   const allChannels = DC_CHANNELS.categories
     ? DC_CHANNELS.categories.flatMap(c => c.channels)
     : DC_CHANNELS.text;
   const chData = allChannels.find(c => c.id === chId);
+  const displayName = chData?.name || chId;
+
+  $('current-channel-name').textContent = displayName;
+  $('message-input').placeholder = `Message #${displayName}`;
+
+  // Update topbar
+  const color = CHANNEL_COLOR[chId] || '#cba6f7';
+  $('current-channel-name').style.color = color;
   const topicEl = $('channel-topic');
   if (topicEl && chData?.topic) {
     topicEl.textContent = chData.topic;
@@ -1709,7 +1725,12 @@ function switchChannel(chId) {
     topicEl.style.display = 'none';
   }
 
-  renderMessages(chId);
+  // If bridge is live, load real messages; otherwise use mock data
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && typeof loadLiveMessages === 'function') {
+    loadLiveMessages(chId);
+  } else {
+    renderMessages(chId);
+  }
   renderPinnedMessages(chId);
 }
 
@@ -2640,14 +2661,12 @@ function renderDashboard() {
   if (errBtn) errBtn.style.display = errors > 0 ? '' : 'none';
 
   // System metrics (try bridge)
-  if (Bridge.liveMode) {
-    fetch('/api/system').then(r => r.ok ? r.json() : null).then(d => {
-      if (!d) return;
-      if (d.uptime) el('dash-uptime', d.uptime);
-      if (d.load) el('dash-load', d.load);
-      if (d.memory) el('dash-memory', d.memory);
-    }).catch(() => {});
-  }
+  fetch('/api/overview').then(r => r.ok ? r.json() : null).then(d => {
+    if (!d) return;
+    if (d.uptime) el('dash-uptime', d.uptime.replace(/, \d+ minutes?/, '').replace(/ days?/, 'd').replace(/ hours?/, 'h'));
+    if (d.load) el('dash-load', d.load.avg1.toFixed(1));
+    if (d.memory) el('dash-memory', Math.round(d.memory.used / 1024 * 10) / 10 + '/' + Math.round(d.memory.total / 1024 * 10) / 10 + 'G');
+  }).catch(() => {});
 }
 
 // Run dashboard on feed render

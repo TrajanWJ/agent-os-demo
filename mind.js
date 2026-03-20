@@ -1111,3 +1111,39 @@ function renderBasicMarkdown(text) {
 
   return html;
 }
+
+// ═══════════════════════════════════════════════════════════
+// COMPATIBILITY — bridge old function names to new system
+// ═══════════════════════════════════════════════════════════
+
+function searchMind(query) {
+  // Called from app.js omnibus search
+  if (query) {
+    const input = document.getElementById("mind-search-input");
+    if (input) input.value = query;
+    setMindTab("search");
+    doMindSearch();
+  }
+}
+
+// Legacy setMindMode — redirect to tab system
+function setMindMode(mode) {
+  if (mode === "graph") setMindTab("graph");
+  else if (mode === "cards") setMindTab("search");
+  else if (mode === "timeline") setMindTab("insights");
+}
+
+
+// Override openVaultNote after all scripts load
+document.addEventListener('DOMContentLoaded', () => {
+  const _origOpenVaultNote = window.openVaultNote;
+  window.openVaultNote = function(note) {
+    if (note && note.title) {
+      nav('mind');
+      openNoteInReader(note.type + '/' + note.title + '.md');
+    } else if (_origOpenVaultNote) {
+      _origOpenVaultNote(note);
+    }
+  };
+});
+

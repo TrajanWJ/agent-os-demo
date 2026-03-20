@@ -23,7 +23,8 @@ const TYPE_COLORS = {
   Operations:'#fab387', Report:'#f38ba8', Code:'#a6e3a1'
 };
 
-function initMind() {
+// initMind is now in mind.js — this is the legacy version kept for reference
+function initMindLegacy() {
   // Default to cards on mobile, graph on desktop
   if (window.innerWidth <= 768 && mindMode === 'graph') {
     mindMode = 'cards';

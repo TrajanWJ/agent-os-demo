@@ -17,14 +17,9 @@ const Bridge = {
 
   // ── HTTP ────────────────────────────────────────────────
   async apiFetch(path, opts = {}) {
-    const resp = await fetch(`${this.baseUrl}${path}`, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`,
-        ...(opts.headers || {}),
-      },
-    });
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    const resp = await fetch(`${this.baseUrl}${path}`, { ...opts, headers });
     if (!resp.ok) throw new Error(`Bridge ${resp.status}`);
     return resp.json();
   },
@@ -152,15 +147,7 @@ function initBridgeUI() {
   });
 
   // Auto-detect same-origin: if served from /app and no token saved, try fetching config
-  if (!Bridge.token && location.pathname.startsWith('/app')) {
-    // Prompt user to enter token via the config modal on first load
-    const dot = document.getElementById('bridge-dot');
-    const lbl = document.getElementById('bridge-label');
-    if (dot) dot.style.background = '#f9e2af';
-    if (lbl) lbl.textContent = 'Setup needed';
-  }
-
-  // Auto-connect
+  // Auto-connect (same-origin /app doesn't need a token)
   if (Bridge.isConfigured()) {
     const lbl = document.getElementById('bridge-label');
     if (lbl) lbl.textContent = 'Connecting...';
@@ -204,7 +191,7 @@ async function bridgeSaveConfig() {
   const url = document.getElementById('br-url').value.trim();
   const tok = document.getElementById('br-tok').value.trim();
   const st = document.getElementById('br-status');
-  if (!url || !tok) { st.textContent = '❌ Both fields required'; return; }
+  if (!url) { st.textContent = '❌ URL required'; return; }
   Bridge.setBaseUrl(url);
   Bridge.setToken(tok);
   st.textContent = '⏳ Testing...';
@@ -235,6 +222,7 @@ let _liveChannelIdMap = {};  // id -> {name, topic}
 
 async function bridgeGoLive() {
   if (!Bridge.isConfigured()) return;
+  Bridge.liveMode = true; // Set early so all downstream functions work
   console.log('[Bridge] Going live...');
 
   // 1) Load channels & replace DC_CHANNELS
@@ -581,6 +569,7 @@ async function loadLiveProposals() {
       _createdAt: p.created_at,
       _triageVerdict: p.triage_verdict || null,
       _triageReason: p.triage_reason || null,
+      _confidence: p.confidence || (p.triage_verdict === 'auto-execute' ? 0.92 : p.triage_verdict === 'escalate' ? 0.45 : p.triage_verdict === 'dismissed' ? 0.3 : 0.65),
     }));
     
     // Replace queueCards entirely with live proposals

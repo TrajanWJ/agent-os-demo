@@ -1,4 +1,4 @@
-<!-- v74-1773994057 -->
+<!-- v75-1773994100 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -385,52 +385,64 @@
 
         <!-- MIND VIEW -->
         <div id="view-mind" class="view">
-          <div class="mind-toolbar">
-            <div class="view-toggle-group">
-              <button class="view-toggle active" data-mode="graph" onclick="setMindMode('graph')">Graph</button>
-              <button class="view-toggle" data-mode="cards" onclick="setMindMode('cards')">Cards</button>
-              <button class="view-toggle" data-mode="timeline" onclick="setMindMode('timeline')">Timeline</button>
+          <!-- Tab Navigation -->
+          <div class="mind-tab-bar">
+            <button class="mind-tab-btn active" data-tab="search" onclick="setMindTab('search')">🔍 Search</button>
+            <button class="mind-tab-btn" data-tab="browse" onclick="setMindTab('browse')">📂 Browse</button>
+            <button class="mind-tab-btn" data-tab="graph" onclick="setMindTab('graph')">🕸️ Graph</button>
+            <button class="mind-tab-btn" data-tab="reader" onclick="setMindTab('reader')">📖 Reader</button>
+            <button class="mind-tab-btn" data-tab="insights" onclick="setMindTab('insights')">🧠 Insights</button>
+          </div>
+
+          <!-- Search Panel -->
+          <div id="mind-panel-search" class="mind-tab-panel active">
+            <div class="mind-search-bar">
+              <input type="text" class="mind-search-input" id="mind-search-input" placeholder="Search vault notes..." onkeydown="handleMindSearchKey(event)">
+              <button class="mind-search-btn" onclick="doMindSearch()">Search</button>
             </div>
-            <input type="text" class="mind-search" id="mind-search" placeholder="🔍 Search vault..." oninput="searchMind(this.value)">
+            <div id="mind-recent-searches"></div>
+            <div class="mind-search-stats" id="mind-search-stats"></div>
+            <div id="mind-search-results" class="mind-search-results"></div>
           </div>
 
-          <!-- Filter Pills (visible in cards/timeline modes) -->
-          <div class="mind-filters" id="mind-filters">
-            <div class="mind-filter-row" id="mind-filter-pills"></div>
-            <div class="mind-sort-row">
-              <span class="mind-sort-label">Sort:</span>
-              <select class="mind-sort-select" id="mind-sort" onchange="applyMindSort()">
-                <option value="recent">Most Recent</option>
-                <option value="confidence">Confidence</option>
-                <option value="backlinks">Most Linked</option>
-                <option value="alpha">A → Z</option>
-              </select>
-              <span class="mind-note-count" id="mind-note-count"></span>
-            </div>
-          </div>
-
-          <!-- Graph Mode -->
-          <div id="mind-graph" class="mind-panel active">
-            <button id="graph-lock-btn" class="graph-lock-btn" onclick="toggleGraphLock()">🔒 Lock</button>
-            <canvas id="graph-canvas"></canvas>
-            <div class="graph-detail-panel hidden" id="graph-detail"></div>
-            <div class="graph-tooltip hidden" id="graph-tooltip"></div>
-          </div>
-
-          <!-- Cards Mode -->
-          <div id="mind-cards" class="mind-panel hidden">
-            <div class="vault-cards-grid" id="vault-cards-grid"></div>
-          </div>
-
-          <!-- Timeline Mode -->
-          <div id="mind-timeline" class="mind-panel hidden">
-            <div class="timeline-scroll" id="timeline-scroll">
-              <div class="timeline-track" id="timeline-track"></div>
+          <!-- Browse Panel -->
+          <div id="mind-panel-browse" class="mind-tab-panel hidden">
+            <div class="mind-browse-layout">
+              <div class="mind-browse-tree-panel" id="mind-browse-tree"></div>
+              <div class="mind-browse-list-panel" id="mind-browse-list">
+                <div class="mind-empty">Select a folder to browse</div>
+              </div>
             </div>
           </div>
 
-          <!-- Note Detail (mobile full-screen) -->
-          <div class="mind-note-detail hidden" id="mind-note-detail"></div>
+          <!-- Graph Panel -->
+          <div id="mind-panel-graph" class="mind-tab-panel hidden">
+            <div class="mind-graph-toolbar">
+              <input type="text" class="mind-graph-filter-input" placeholder="Filter nodes..." oninput="filterMindGraph(this.value)">
+              <button id="mind-graph-lock-btn" class="graph-lock-btn" onclick="toggleMindGraphLock()">🔒 Lock</button>
+            </div>
+            <div class="mind-graph-container">
+              <canvas id="mind-graph-canvas"></canvas>
+              <div class="graph-detail-panel hidden" id="mind-graph-detail"></div>
+              <div class="graph-tooltip hidden" id="mind-graph-tooltip"></div>
+            </div>
+          </div>
+
+          <!-- Reader Panel -->
+          <div id="mind-panel-reader" class="mind-tab-panel hidden">
+            <div id="mind-reader-content" class="mind-reader-content">
+              <div class="mind-reader-empty">
+                <div style="font-size:48px;margin-bottom:12px">📖</div>
+                <div style="font-size:16px;font-weight:600;color:var(--text-dim)">No note selected</div>
+                <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Click a note from Search, Browse, or Graph to view it here</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Insights Panel -->
+          <div id="mind-panel-insights" class="mind-tab-panel hidden">
+            <div id="mind-insights-content" class="mind-insights-content"></div>
+          </div>
         </div>
 
         <!-- PULSE VIEW -->
@@ -859,11 +871,13 @@
 
   <script src="data.js?v=1773993468"></script>
   <script src="app.js?v=1773993468"></script>
+  <script src="mind.js?v=1773994100"></script>
   <script src="app2.js?v=1773993468"></script>
   <script src="app3.js?v=1773993468"></script>
   <script src="app4.js?v=1773993468"></script>
   <script src="app5.js?v=1773993468"></script>
   <script src="app6.js?v=1773993468"></script>
+  <script src="bridge.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
 </body>
 </html>

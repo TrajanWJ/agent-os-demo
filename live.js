@@ -17,40 +17,52 @@ const LIVE = {
 // ── Boot ──────────────────────────────────────────────────
 function initLive() {
   if (!LIVE.enabled) return;
-  console.log('[LIVE] Initializing live data connection...');
+  // If bridge.js is loaded and handling live data, skip live.js init for messages/queue
+  const bridgeHandles = (typeof Bridge !== 'undefined' && Bridge.liveMode);
+  console.log('[LIVE] Initializing live data connection...', bridgeHandles ? '(bridge active, deferring messages/queue)' : '');
 
-  // Initial data load
+  // Always load system overview and vault
   loadOverview();
-  loadChannels();
   loadVaultNotes();
-  loadMessages(currentChannel || 'concierge');
 
-  // Connect WebSocket for real-time updates
-  connectWebSocket();
+  // Only load channels/messages/queue if bridge.js isn't handling them
+  if (!bridgeHandles) {
+    loadChannels();
+    loadMessages(currentChannel || 'concierge');
+    loadQueueFromStore();
+  }
+
+  // Connect WebSocket for real-time updates (only if bridge isn't doing WS)
+  if (!bridgeHandles) {
+    connectWebSocket();
+  }
 
   // Sync queue items to backend + Discord (delayed to not block init)
   setTimeout(syncQueueToBackend, 3000);
 
   // Load from EventStore
   loadFeedEvents();
-  loadQueueFromStore();
 
   // Polling
   LIVE.timers.overview = setInterval(loadOverview, LIVE.pollInterval);
   LIVE.timers.vault = setInterval(loadVaultNotes, 60000);
   LIVE.timers.feed = setInterval(loadFeedEvents, 15000); // Feed refresh every 15s
-  LIVE.timers.queue = setInterval(loadQueueFromStore, 10000); // Queue refresh every 10s
+  // Only poll queue from live.js if bridge isn't handling it
+  if (!bridgeHandles) {
+    LIVE.timers.queue = setInterval(loadQueueFromStore, 30000); // 30s backoff (was 10s)
+  }
 
-  // Override switchChannel to load real messages
-  const origSwitchChannel = window.switchChannel;
-  window.switchChannel = function(chId) {
-    origSwitchChannel(chId);
-    loadMessages(chId);
-  };
+  // Override switchChannel to load real messages (only if bridge isn't doing it)
+  if (!bridgeHandles) {
+    const origSwitchChannel = window.switchChannel;
+    window.switchChannel = function(chId) {
+      origSwitchChannel(chId);
+      loadMessages(chId);
+    };
+  }
 
   // Show live indicator
   updateSyncBar('connected');
-  toast('🟢 Live mode active — WebSocket connected', 'success', 3000);
 }
 
 function updateSyncBar(state) {
@@ -353,54 +365,42 @@ async function loadFeedEvents() {
 
 // ── Queue from EventStore ─────────────────────────────────
 async function loadQueueFromStore() {
+  // Skip if bridge.js is handling proposals
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) return;
+
   const data = await apiFetch('queue');
   if (!data) return;
+
+  // API returns flat array, not {items, stats}
+  const items = Array.isArray(data) ? data : (data.items || []);
+  if (typeof queueCards === 'undefined') return;
+
+  const storeIds = new Set(items.map(i => i.id));
+  const clientOnly = queueCards.filter(c => !storeIds.has(c.id));
   
-  // Update queue cards with real data
-  if (data.items && typeof queueCards !== 'undefined') {
-    // Merge: keep any client-side items not in store, add store items
-    const storeIds = new Set(data.items.map(i => i.id));
-    const clientOnly = queueCards.filter(c => !storeIds.has(c.id));
-    
-    const storeCards = data.items.map(item => ({
-      id: item.id,
-      question: item.question,
-      agent: item.agent || 'righthand',
-      type: item.type || 'approval',
-      choices: item.choices ? (typeof item.choices === 'string' ? JSON.parse(item.choices) : item.choices) : null,
-      priority: item.priority || 'normal',
-      ttl: item.ttl || 300,
-      elapsed: 0, // Will be calculated from created_at
-      remaining: item.expires_at ? Math.max(0, Math.round((new Date(item.expires_at) - Date.now()) / 1000)) : 300,
-      _fromStore: true,
-    }));
-    
-    // Replace queueCards
-    queueCards.length = 0;
-    storeCards.concat(clientOnly).forEach(c => queueCards.push(c));
-    
-    if (currentPage === 'queue' && typeof renderQueue === 'function') {
-      renderQueue();
-    }
-  }
+  const storeCards = items.map(item => ({
+    id: item.id,
+    question: item.description || item.question || '',
+    agent: item.agent || 'righthand',
+    type: item.type || 'approval',
+    choices: item.choices ? (typeof item.choices === 'string' ? JSON.parse(item.choices) : item.choices) : null,
+    priority: item.priority || 'normal',
+    ttl: item.ttl || 300,
+    elapsed: 0,
+    remaining: item.expires_at ? Math.max(0, Math.round((new Date(item.expires_at) - Date.now()) / 1000)) : 300,
+    _fromStore: true,
+    _status: item.status || 'pending',
+    _priority: typeof item.priority === 'number' ? `P${item.priority}` : (item.priority || 'P3'),
+    _source: item.agent || 'unknown',
+    _createdAt: item.created || item.created_at,
+  }));
   
-  // Update auto-queue stats
-  if (data.stats) {
-    const statsEl = document.getElementById('queue-auto-stats');
-    if (statsEl) {
-      statsEl.innerHTML = `
-        <span class="auto-stat">🤖 Auto-resolved: <strong>${data.stats.auto_resolved_today || 0}</strong> today</span>
-        <span class="auto-stat">📏 Active rules: <strong>${data.stats.active_rules || 0}</strong></span>
-        <span class="auto-stat">📊 Total answered: <strong>${data.stats.total_answered || 0}</strong></span>
-      `;
-    }
-    
-    // Update qStats if available
-    if (typeof qStats !== 'undefined') {
-      qStats.answered = data.stats.answered_today || 0;
-      qStats.autoResolved = data.stats.auto_resolved_today || 0;
-      if (typeof updateQueueStats === 'function') updateQueueStats();
-    }
+  // Replace queueCards
+  queueCards.length = 0;
+  storeCards.concat(clientOnly).forEach(c => queueCards.push(c));
+  
+  if (currentPage === 'queue' && typeof renderQueue === 'function') {
+    renderQueue();
   }
 }
 
@@ -572,7 +572,7 @@ async function loadMessages(channelName, fullReplace = true) {
   }
 
   try {
-    const res = await fetch(`/api/messages?channel=${channelName}&limit=30&id=${channelId}`);
+    const res = await fetch(`/api/channels/${channelId}/messages?limit=30`);
     const messages = await res.json();
     if (!Array.isArray(messages) || messages.error) return;
 
