@@ -835,7 +835,11 @@ function initRooms() {
   if (rooms.length === 0) {
     const saved = localStorage.getItem('agent-os-rooms');
     if (saved) {
-      try { rooms = JSON.parse(saved); } catch { rooms = seedRooms(); }
+      try {
+        rooms = JSON.parse(saved);
+        // Clean up any stale thinking messages from interrupted sessions
+        rooms.forEach(r => { r.messages = r.messages.filter(m => !m._thinking); });
+      } catch { rooms = seedRooms(); }
     } else {
       rooms = seedRooms();
     }
