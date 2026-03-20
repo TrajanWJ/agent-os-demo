@@ -44,7 +44,10 @@ const PAGE_TITLES = {
 };
 
 // ── Navigation ────────────────────────────────────────────
+let _channelSwitchLock = false;
 function nav(page) {
+  // Guard: don't navigate away from Talk during channel switch
+  if (_channelSwitchLock && currentPage === 'talk' && page !== 'talk') return;
   // Redirect removed pages
   const redirects = { schedule: 'briefing', explore: 'mind', board: 'feed', config: 'feed', command: 'feed', stream: 'feed' };
   if (redirects[page]) page = redirects[page];
@@ -1818,6 +1821,8 @@ function setTalkMode(mode) {
 }
 
 function switchChannel(chId) {
+  _channelSwitchLock = true;
+  setTimeout(() => { _channelSwitchLock = false; }, 200);
   currentChannel = chId;
   currentDM = null;
   // Update active state
@@ -2375,28 +2380,56 @@ function threadFromMessage(msgId) {
   const msg = findMessage(msgId);
   if (!msg) return;
 
-  // Initialize thread if needed
-  if (!THREAD_REPLIES[msgId]) {
-    THREAD_REPLIES[msgId] = [];
-    // Seed with 2-3 fake replies for demo
-    const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#cba6f7' };
-    const otherAgents = AGENTS.filter(a => a.id !== msg.agent).slice(0, 2);
-    const fakeReplies = [
-      { id: 'tr_' + msgId + '_1', agent: otherAgents[0]?.id || 'researcher', text: 'Good point — I\'ll factor this into my analysis.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 60 },
-      { id: 'tr_' + msgId + '_2', agent: agent.id, text: 'Updated. Check the latest revision when ready.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 180 },
-    ];
-    if (otherAgents[1]) {
-      fakeReplies.push({ id: 'tr_' + msgId + '_3', agent: otherAgents[1].id, text: 'Looks good from my side. Proceeding with integration.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 300 });
-    }
-    THREAD_REPLIES[msgId] = fakeReplies;
-  }
-
-  // Show thread panel
+  // Show thread panel immediately
   threadPanelVisible = true;
   const tp = $('thread-panel');
   tp.classList.remove('hidden');
   tp.dataset.msgId = msgId;
-  renderThreadPanel(msgId, msg);
+
+  // Try fetching real thread messages from bridge
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && msg._threadId) {
+    // Show loading state
+    tp.innerHTML = `
+      <div class="thread-panel-header"><span>🧵 Thread</span><button onclick="toggleThreadPanel()">✕</button></div>
+      <div style="padding:24px;text-align:center;color:var(--text-muted)">Loading thread...</div>
+    `;
+    Bridge.getThreadMessages(msg._threadId).then(messages => {
+      const replies = (messages || []).map(m => {
+        const local = typeof bridgeMsgToLocal === 'function' ? bridgeMsgToLocal(m) : {
+          id: m.id, agent: m.author?.bot ? 'righthand' : 'user',
+          text: m.content || '', time: new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+          ts: new Date(m.timestamp).getTime() / 1000,
+        };
+        return local;
+      });
+      THREAD_REPLIES[msgId] = replies;
+      renderThreadPanel(msgId, msg);
+    }).catch(e => {
+      console.warn('[Thread] Load failed:', e.message);
+      // Fallback to local/demo data
+      initDemoThreadReplies(msgId, msg);
+      renderThreadPanel(msgId, msg);
+    });
+  } else if (!THREAD_REPLIES[msgId]) {
+    // No bridge or no threadId — use demo data
+    initDemoThreadReplies(msgId, msg);
+    renderThreadPanel(msgId, msg);
+  } else {
+    renderThreadPanel(msgId, msg);
+  }
+}
+
+function initDemoThreadReplies(msgId, msg) {
+  const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#cba6f7' };
+  const otherAgents = AGENTS.filter(a => a.id !== msg.agent).slice(0, 2);
+  const fakeReplies = [
+    { id: 'tr_' + msgId + '_1', agent: otherAgents[0]?.id || 'researcher', text: 'Good point — I\'ll factor this into my analysis.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 60 },
+    { id: 'tr_' + msgId + '_2', agent: agent.id, text: 'Updated. Check the latest revision when ready.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 180 },
+  ];
+  if (otherAgents[1]) {
+    fakeReplies.push({ id: 'tr_' + msgId + '_3', agent: otherAgents[1].id, text: 'Looks good from my side. Proceeding with integration.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 300 });
+  }
+  THREAD_REPLIES[msgId] = fakeReplies;
 }
 
 function renderThreadPanel(msgId, msg) {

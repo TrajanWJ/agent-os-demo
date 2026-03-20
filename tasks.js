@@ -558,16 +558,19 @@ async function taskAction(taskId, action) {
 
   try {
     switch (action) {
+      case 'approve':
+        await Bridge.approveDispatchTask(taskId);
+        toast('✅ Task approved and moved to active', 'success');
+        break;
       case 'cancel':
         await fetch(`${baseUrl}/api/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         toast('❌ Task cancelled', 'info');
         break;
       case 'retry':
-      case 'rerun':
         await fetch(`${baseUrl}/api/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         toast('🔄 Task requeued', 'success');
         break;
-      case 'boost':
+      case 'boost': {
         const task = tasksPageData.find(t => t.id === taskId);
         const curP = getTaskPriority(task);
         const newP = curP === 'P3' ? 'P2' : curP === 'P2' ? 'P1' : curP === 'P1' ? 'P0' : 'P0';
@@ -577,6 +580,14 @@ async function taskAction(taskId, action) {
           body: JSON.stringify({ priority: newP }),
         });
         toast(`⬆️ Priority boosted to ${newP}`, 'success');
+        break;
+      }
+      case 'complete':
+      case 'fail':
+      case 'reassign':
+      case 'reopen':
+      case 'delete':
+        toast(`🚧 "${action}" not yet implemented`, 'info');
         break;
       case 'check':
         toast('🔍 Checking task status...', 'info');
