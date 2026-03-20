@@ -32,40 +32,7 @@ const FEED_EVENTS = [
 ];
 
 // ── QUEUE QUESTIONS ───────────────────────────────────────────────────────────
-const QUEUE_QUESTIONS = [
-  {id:'q1', agent:'coder',     type:'binary',   priority:'urgent', ttl:240, elapsed:180,
-   question:'Should I bump the Node.js version to 22 LTS?',
-   context:'Current version is 18.x. v22 LTS released. No breaking changes in our codebase detected. CI passes on v22 locally.',
-   options:null},
-  {id:'q2', agent:'researcher',type:'choice',   priority:'normal', ttl:300, elapsed:60,
-   question:'Which competitor should I deep-dive next?',
-   context:'Completed surface scans of all 13 products. Need to pick one for full teardown analysis (3-4 hour task).',
-   options:['Devin (most autonomous)','LangSmith (best observability)','Cursor (best UX)','Dify (most visual)']},
-  {id:'q3', agent:'righthand', type:'approval', priority:'urgent', ttl:180, elapsed:150,
-   question:'Approve this dispatch plan before execution?',
-   context:'Plan: 1) Spawn Security for audit 2) Spawn Vault for indexing 3) Spawn Prompt Eng for optimization. Estimated 45K tokens total. Budget: 100K remaining.',
-   options:null},
-  {id:'q4', agent:'devil',     type:'freetext', priority:'optional', ttl:600, elapsed:120,
-   question:'I need context on the token budget strategy — how should I weight cost vs. quality?',
-   context:"I'm about to run adversarial analysis on Researcher's competitive findings. Quality matters here, but I don't want to blow the day's budget.",
-   options:null},
-  {id:'q5', agent:'vault',     type:'rating',   priority:'normal', ttl:360, elapsed:90,
-   question:'Rate the completeness of the Architecture docs (1–5)',
-   context:'I\'ve cross-referenced all notes. Architecture section has 8 notes, 34 backlinks. Missing: deployment runbook, scaling strategy, disaster recovery.',
-   options:['1 — Very incomplete','2 — Missing major sections','3 — Adequate','4 — Mostly complete','5 — Comprehensive']},
-  {id:'q6', agent:'ops',       type:'binary',   priority:'normal', ttl:480, elapsed:200,
-   question:'Restart session-watchdog now? It\'s been failing for 2 hours.',
-   context:'session-watchdog has failed 6 consecutive heartbeats. Service is at :8484. All other services nominal. No active sessions would be interrupted.',
-   options:null},
-  {id:'q7', agent:'prompt',    type:'approval', priority:'normal', ttl:420, elapsed:180,
-   question:'Review these prompt templates before I commit them to vault?',
-   context:'Updated 12 prompt templates. Key changes: added chain-of-thought scaffolding, reduced verbosity by 30%, added confidence calibration instructions.',
-   options:null},
-  {id:'q8', agent:'researcher',type:'choice',   priority:'optional', ttl:900, elapsed:300,
-   question:'How should I structure the final competitive report?',
-   context:'~80% through the analysis. Report will be ~15K tokens. Need format guidance before I write conclusions.',
-   options:['Executive summary first, details in appendix','Chronological by product discovery','Grouped by product category','Threat-matrix format (us vs. them)']},
-];
+const QUEUE_QUESTIONS = []; // Live proposals loaded from bridge API
 
 // ── DISCORD MESSAGES ──────────────────────────────────────────────────────────
 const DC_MESSAGES = {
@@ -156,81 +123,93 @@ const DM_MESSAGES = {
 const DC_CHANNELS = {
   categories: [
     {
-      id:'cat-active', name:'⚡ ACTIVE', channels: [
-        {id:'agent-os-demo-launch', name:'🔥-agent-os-demo-launch', unread:2, type:'text', topic:'Agent OS demo — build, host, deploy.'},
-        {id:'discord-server-v5',    name:'🏗️-discord-server-v5-1',   unread:0, type:'text', topic:'Discord architecture v5.1'},
-        {id:'agent-os-frontend',    name:'🧠-agent-os-frontend',     unread:0, type:'text', topic:'Future Frontend Layer — native app to replace Discord.'},
-        {id:'red-team-fixes',       name:'⚠️-red-team-fixes',        unread:1, type:'text', topic:'3 criticals from v5.1 red team'},
-        {id:'wilson-premier',       name:'🏢-wilson-premier-revenue', unread:0, type:'text', topic:'Wilson Premier Agent Platform — THE revenue play.'},
-        {id:'knowledge-graph',      name:'🧊-knowledge-graph',       unread:0, type:'text', topic:'Neo4j graph activation'},
+      id:'⚡ ACTIVE', name:'⚡ ACTIVE', channels: [
+        {id:'1484410846422765590', name:'🔧-claw-discord-setup', unread:0, type:'text', topic:'Discord v5 config, wiring, repairs. Active rebuild: categories, webhooks, naming system, channel sync. All Discord/OpenC'},
+        {id:'1484411971880226856', name:'ingestor-researcher-dispatcher-propositioner', unread:0, type:'text', topic:'ingestor-feed, vault-feed, links pipeline wiring. reddit-intel.sh runs every 4h. Links pipeline: ~/bin/links-pipeline.sh'},
+        {id:'1484411979761324183', name:'🔬-self-improvement-loop', unread:0, type:'text', topic:'Self-improvement hook live in 3 scripts. 21 backtest errors logged. Next: dedup logic, pattern aggregation across agents'},
+        {id:'1484411982487490701', name:'🤖-agent-os-frontend', unread:0, type:'text', topic:'Native frontend to replace Discord. 5 views: Bridge/Tasks/Graph/Agents/System. Demo HTML built. Deploy at next API reset'},
+        {id:'1484432021727084644', name:'📚-links-reads-to-implement', unread:0, type:'text', topic:'Drop links, articles, libraries, and tools here. Agents pick up and assess for implementation. Anything worth building g'},
+        {id:'1484435106365046844', name:'🤝-agent-orchestration', unread:0, type:'text', topic:'Multi-agent coordination: handoffs, spawn patterns, team workflows, inter-agent mailbox, task chaining. Design and debug'},
       ]
     },
     {
-      id:'cat-bridge', name:'🛎️ BRIDGE', channels: [
-        {id:'concierge', name:'concierge',         unread:3, type:'text', topic:'Primary Trajan↔agent interface. Talk to Right Hand here.'},
-        {id:'dispatch',  name:'📋-dispatch',        unread:0, type:'text', topic:'Issue agent commands here.'},
-        {id:'daily-brief',name:'📢-daily-brief',    unread:1, type:'text', topic:'07:00 UTC daily digest.'},
+      id:'🛎️ BRIDGE', name:'🛎️ BRIDGE', channels: [
+        {id:'1482997518362214422', name:'concierge', unread:0, type:'text', topic:'Talk to Right Hand. Real-time conversation. Ask anything, get answers or delegation. Your primary interface.'},
+        {id:'1484014822642286654', name:'📋-dispatch', unread:0, type:'text', topic:'Issue commands. State what you want done + context. Get ✅ confirmation + results link. Async — agents pick up within 15m'},
       ]
     },
     {
-      id:'cat-command', name:'🧠 COMMAND', channels: [
-        {id:'desk',      name:'🗂️-desk',            unread:2, type:'forum', topic:'Task board. One thread per task.', count:14},
-        {id:'decisions', name:'⚖️-decisions',        unread:0, type:'forum', topic:'Decision log. One thread per decision.', count:8},
-        {id:'prompt-lab',name:'🧠-prompt-lab',       unread:0, type:'forum', topic:'Prompt engineering workshop.', count:5},
+      id:'🧠 COMMAND', name:'🧠 COMMAND', channels: [
+        {id:'1482996866428964904', name:'🗂️-desk', unread:0, type:'forum', topic:'Task board. One thread per task — agents open, you close with ✅. Tags: 🔴 Critical · 🟡 Active · 🟢 Done · ⚫ Archived + '},
+        {id:'1482939106223853740', name:'⚖️-decisions', unread:0, type:'forum', topic:'Decision log. One thread per decision. Tags: pending → decided → reversed + domain. Feeds vault/Trajan/Decisions.md auto'},
+        {id:'1484014825670574180', name:'🧠-prompt-lab', unread:0, type:'forum', topic:'Prompt engineering workshop. One thread per agent or prompt. Tags: draft → tested → deployed + type (soul/system-prompt/'},
+        {id:'1484031225709723818', name:'📢-daily-brief', unread:0, type:'text', topic:'Morning synthesis. System health, overnight completions, today\'s priorities. Glance at it, act in #dispatch. One post p'},
+        {id:'1484267485476946112', name:'❓-queue', unread:0, type:'text', topic:'Agent decision queue. Items posted from Agent OS web UI + agents. Answer here or in the web app — both sync bidirectiona'},
       ]
     },
     {
-      id:'cat-signals', name:'📡 SIGNALS', channels: [
-        {id:'links',        name:'🔗-links',           unread:0, type:'text', topic:'Drop links for analysis.'},
-        {id:'ingestor-feed',name:'📡-ingestor-feed',    unread:4, type:'text', topic:'Hourly Reddit/GitHub/HN intel.'},
-        {id:'vault-feed',   name:'📦-vault-feed',       unread:1, type:'text', topic:'Vault writes, knowledge updates.'},
+      id:'📡 SIGNALS', name:'📡 SIGNALS', channels: [
+        {id:'1482256987700990066', name:'🔗-links', unread:0, type:'text', topic:'Drop links for analysis. Agents pick up and process.'},
+        {id:'1482295358963974187', name:'📡-ingestor-feed', unread:0, type:'text', topic:'Hourly Reddit/GitHub/HN intel via Ingestor webhook. Subscribable.'},
+        {id:'1483018390015709315', name:'📦-vault-feed', unread:0, type:'text', topic:'Vault writes, knowledge updates via Vault Keeper webhook.'},
       ]
     },
     {
-      id:'cat-system', name:'🔧 SYSTEM', channels: [
-        {id:'ops-log',    name:'⚙️-ops-log',          unread:0, type:'text', topic:'System operations, cron output, dispatch cycles.'},
-        {id:'raw-logs',   name:'📜-raw-logs',          unread:0, type:'text', topic:'Cron runs, dispatch cycles, completion hooks.'},
-        {id:'heartbeat',  name:'🫀-heartbeat',         unread:0, type:'text', topic:'System health at a glance.'},
-        {id:'alerts',     name:'🚨-alerts',            unread:0, type:'text', topic:'Critical alerts only.'},
-        {id:'security',   name:'🔒-security',          unread:0, type:'text', topic:'Security agent output.'},
-        {id:'agent-status',name:'💬-agent-status',     unread:0, type:'voice'},
+      id:'🔧 SYSTEM', name:'🔧 SYSTEM', channels: [
+        {id:'1484015032038850640', name:'💬-agent-status', unread:0, type:'voice', topic:''},
+        {id:'1482256984811114688', name:'⚙️-ops-log', unread:0, type:'text', topic:'Ops log. System operations, cron output, dispatch cycles.'},
+        {id:'1482547280325120076', name:'📜-raw-logs', unread:0, type:'text', topic:'Cron runs, dispatch cycles, completion hooks. Reference channel — mute it.'},
+        {id:'1484014833790877716', name:'🔒-security', unread:0, type:'text', topic:'Security agent output — scans, hardening, vulnerability reports.'},
+        {id:'1484031232521273444', name:'🫀-heartbeat', unread:0, type:'text', topic:'Single pinned embed, updated every 15min. System health at a glance.'},
+        {id:'1484031239680823316', name:'🚨-alerts', unread:0, type:'text', topic:'🔴 Problems only. Silent when healthy. If this has unread, something\'s wrong.'},
       ]
     },
     {
-      id:'cat-projects', name:'🚀 PROJECTS', channels: [
-        {id:'projects',  name:'🚀-projects',         unread:1, type:'forum', topic:'One thread per project.', count:6},
+      id:'🤖 AGENT WORK', name:'🤖 AGENT WORK', channels: [
+        {id:'1483010758408274027', name:'🤖-agent-feed', unread:0, type:'text', topic:'Task lifecycle feed. ⏳ queued → 🔄 running → ✅ done / 🔴 failed. One line per task. Glanceable — details in threads.'},
+        {id:'1482258431997116531', name:'🔬-research-feed', unread:0, type:'text', topic:'Research summaries. First line = finding. Details in thread. Never dump raw output here.'},
+        {id:'1484014829156175893', name:'💻-code-output', unread:0, type:'text', topic:'Code results. What changed, what was built. PRs, commits, build status. Details in threads.'},
+        {id:'1484014830280249395', name:'😈-devils-corner', unread:0, type:'text', topic:'Debate outputs, critiques, red-teaming via Devil\'s Advocate webhook.'},
       ]
     },
     {
-      id:'cat-agent-work', name:'🤖 AGENT WORK', channels: [
-        {id:'agent-feed',    name:'🤖-agent-feed',     unread:3, type:'text', topic:'Dispatches, handoffs, general agent activity.'},
-        {id:'research-feed', name:'🔬-research-feed',  unread:2, type:'text', topic:'Researcher output.'},
-        {id:'code-output',   name:'💻-code-output',    unread:0, type:'text', topic:'Builds, commits, code results.'},
-        {id:'devils-corner', name:'😈-devils-corner',  unread:1, type:'text', topic:'Debate outputs, critiques, red-teaming.'},
+      id:'🚀 PROJECTS', name:'🚀 PROJECTS', channels: [
+        {id:'1482899212889751745', name:'🚀-projects', unread:0, type:'forum', topic:'One thread per project. All work, updates, and context in threads — not scattered across channels. Tags: project name + '},
       ]
     },
   ],
-  // Flat list for backward compat
   text: [
-    {id:'concierge',    name:'concierge',         unread:3, topic:'Primary Trajan↔agent interface.'},
-    {id:'dispatch',     name:'📋-dispatch',        unread:0, topic:'Issue agent commands here.'},
-    {id:'research-feed',name:'🔬-research-feed',  unread:2, topic:'Researcher output.'},
-    {id:'devils-corner',name:'😈-devils-corner',  unread:1, topic:'Debate outputs, critiques.'},
-    {id:'ops-log',      name:'⚙️-ops-log',        unread:0, topic:'System operations and health.'},
-    {id:'code-output',  name:'💻-code-output',    unread:0, topic:'Builds, commits, code results.'},
-    {id:'agent-feed',   name:'🤖-agent-feed',     unread:3, topic:'Dispatches, handoffs, general agent activity.'},
+    {id:'1484410846422765590', name:'🔧-claw-discord-setup', unread:0, topic:'Discord v5 config, wiring, repairs. Active rebuild: categories, webhooks, naming'},
+    {id:'1484411971880226856', name:'ingestor-researcher-dispatcher-propositioner', unread:0, topic:'ingestor-feed, vault-feed, links pipeline wiring. reddit-intel.sh runs every 4h.'},
+    {id:'1484411979761324183', name:'🔬-self-improvement-loop', unread:0, topic:'Self-improvement hook live in 3 scripts. 21 backtest errors logged. Next: dedup '},
+    {id:'1484411982487490701', name:'🤖-agent-os-frontend', unread:0, topic:'Native frontend to replace Discord. 5 views: Bridge/Tasks/Graph/Agents/System. D'},
+    {id:'1484432021727084644', name:'📚-links-reads-to-implement', unread:0, topic:'Drop links, articles, libraries, and tools here. Agents pick up and assess for i'},
+    {id:'1484435106365046844', name:'🤝-agent-orchestration', unread:0, topic:'Multi-agent coordination: handoffs, spawn patterns, team workflows, inter-agent '},
+    {id:'1482997518362214422', name:'concierge', unread:0, topic:'Talk to Right Hand. Real-time conversation. Ask anything, get answers or delegat'},
+    {id:'1484014822642286654', name:'📋-dispatch', unread:0, topic:'Issue commands. State what you want done + context. Get ✅ confirmation + results'},
+    {id:'1484031225709723818', name:'📢-daily-brief', unread:0, topic:'Morning synthesis. System health, overnight completions, today\'s priorities. Gl'},
+    {id:'1484267485476946112', name:'❓-queue', unread:0, topic:'Agent decision queue. Items posted from Agent OS web UI + agents. Answer here or'},
+    {id:'1482256987700990066', name:'🔗-links', unread:0, topic:'Drop links for analysis. Agents pick up and process.'},
+    {id:'1482295358963974187', name:'📡-ingestor-feed', unread:0, topic:'Hourly Reddit/GitHub/HN intel via Ingestor webhook. Subscribable.'},
+    {id:'1483018390015709315', name:'📦-vault-feed', unread:0, topic:'Vault writes, knowledge updates via Vault Keeper webhook.'},
+    {id:'1482256984811114688', name:'⚙️-ops-log', unread:0, topic:'Ops log. System operations, cron output, dispatch cycles.'},
+    {id:'1482547280325120076', name:'📜-raw-logs', unread:0, topic:'Cron runs, dispatch cycles, completion hooks. Reference channel — mute it.'},
+    {id:'1484014833790877716', name:'🔒-security', unread:0, topic:'Security agent output — scans, hardening, vulnerability reports.'},
+    {id:'1484031232521273444', name:'🫀-heartbeat', unread:0, topic:'Single pinned embed, updated every 15min. System health at a glance.'},
+    {id:'1484031239680823316', name:'🚨-alerts', unread:0, topic:'🔴 Problems only. Silent when healthy. If this has unread, something\'s wrong.'},
+    {id:'1483010758408274027', name:'🤖-agent-feed', unread:0, topic:'Task lifecycle feed. ⏳ queued → 🔄 running → ✅ done / 🔴 failed. One line per ta'},
+    {id:'1482258431997116531', name:'🔬-research-feed', unread:0, topic:'Research summaries. First line = finding. Details in thread. Never dump raw outp'},
+    {id:'1484014829156175893', name:'💻-code-output', unread:0, topic:'Code results. What changed, what was built. PRs, commits, build status. Details '},
+    {id:'1484014830280249395', name:'😈-devils-corner', unread:0, topic:'Debate outputs, critiques, red-teaming via Devil\'s Advocate webhook.'},
   ],
-  voice: [
-    {id:'agent-status', name:'💬-agent-status', users:['🤝','🔬'], limit:null},
-  ],
+  voice: [],
   forums: [
-    {id:'desk',      name:'🗂️-desk',       icon:'📋', count:14},
-    {id:'decisions', name:'⚖️-decisions',   icon:'⚖️', count:8},
-    {id:'projects',  name:'🚀-projects',    icon:'🚀', count:6},
-    {id:'prompt-lab',name:'🧠-prompt-lab',  icon:'🧠', count:5},
+    {id:'1482996866428964904', name:'🗂️-desk', icon:"📋", count:0},
+    {id:'1482939106223853740', name:'⚖️-decisions', icon:"📋", count:0},
+    {id:'1484014825670574180', name:'🧠-prompt-lab', icon:"📋", count:0},
+    {id:'1482899212889751745', name:'🚀-projects', icon:"📋", count:0},
   ],
 };
-
 const DC_PINNED = {
   bridge: ['m1','m2','m3'],
   dev: ['d2'],

@@ -75,7 +75,7 @@ function renderCommandResults(val) {
       // Default suggestions
       results = [
         { icon: '🏠', title: 'Feed', desc: 'Activity stream', action: () => nav('feed') },
-        { icon: '❓', title: 'Queue', desc: 'Pending decisions', action: () => nav('queue') },
+        { icon: '❓', title: 'Proposals', desc: 'Pending decisions', action: () => nav('queue') },
         { icon: '💬', title: 'Talk', desc: 'Agent comms', action: () => nav('talk') },
         { icon: '🧠', title: 'Mind', desc: 'Knowledge vault', action: () => nav('mind') },
         { icon: '⚡', title: 'Pulse', desc: 'System health', action: () => nav('pulse') },
@@ -197,7 +197,7 @@ function renderPaletteResults(val) {
     // Commands
     const cmds = [
       { icon: '🏠', title: 'Go to Feed', sc: '1', action: () => { nav('feed'); closeCommandPalette(); } },
-      { icon: '❓', title: 'Go to Queue', sc: '2', action: () => { nav('queue'); closeCommandPalette(); } },
+      { icon: '❓', title: 'Go to Proposals', sc: '2', action: () => { nav('queue'); closeCommandPalette(); } },
       { icon: '💬', title: 'Go to Talk', sc: '3', action: () => { nav('talk'); closeCommandPalette(); } },
       { icon: '🧠', title: 'Go to Mind', sc: '4', action: () => { nav('mind'); closeCommandPalette(); } },
       { icon: '⚡', title: 'Go to Pulse', sc: '5', action: () => { nav('pulse'); closeCommandPalette(); } },

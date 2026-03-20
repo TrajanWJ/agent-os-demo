@@ -14,7 +14,7 @@ let notifications = [];
 
 // Page titles
 const PAGE_TITLES = {
-  feed: 'Home', queue: 'Queue', talk: 'Talk',
+  feed: 'Home', queue: 'Proposals', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
   schedule: 'Schedule', missions: 'Missions', explore: 'Explore'
@@ -279,7 +279,7 @@ function renderDashMetrics() {
 
   const cards = [
     { icon: 'users',        num: activeCount, label: 'Active Agents',  trend: '↑ 2',   dir: 'up' },
-    { icon: 'inbox',        num: queueDepth,  label: 'Queue Depth',    trend: queueDepth > 5 ? '↑ High' : '→ Normal', dir: queueDepth > 5 ? 'down' : 'flat' },
+    { icon: 'inbox',        num: queueDepth,  label: 'Proposals',      trend: queueDepth > 5 ? '↑ High' : '→ Normal', dir: queueDepth > 5 ? 'down' : 'flat' },
     { icon: 'check-circle', num: tasksToday,   label: 'Tasks Today',    trend: '↑ 12%', dir: 'up' },
     { icon: 'zap',          num: tokenStr,     label: 'Token Usage',    trend: '49.9K budget', dir: 'flat' },
   ];
@@ -622,7 +622,7 @@ function answerQueue(qId, answer) {
     $('queue-empty').classList.remove('hidden');
   }
   // Mirror to Discord #dispatch
-  syncToDiscord('dispatch', `📋 Queue decision: **${q.question?.substring(0,60)||qId}** → \`${answer}\``, q.agent);
+  syncToDiscord('dispatch', `📋 Proposal decision: **${q.question?.substring(0,60)||qId}** → \`${answer}\``, q.agent);
   // Bidirectional: emit to event bus
   if (typeof EventBus !== 'undefined') {
     EventBus.emit('queue:answered', { agent: q.agent, question: q.question || qId, answer, qId });
@@ -785,7 +785,7 @@ function generateQueueCard() {
 // ═══════════════════════════════════════════════════════════
 
 let talkMode = 'channels'; // 'channels' | 'dms'
-let currentChannel = 'bridge';
+let currentChannel = '1482997518362214422'; // concierge
 let currentDM = null;
 let memberListVisible = false;
 let threadPanelVisible = false;
