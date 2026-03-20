@@ -100,6 +100,7 @@ function nav(page) {
       renderQueue();
     }
   }
+  if (page === 'workbench') { if (typeof initWorkbench === 'function') initWorkbench(); }
   if (page === 'rooms') { if (typeof initRooms === 'function') initRooms(); }
   if (page === 'talk') {
     renderChannelList();
@@ -1649,6 +1650,8 @@ let memberListVisible = false;
 let threadPanelVisible = false;
 let replyingTo = null;
 let typingTimer = null;
+let _lastTypingSent = 0;
+const TYPING_DEBOUNCE_MS = 8000;
 
 const THREAD_REPLIES = {};
 
@@ -1915,8 +1918,9 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
   const agent = isUser ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : (ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' });
 
   const group = document.createElement('div');
-  group.className = `msg-group${collapsed ? ' collapsed' : ''}${isUser ? ' msg-user' : ''}`;
+  group.className = `msg-group${collapsed ? ' collapsed' : ''}${isUser ? ' msg-user' : ''}${msg._pending ? ' msg-pending' : ''}${msg._failed ? ' msg-failed' : ''}`;
   group.id = `msg-${msg.id}`;
+  group.dataset.msgId = msg.id;
 
   // Reply reference
   let replyHTML = '';
@@ -1950,16 +1954,20 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
 
   // Reactions
   let reactHTML = '';
-  if (msg.reactions && msg.reactions.length > 0) {
-    reactHTML = `<div class="msg-reactions">
-      ${msg.reactions.map(r => `
-        <button class="reaction${r.mine ? ' mine' : ''}" onclick="toggleReaction('${msg.id}','${r.e}')">
-          ${r.e} <span class="reaction-count">${r.n}</span>
-        </button>
-      `).join('')}
-      <button class="reaction" onclick="openEmojiForReaction('${msg.id}')">+</button>
-    </div>`;
-  }
+  const existingReactions = (msg.reactions && msg.reactions.length > 0) ? msg.reactions.map(r => `
+    <button class="reaction${r.mine ? ' mine' : ''}" onclick="toggleReaction('${msg.id}','${r.e}','${channelId || ''}')">
+      ${r.e} <span class="reaction-count">${r.n}</span>
+    </button>
+  `).join('') : '';
+  // Quick reaction picker (common emoji) — shown on hover
+  const quickReactEmojis = ['👍','❤️','😂','🎉','✅','❌'];
+  const quickReactHTML = quickReactEmojis.map(e =>
+    `<button class="quick-react-btn" onclick="event.stopPropagation();addQuickReaction('${msg.id}','${e}','${channelId || ''}')" title="${e}">${e}</button>`
+  ).join('');
+  reactHTML = `
+    <div class="msg-quick-react-bar">${quickReactHTML}</div>
+    ${existingReactions ? `<div class="msg-reactions">${existingReactions}<button class="reaction" onclick="openEmojiForReaction('${msg.id}')">+</button></div>` : ''}
+  `;
 
   // Avatar + header only if not collapsed
   const avatarSection = `
@@ -2039,8 +2047,17 @@ function handleMessageInput(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
+    return;
   }
-  if (e.key === 'Escape') cancelReply();
+  if (e.key === 'Escape') { cancelReply(); return; }
+  // Typing indicator — debounced, at most every 8s
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && currentChannel && !currentDM) {
+    const now = Date.now();
+    if (now - _lastTypingSent > TYPING_DEBOUNCE_MS) {
+      _lastTypingSent = now;
+      Bridge.sendTyping(currentChannel).catch(() => {});
+    }
+  }
 }
 
 function handleInputChange(e) {
@@ -2306,11 +2323,12 @@ function cancelReply() {
   $('message-input').placeholder = `Message ${ch}`;
 }
 
-function toggleReaction(msgId, emoji) {
-  // Find and toggle reaction
+function toggleReaction(msgId, emoji, channelId) {
+  // Find and toggle reaction locally
   const allMsgs = [...Object.values(DC_MESSAGES), ...Object.values(DM_MESSAGES)].flat();
   const msg = allMsgs.find(m => m.id === msgId);
-  if (!msg || !msg.reactions) return;
+  if (!msg) return;
+  if (!msg.reactions) msg.reactions = [];
   const existing = msg.reactions.find(r => r.e === emoji);
   if (existing) {
     existing.mine = !existing.mine;
@@ -2320,6 +2338,17 @@ function toggleReaction(msgId, emoji) {
     msg.reactions.push({ e: emoji, n: 1, mine: true });
   }
   renderMessages(currentDM ? null : currentChannel, currentDM);
+  // POST to bridge if live
+  const chId = channelId || currentChannel;
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && chId) {
+    Bridge.addReaction(chId, msgId, emoji).catch(e => {
+      console.warn('[Reaction] Failed:', e.message);
+    });
+  }
+}
+
+function addQuickReaction(msgId, emoji, channelId) {
+  toggleReaction(msgId, emoji, channelId);
 }
 
 function openEmojiForReaction(msgId) {

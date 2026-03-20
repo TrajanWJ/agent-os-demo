@@ -47,6 +47,11 @@
             <span class="nav-label">Briefing</span>
             <span class="nav-badge" id="briefing-badge"></span>
           </a>
+          <a class="nav-item" data-page="workbench" onclick="nav('workbench')">
+            <span class="nav-icon">👁️</span>
+            <span class="nav-label">Workbench</span>
+            <span class="nav-badge" id="workbench-badge"></span>
+          </a>
         </div>
 
         <div class="nav-group">
@@ -455,9 +460,11 @@
           <div class="mind-tab-bar">
             <button class="mind-tab-btn active" data-tab="search" onclick="setMindTab('search')">🔍 Search</button>
             <button class="mind-tab-btn" data-tab="browse" onclick="setMindTab('browse')">📂 Browse</button>
+            <button class="mind-tab-btn" data-tab="tags" onclick="setMindTab('tags')">🏷️ Tags</button>
             <button class="mind-tab-btn" data-tab="graph" onclick="setMindTab('graph')">🕸️ Graph</button>
             <button class="mind-tab-btn" data-tab="reader" onclick="setMindTab('reader')">📖 Reader</button>
             <button class="mind-tab-btn" data-tab="insights" onclick="setMindTab('insights')">🧠 Insights</button>
+            <button class="mind-new-note-btn" onclick="openNewNoteModal()" title="New Note">+ New Note</button>
           </div>
 
           <!-- Search Panel -->
@@ -472,6 +479,11 @@
           </div>
 
           <!-- Browse Panel -->
+          <!-- Tags Tab -->
+          <div id="mind-panel-tags" class="mind-tab-panel hidden">
+            <div id="mind-tags-content" class="mind-tags-content"></div>
+          </div>
+
           <div id="mind-panel-browse" class="mind-tab-panel hidden">
             <div class="mind-browse-layout">
               <div class="mind-browse-tree-panel" id="mind-browse-tree"></div>
@@ -723,6 +735,23 @@
 
         <!-- Tasks View -->
         <div id="view-tasks" class="view hidden">
+          <div class="tasks-page-header">
+            <h2>📋 Tasks</h2>
+            <button class="tasks-new-btn" onclick="openNewTaskModal()">➕ New Task</button>
+          </div>
+          <!-- Quick-Add Bar -->
+          <div class="tasks-quick-add" id="tasks-quick-add">
+            <input type="text" class="tasks-quick-input" id="tasks-quick-input" placeholder="Quick add task…" onkeydown="if(event.key==='Enter')quickAddTask()">
+            <select class="tasks-quick-agent" id="tasks-quick-agent">
+              <option value="coder">💻 Coder</option>
+              <option value="researcher">🔬 Researcher</option>
+              <option value="ops">⚙️ Ops</option>
+              <option value="righthand">🤝 Right Hand</option>
+              <option value="utility">🔧 Utility</option>
+              <option value="devil">😈 Devil's Advocate</option>
+            </select>
+            <button class="tasks-quick-add-btn" onclick="quickAddTask()">Add</button>
+          </div>
           <div class="tasks-layout">
             <!-- Left: Task List -->
             <div class="tasks-list-panel" id="tasks-list-panel">
@@ -891,6 +920,30 @@
           </div>
         </div>
 
+        <!-- Workbench View -->
+        <div id="view-workbench" class="view hidden">
+          <div class="wb-topbar">
+            <div class="wb-topbar-left">
+              <select class="wb-agent-select" id="wb-agent-select" onchange="wbSelectAgent(this.value)">
+                <option value="__all__">👁️ All Agents</option>
+              </select>
+              <button class="wb-btn wb-watch-all-btn" onclick="wbToggleWatchAll()">👁️ Watch All</button>
+            </div>
+            <div class="wb-topbar-right">
+              <span class="wb-live-indicator" id="wb-live-indicator">
+                <span class="wb-live-dot"></span> LIVE
+              </span>
+            </div>
+          </div>
+          <div class="wb-content" id="workbench-content">
+            <div class="empty-state">
+              <div class="empty-state-icon">👁️</div>
+              <div class="empty-state-title">Agent Workbench</div>
+              <div class="empty-state-subtitle">Loading agent activity...</div>
+            </div>
+          </div>
+        </div>
+
       </div><!-- /views -->
     </div><!-- /main -->
   </div><!-- /app -->
@@ -943,6 +996,7 @@
       <button class="mobile-menu-item" onclick="nav('inbox');toggleMobileMenu()">📬 Inbox</button>
       <button class="mobile-menu-item" onclick="nav('queue');toggleMobileMenu()">📋 Proposals</button>
       <button class="mobile-menu-item" onclick="nav('briefing');toggleMobileMenu()">📜 Briefing</button>
+      <button class="mobile-menu-item" onclick="nav('workbench');toggleMobileMenu()">👁️ Workbench</button>
       <div class="mobile-menu-divider"></div>
       <div class="mobile-menu-group-label">💬 COMMUNICATE</div>
       <button class="mobile-menu-item" onclick="nav('talk');toggleMobileMenu()">💬 Talk</button>
@@ -1055,6 +1109,25 @@
     <div class="card-modal" id="card-modal-content"></div>
   </div>
 
+  <!-- New Note Modal -->
+  <div class="modal-overlay hidden" id="new-note-modal" onclick="closeNewNoteModalIfOutside(event)">
+    <div class="card-modal" id="new-note-modal-content" style="max-width:520px">
+      <h3 style="margin:0 0 16px;font-size:18px;color:var(--text)">📝 New Note</h3>
+      <label class="modal-label">Title</label>
+      <input id="new-note-title" class="modal-input" placeholder="Note title...">
+      <label class="modal-label">Folder</label>
+      <select id="new-note-folder" class="modal-input" style="padding:10px 14px;cursor:pointer">
+        <option value="">Loading folders...</option>
+      </select>
+      <label class="modal-label">Content</label>
+      <textarea id="new-note-content" class="modal-textarea" rows="10" placeholder="Write your note in Markdown..."></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="modal-btn-cancel" onclick="closeNewNoteModal()">Cancel</button>
+        <button class="modal-btn-primary" onclick="submitNewNote()">Create Note</button>
+      </div>
+    </div>
+  </div>
+
   <script src="data.js?v=1773993468"></script>
   <script src="ux.js?v=1773994200"></script>
   <script src="app.js?v=1773993468"></script>
@@ -1071,5 +1144,39 @@
   <script src="live.js?v=1773993468"></script>
   <script src="help.js?v=1773994100"></script>
   <script src="timeline.js?v=1773994200"></script>
+  <script src="workbench.js?v=1773994200"></script>
+
+  <!-- New Task Modal -->
+  <div class="task-modal-overlay" id="task-modal-overlay" onclick="closeNewTaskModal()">
+    <div class="task-modal" onclick="event.stopPropagation()">
+      <div class="task-modal-header">✅ Create New Task</div>
+      <div class="task-modal-body">
+        <label class="task-modal-label">Title</label>
+        <input type="text" class="task-modal-input" id="task-modal-title" placeholder="Task title…">
+        <label class="task-modal-label">Agent</label>
+        <select class="task-modal-select" id="task-modal-agent">
+          <option value="coder">💻 Coder</option>
+          <option value="researcher">🔬 Researcher</option>
+          <option value="ops">⚙️ Ops</option>
+          <option value="righthand">🤝 Right Hand</option>
+          <option value="utility">🔧 Utility</option>
+          <option value="devil">😈 Devil's Advocate</option>
+        </select>
+        <label class="task-modal-label">Priority</label>
+        <div class="task-modal-priorities" id="task-modal-priorities">
+          <button class="task-modal-pri-btn" data-pri="P0" onclick="selectTaskPri('P0')">🔴 P0</button>
+          <button class="task-modal-pri-btn selected" data-pri="P1" onclick="selectTaskPri('P1')">🟠 P1</button>
+          <button class="task-modal-pri-btn" data-pri="P2" onclick="selectTaskPri('P2')">🟡 P2</button>
+          <button class="task-modal-pri-btn" data-pri="P3" onclick="selectTaskPri('P3')">🟢 P3</button>
+        </div>
+        <label class="task-modal-label">Description</label>
+        <textarea class="task-modal-textarea" id="task-modal-desc" rows="4" placeholder="Optional description…"></textarea>
+      </div>
+      <div class="task-modal-footer">
+        <button class="task-modal-cancel" onclick="closeNewTaskModal()">Cancel</button>
+        <button class="task-modal-submit" onclick="submitNewTask()">Create ✅</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

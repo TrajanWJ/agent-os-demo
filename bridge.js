@@ -37,9 +37,21 @@ const Bridge = {
   async getChannels()              { return this.apiFetch('/api/channels'); },
   async getMessages(chId, limit=50){ return this.apiFetch(`/api/channels/${chId}/messages?limit=${limit}`); },
   async sendMessage(chId, text, replyTo=null) {
-    const body = { message: text };
+    const body = { content: text };
     if (replyTo) body.reply_to = replyTo;
     return this.apiFetch(`/api/channels/${chId}/messages`, { method:'POST', body:JSON.stringify(body) });
+  },
+  async addReaction(chId, msgId, emoji) {
+    return this.apiFetch(`/api/channels/${chId}/messages/${msgId}/react`, { method:'POST', body:JSON.stringify({emoji}) });
+  },
+  async sendTyping(chId) {
+    return this.apiFetch(`/api/channels/${chId}/typing`, { method:'POST', body:'{}' });
+  },
+  async getThreads(chId) {
+    return this.apiFetch(`/api/channels/${chId}/threads`);
+  },
+  async getThreadMessages(threadId) {
+    return this.apiFetch(`/api/threads/${threadId}/messages`);
   },
 
   // ── Queue ───────────────────────────────────────────────
@@ -90,6 +102,10 @@ const Bridge = {
   async getMissionsSchedule()     { return this.apiFetch('/api/missions/schedule'); },
   async getMissionsFeed(limit=50) { return this.apiFetch(`/api/missions/feed?limit=${limit}`); },
   async getMissionsStats()        { return this.apiFetch('/api/missions/stats'); },
+
+  // ── Dispatch Tasks ───────────────────────────────────────
+  async createDispatchTask(data) { return this.apiFetch('/api/dispatch/task', { method:'POST', body:JSON.stringify(data) }); },
+  async approveDispatchTask(id) { return this.apiFetch(`/api/dispatch/task/${encodeURIComponent(id)}/approve`, { method:'POST' }); },
 
   // ── WebSocket ───────────────────────────────────────────
   connect() {
@@ -527,20 +543,25 @@ async function bridgeSendMessage() {
     if (typeof replyingTo !== 'undefined') replyingTo = null;
     const replyBar = document.getElementById('reply-bar');
     if (replyBar) replyBar.style.display = 'none';
-    // Update the optimistic element with the real Discord message ID
+    // Update the optimistic element: confirmed styling
     const pendingEl = container?.querySelector(`[data-msg-id="${tempId}"]`);
     if (pendingEl) {
       pendingEl.setAttribute('data-msg-id', result.id);
       pendingEl.id = `msg-${result.id}`;
+      pendingEl.classList.remove('msg-pending');
     }
+    // Also update reply-preview
+    const rp = document.getElementById('reply-preview');
+    if (rp) rp.classList.add('hidden');
   } catch (e) {
-    // Remove optimistic message and show error
+    // Mark optimistic message as failed
     const pendingEl = container?.querySelector(`[data-msg-id="${tempId}"]`);
     if (pendingEl) {
-      pendingEl.style.opacity = '0.5';
+      pendingEl.classList.remove('msg-pending');
+      pendingEl.classList.add('msg-failed');
       pendingEl.title = 'Send failed: ' + e.message;
     }
-    toast('Send failed: ' + e.message, 'error');
+    toast('❌ Send failed: ' + e.message, 'error');
   }
 }
 

@@ -461,30 +461,32 @@ function renderTaskActions(task) {
   const priority = getTaskPriority(task);
   const agent = getTaskAgent(task.agent);
 
-  // Action buttons
+  // Action buttons — status-driven
   let actionsHTML = '';
   switch (status) {
     case 'queued':
       actionsHTML = `
         <div class="tasks-action-group">
           <div class="tasks-action-group-title">Actions</div>
+          <button class="tasks-action-btn success" onclick="taskAction('${task.id}','approve')">✅ Approve</button>
           <button class="tasks-action-btn" onclick="taskAction('${task.id}','boost')">⬆️ Boost Priority</button>
-          <button class="tasks-action-btn danger" onclick="taskAction('${task.id}','cancel')">❌ Cancel</button>
+          <button class="tasks-action-btn danger" onclick="taskAction('${task.id}','delete')">🗑️ Delete</button>
         </div>`;
       break;
     case 'active':
       actionsHTML = `
         <div class="tasks-action-group">
           <div class="tasks-action-group-title">Actions</div>
-          <button class="tasks-action-btn" onclick="taskAction('${task.id}','check')">🔍 Check Status</button>
-          <button class="tasks-action-btn danger" onclick="taskAction('${task.id}','cancel')">❌ Cancel</button>
+          <button class="tasks-action-btn success" onclick="taskAction('${task.id}','complete')">✅ Complete</button>
+          <button class="tasks-action-btn danger" onclick="taskAction('${task.id}','fail')">❌ Fail</button>
+          <button class="tasks-action-btn" onclick="taskAction('${task.id}','reassign')">🔄 Reassign</button>
         </div>`;
       break;
     case 'done':
       actionsHTML = `
         <div class="tasks-action-group">
           <div class="tasks-action-group-title">Actions</div>
-          <button class="tasks-action-btn" onclick="taskAction('${task.id}','rerun')">🔄 Rerun</button>
+          <button class="tasks-action-btn" onclick="taskAction('${task.id}','reopen')">🔄 Reopen</button>
         </div>`;
       break;
     case 'failed':
@@ -492,6 +494,7 @@ function renderTaskActions(task) {
         <div class="tasks-action-group">
           <div class="tasks-action-group-title">Actions</div>
           <button class="tasks-action-btn" onclick="taskAction('${task.id}','retry')">🔄 Retry</button>
+          <button class="tasks-action-btn danger" onclick="taskAction('${task.id}','delete')">🗑️ Delete</button>
         </div>`;
       break;
   }
