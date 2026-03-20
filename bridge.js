@@ -381,6 +381,11 @@ async function loadLiveMessages(channelId) {
   const container = document.getElementById('messages-list');
   if (!container) return;
   
+  // Subscribe to this channel for real-time polling on the server
+  if (Bridge.ws && Bridge.ws.readyState === 1) {
+    Bridge.ws.send(JSON.stringify({ type: 'subscribe', channel: channelId }));
+  }
+  
   // Show loading
   container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted);">Loading messages...</div>';
   
