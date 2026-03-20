@@ -731,8 +731,74 @@
 
         <!-- Inbox View -->
         <div id="view-inbox" class="view hidden inbox-layout">
-          <div id="inbox-list-panel" class="inbox-list-panel"></div>
+          <!-- Left Panel: Item List -->
+          <div id="inbox-list-panel" class="inbox-list-panel">
+            <div class="inbox-search-bar">
+              <div class="inbox-search-wrapper">
+                <svg class="inbox-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input type="text" id="inbox-search-input" class="inbox-search-input" placeholder="Search inbox..." oninput="filterInboxSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';filterInboxSearch('');this.blur();}">
+                <kbd class="inbox-search-kbd">/</kbd>
+              </div>
+              <div class="inbox-sort-dropdown">
+                <button class="inbox-sort-btn" id="inbox-sort-btn" onclick="toggleInboxSort()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h12M3 18h6"/></svg>
+                </button>
+                <div class="inbox-sort-menu hidden" id="inbox-sort-menu">
+                  <button class="inbox-sort-option active" data-sort="newest" onclick="setInboxSort('newest')">Newest first</button>
+                  <button class="inbox-sort-option" data-sort="priority" onclick="setInboxSort('priority')">Priority</button>
+                  <button class="inbox-sort-option" data-sort="agent" onclick="setInboxSort('agent')">By agent</button>
+                </div>
+              </div>
+            </div>
+            <div class="inbox-category-tabs" id="inbox-category-tabs"></div>
+            <div class="inbox-bulk-bar hidden" id="inbox-bulk-bar">
+              <span class="inbox-bulk-count" id="inbox-bulk-count">0 selected</span>
+              <button class="inbox-bulk-btn approve" onclick="inboxBulkAction('approve')">✅ Approve All</button>
+              <button class="inbox-bulk-btn dismiss" onclick="inboxBulkAction('dismiss')">❌ Dismiss All</button>
+              <button class="inbox-bulk-btn delete" onclick="inboxBulkAction('delete')">🗑️ Delete All</button>
+              <button class="inbox-bulk-btn cancel" onclick="inboxClearSelection()">Cancel</button>
+            </div>
+            <div class="inbox-items-list" id="inbox-items-list"></div>
+          </div>
+          <!-- Center Panel: Detail View -->
           <div id="inbox-detail-panel" class="inbox-detail-panel"></div>
+          <!-- Right Panel: Context Sidebar -->
+          <div id="inbox-context-panel" class="inbox-context-panel">
+            <div class="inbox-context-header">
+              <span>Context</span>
+              <button class="inbox-context-toggle" onclick="toggleInboxContext()" title="Toggle sidebar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+            </div>
+            <div class="inbox-context-body" id="inbox-context-body"></div>
+          </div>
+          <!-- Keyboard Shortcuts Modal -->
+          <div class="inbox-shortcuts-modal hidden" id="inbox-shortcuts-modal" onclick="if(event.target===this)this.classList.add('hidden')">
+            <div class="inbox-shortcuts-card">
+              <div class="inbox-shortcuts-title">⌨️ Keyboard Shortcuts</div>
+              <div class="inbox-shortcuts-grid">
+                <div class="inbox-shortcut"><kbd>j</kbd><span>Next item</span></div>
+                <div class="inbox-shortcut"><kbd>k</kbd><span>Previous item</span></div>
+                <div class="inbox-shortcut"><kbd>Enter</kbd><span>Open item</span></div>
+                <div class="inbox-shortcut"><kbd>a</kbd><span>Approve</span></div>
+                <div class="inbox-shortcut"><kbd>x</kbd><span>Dismiss</span></div>
+                <div class="inbox-shortcut"><kbd>s</kbd><span>Snooze</span></div>
+                <div class="inbox-shortcut"><kbd>r</kbd><span>Reply</span></div>
+                <div class="inbox-shortcut"><kbd>d</kbd><span>Delete</span></div>
+                <div class="inbox-shortcut"><kbd>/</kbd><span>Search</span></div>
+                <div class="inbox-shortcut"><kbd>Esc</kbd><span>Back to list</span></div>
+                <div class="inbox-shortcut"><kbd>1-6</kbd><span>Switch tabs</span></div>
+                <div class="inbox-shortcut"><kbd>?</kbd><span>This help</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Snooze Dropdown (floating) -->
+          <div class="inbox-snooze-dropdown hidden" id="inbox-snooze-dropdown">
+            <button onclick="snoozeSelectedItem(3600000)">⏰ 1 hour</button>
+            <button onclick="snoozeSelectedItem(14400000)">🕓 4 hours</button>
+            <button onclick="snoozeSelectedItem(86400000)">🌅 Tomorrow</button>
+            <button onclick="snoozeSelectedItem(604800000)">📅 Next week</button>
+          </div>
         </div>
 
         <!-- Rooms View -->
@@ -950,6 +1016,7 @@
   <script src="app5.js?v=1773993468"></script>
   <script src="app6.js?v=1773993468"></script>
   <script src="tasks.js?v=1773993468"></script>
+  <script src="projects.js?v=1773994200"></script>
   <script src="bridge.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
   <script src="help.js?v=1773994100"></script>

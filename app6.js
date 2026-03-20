@@ -273,6 +273,7 @@ function mergeDiscordIntoStream() {
 }
 
 async function pollDiscordMirror() {
+  if (!shouldPoll()) return;
   const messages = await fetchDiscordRecent();
   if (messages.length === 0) return;
 
@@ -339,6 +340,7 @@ function makeDiscordStreamItem(item, idx) {
 let workflowVizTimer = null;
 
 async function updateWorkflowViz() {
+  if (!shouldPoll()) return;
   const container = document.getElementById('workflow-viz');
   if (!container) return;
 

@@ -635,6 +635,7 @@ function startProposalRefresh() {
   if (_proposalRefreshTimer) return;
   // Refresh proposals every 30s
   _proposalRefreshTimer = setInterval(() => {
+    if (!shouldPoll()) return;
     if (Bridge.liveMode) loadLiveProposals();
   }, 30000);
 }

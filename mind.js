@@ -289,7 +289,7 @@ function selectBrowseFolder(folder) {
   </div>` +
   notes.map(n => {
     const title = extractTitle(n.path);
-    const relTime = n.modified ? timeAgo(new Date(n.modified)) : '';
+    const relTime = n.modified ? mindTimeAgo(new Date(n.modified)) : '';
     const size = n.size ? formatSize(n.size) : '';
     return `<div class="mind-browse-note" onclick="openNoteInReader('${escHtml(n.path)}')">
       <div class="mind-browse-note-title">${escHtml(title)}</div>
@@ -983,7 +983,7 @@ async function loadInsightsData() {
       <div class="mind-insights-recent">
         ${(recent.length > 0 ? recent : VAULT_NOTES.slice(0, 10).map(n => ({ path: n.type + '/' + n.title + '.md', modified: n.date }))).map(n => {
           const title = extractTitle(n.path || '');
-          const relTime = n.modified ? timeAgo(new Date(n.modified)) : '';
+          const relTime = n.modified ? mindTimeAgo(new Date(n.modified)) : '';
           return `<div class="mind-insights-recent-item" onclick="openNoteInReader('${escHtml(n.path || '')}')">
             <span class="mind-insights-recent-title">${escHtml(title)}</span>
             <span class="mind-insights-recent-time">${relTime}</span>
@@ -1056,7 +1056,7 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function timeAgo(date) {
+function mindTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
   if (seconds < 60) return 'just now';
   if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
