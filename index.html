@@ -114,17 +114,33 @@
 
         <!-- FEED VIEW -->
         <div id="view-feed" class="view active">
-          <div class="feed-toolbar">
-            <div class="filter-chips" id="feed-filters">
-              <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>
-              <button class="chip" data-filter="error" onclick="filterFeed('error')">🔴 Errors</button>
-              <button class="chip" data-filter="question_asked" onclick="filterFeed('question_asked')">❓ Questions</button>
-              <button class="chip" data-filter="task_completed" onclick="filterFeed('task_completed')">✅ Completed</button>
-              <button class="chip" data-filter="vault_write" onclick="filterFeed('vault_write')">📚 Vault</button>
-              <button class="chip" data-filter="insight" onclick="filterFeed('insight')">💡 Insights</button>
-            </div>
+          <!-- Dashboard: Agent Status Bar -->
+          <div class="dash-agents-bar" id="dash-agents-bar"></div>
+
+          <!-- Dashboard: Metrics + System Pulse -->
+          <div class="dash-middle">
+            <div class="dash-metrics" id="dash-metrics"></div>
+            <div class="dash-pulse" id="dash-pulse"></div>
           </div>
-          <div id="feed-list" class="feed-list"></div>
+
+          <!-- Dashboard: Activity Feed (compact) -->
+          <div class="dash-feed-section">
+            <div class="dash-feed-header">
+              <h3 class="dash-section-title"><i data-lucide="activity" style="width:16px;height:16px"></i> Recent Activity</h3>
+              <button class="dash-view-all-btn" id="dash-view-all-btn" onclick="toggleDashFeedExpand()">View All</button>
+            </div>
+            <div class="feed-toolbar">
+              <div class="filter-chips dash-filter-chips" id="feed-filters">
+                <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>
+                <button class="chip" data-filter="error" onclick="filterFeed('error')">🔴 Errors</button>
+                <button class="chip" data-filter="question_asked" onclick="filterFeed('question_asked')">❓ Questions</button>
+                <button class="chip" data-filter="task_completed" onclick="filterFeed('task_completed')">✅ Completed</button>
+                <button class="chip" data-filter="vault_write" onclick="filterFeed('vault_write')">📚 Vault</button>
+                <button class="chip" data-filter="insight" onclick="filterFeed('insight')">💡 Insights</button>
+              </div>
+            </div>
+            <div id="feed-list" class="feed-list dash-feed-list"></div>
+          </div>
         </div>
 
         <!-- QUEUE VIEW -->

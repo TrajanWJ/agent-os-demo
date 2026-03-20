@@ -44,6 +44,7 @@ function nav(page) {
   $('page-title').textContent = PAGE_TITLES[page] || page;
 
   // Lazy init pages
+  if (page === 'feed')     renderDashboard();
   if (page === 'mind')     initMind();
   if (page === 'pulse')    renderPulse();
   if (page === 'board')    renderBoard();
@@ -233,6 +234,132 @@ const TYPE_LABELS = {
   insight:        'insight',
   vault_write:    'vault',
 };
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD — Mission Control
+// ═══════════════════════════════════════════════════════════
+
+let dashFeedExpanded = false;
+
+function renderDashboard() {
+  renderDashAgents();
+  renderDashMetrics();
+  renderDashPulse();
+  renderFeed();
+  applyDashFeedLimit();
+  lucide.createIcons();
+}
+
+function renderDashAgents() {
+  const bar = $('dash-agents-bar');
+  if (!bar) return;
+  bar.innerHTML = AGENTS.map(a => {
+    const isActive = a.status === 'active';
+    const taskText = a.task || 'Idle';
+    return `
+      <div class="dash-agent-card" onclick="openTalkWithAgent('${a.id}')" title="${a.name} — ${taskText}">
+        <div class="dash-agent-card-top">
+          <span class="dash-agent-emoji">${a.emoji}</span>
+          <span class="dash-agent-name" style="color:${a.color}">${a.name}</span>
+          <span class="dash-agent-status ${isActive ? 'active' : 'idle'}"></span>
+        </div>
+        <div class="dash-agent-task">${isActive ? taskText : 'Idle'}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderDashMetrics() {
+  const el = $('dash-metrics');
+  if (!el) return;
+  const activeCount = AGENTS.filter(a => a.status === 'active').length;
+  const queueDepth = typeof queueCards !== 'undefined' ? queueCards.length : 0;
+  const tasksToday = AGENTS.reduce((s, a) => s + (a.tasks || 0), 0);
+  const totalTokens = AGENTS.reduce((s, a) => s + (a.tokens || 0), 0);
+  const tokenStr = totalTokens >= 1000 ? (totalTokens / 1000).toFixed(1) + 'K' : totalTokens.toString();
+
+  const cards = [
+    { icon: 'users',        num: activeCount, label: 'Active Agents',  trend: '↑ 2',   dir: 'up' },
+    { icon: 'inbox',        num: queueDepth,  label: 'Queue Depth',    trend: queueDepth > 5 ? '↑ High' : '→ Normal', dir: queueDepth > 5 ? 'down' : 'flat' },
+    { icon: 'check-circle', num: tasksToday,   label: 'Tasks Today',    trend: '↑ 12%', dir: 'up' },
+    { icon: 'zap',          num: tokenStr,     label: 'Token Usage',    trend: '49.9K budget', dir: 'flat' },
+  ];
+
+  el.innerHTML = cards.map(c => `
+    <div class="dash-stat-card">
+      <div class="dash-stat-icon">
+        <i data-lucide="${c.icon}"></i>
+        <span class="dash-stat-trend ${c.dir}">${c.trend}</span>
+      </div>
+      <div class="dash-stat-number">${c.num}</div>
+      <div class="dash-stat-label">${c.label}</div>
+    </div>`).join('');
+}
+
+function renderDashPulse() {
+  const el = $('dash-pulse');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="dash-pulse-title"><i data-lucide="heart-pulse"></i> System Pulse</div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Gateway</span>
+      <span class="dash-pulse-value"><span class="dash-pulse-dot green"></span> Healthy</span>
+    </div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Uptime</span>
+      <span class="dash-pulse-value">4d 7h 23m</span>
+    </div>
+    <div class="dash-pulse-divider"></div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Last Dispatch</span>
+      <span class="dash-pulse-value">2m ago</span>
+    </div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Cron Jobs</span>
+      <span class="dash-pulse-value"><span class="dash-pulse-dot yellow"></span> 6/7 OK</span>
+    </div>
+    <div class="dash-pulse-divider"></div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Memory</span>
+      <span class="dash-pulse-value">6.2 / 14 GB</span>
+    </div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Disk</span>
+      <span class="dash-pulse-value"><span class="dash-pulse-dot ${94 > 90 ? 'red' : 'green'}"></span> 94% used</span>
+    </div>
+  `;
+}
+
+function applyDashFeedLimit() {
+  const list = $('feed-list');
+  if (!list) return;
+  if (dashFeedExpanded) {
+    list.classList.remove('collapsed');
+    list.classList.add('expanded');
+  } else {
+    list.classList.add('collapsed');
+    list.classList.remove('expanded');
+    // Show only first 5 cards
+    const cards = list.querySelectorAll('.feed-card');
+    cards.forEach((c, i) => {
+      c.style.display = i < 5 ? '' : 'none';
+    });
+  }
+}
+
+function toggleDashFeedExpand() {
+  dashFeedExpanded = !dashFeedExpanded;
+  const btn = $('dash-view-all-btn');
+  if (btn) {
+    btn.textContent = dashFeedExpanded ? 'Show Less' : 'View All';
+    btn.classList.toggle('expanded', dashFeedExpanded);
+  }
+  if (dashFeedExpanded) {
+    // Show all cards
+    const cards = $('feed-list').querySelectorAll('.feed-card');
+    cards.forEach(c => c.style.display = '');
+  }
+  applyDashFeedLimit();
+}
 
 function renderFeed() {
   const list = $('feed-list');
