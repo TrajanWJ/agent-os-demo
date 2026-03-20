@@ -43,7 +43,7 @@ body {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 18px; font-size: 14px; cursor: pointer;
   color: var(--subtext0); border-left: 3px solid transparent;
-  transition: all .15s; text-decoration: none; user-select: none;
+  transition: all .2s ease; text-decoration: none; user-select: none;
 }
 .nav-item:hover { color: var(--text); background: rgba(69,71,90,.3); }
 .nav-item.active {
@@ -62,7 +62,7 @@ body {
 }
 .nav-back a {
   color: var(--subtext0); text-decoration: none; font-size: 13px;
-  display: flex; align-items: center; gap: 6px; transition: color .15s;
+  display: flex; align-items: center; gap: 6px; transition: color .2s;
 }
 .nav-back a:hover { color: var(--text); }
 
@@ -73,14 +73,13 @@ body {
 }
 .page {
   display: none; padding: 28px 32px; min-height: 100%;
-  animation: fadeIn .2s ease;
+  opacity: 0; transform: translateY(6px);
+  transition: opacity .25s ease, transform .25s ease;
 }
-.page.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.page.active { display: block; opacity: 1; transform: translateY(0); }
+.page.fade-in { opacity: 1; transform: translateY(0); }
 
-.page-header {
-  margin-bottom: 24px;
-}
+.page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .page-header .subtitle { font-size: 14px; color: var(--subtext0); }
 
@@ -88,7 +87,9 @@ body {
 .card {
   background: var(--surface0); border: 1px solid var(--surface1);
   border-radius: 8px; padding: 18px; margin-bottom: 16px;
+  transition: border-color .2s, box-shadow .2s;
 }
+.card:hover { border-color: var(--surface2); }
 .card h3 {
   font-size: 13px; text-transform: uppercase; letter-spacing: .6px;
   color: var(--subtext0); margin-bottom: 14px; display: flex;
@@ -100,7 +101,11 @@ body {
 .card-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
 
 /* ── Stat boxes ───────────────────────────────── */
-.stat-box { text-align: center; padding: 14px; background: var(--bg-mantle); border-radius: 8px; }
+.stat-box {
+  text-align: center; padding: 14px; background: var(--bg-mantle); border-radius: 8px;
+  transition: transform .15s, box-shadow .15s;
+}
+.stat-box:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
 .stat-box .val { font-size: 28px; font-weight: 700; }
 .stat-box .label { font-size: 12px; color: var(--subtext0); margin-top: 2px; }
 
@@ -108,10 +113,11 @@ body {
 .btn {
   background: var(--blue); color: var(--bg-crust); border: none;
   padding: 7px 16px; border-radius: 6px; cursor: pointer;
-  font-size: 13px; font-weight: 600; transition: opacity .15s;
+  font-size: 13px; font-weight: 600; transition: all .2s;
   display: inline-flex; align-items: center; gap: 6px;
 }
-.btn:hover { opacity: .85; }
+.btn:hover { opacity: .85; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
 .btn.sm { padding: 4px 10px; font-size: 12px; }
 .btn.danger { background: var(--red); }
 .btn.green { background: var(--green); }
@@ -120,16 +126,17 @@ body {
 .btn.ghost {
   background: transparent; color: var(--subtext0); border: 1px solid var(--surface1);
 }
-.btn.ghost:hover { color: var(--text); border-color: var(--surface2); }
+.btn.ghost:hover { color: var(--text); border-color: var(--surface2); background: rgba(69,71,90,.2); }
+.btn.teal { background: var(--teal); }
 
 /* ── Form elements ────────────────────────────── */
 input[type="text"], input[type="number"], input[type="date"], textarea, select {
   background: var(--bg-mantle); border: 1px solid var(--surface1);
   color: var(--text); padding: 8px 12px; border-radius: 6px;
   font-size: 13px; font-family: inherit; outline: none;
-  transition: border-color .15s;
+  transition: border-color .2s, box-shadow .2s;
 }
-input:focus, textarea:focus, select:focus { border-color: var(--blue); }
+input:focus, textarea:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(137,180,250,.15); }
 textarea { resize: vertical; min-height: 60px; }
 
 input[type="range"] {
@@ -139,62 +146,129 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 16px; height: 16px;
   border-radius: 50%; background: var(--blue); cursor: pointer;
+  transition: transform .15s;
 }
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
 /* ── Tags & Pills ─────────────────────────────── */
 .tag {
   display: inline-block; font-size: 11px; padding: 2px 8px;
   border-radius: 4px; background: var(--surface1); color: var(--subtext0);
+  transition: background .15s;
 }
 .tag.p0 { background: rgba(243,139,168,.2); color: var(--red); }
 .tag.p1 { background: rgba(250,179,135,.2); color: var(--peach); }
 .tag.p2 { background: rgba(249,226,175,.2); color: var(--yellow); }
 .tag.p3 { background: rgba(166,227,161,.2); color: var(--green); }
+.tag.clickable { cursor: pointer; }
+.tag.clickable:hover { opacity: .8; }
+.tag.active-filter { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+/* Tag colors for task tags */
+.tag-work { background: rgba(137,180,250,.2); color: var(--blue); }
+.tag-personal { background: rgba(203,166,247,.2); color: var(--purple); }
+.tag-health { background: rgba(166,227,161,.2); color: var(--green); }
+.tag-learning { background: rgba(249,226,175,.2); color: var(--yellow); }
+.tag-finance { background: rgba(250,179,135,.2); color: var(--peach); }
+.tag-urgent { background: rgba(243,139,168,.2); color: var(--red); }
+.tag-agent { background: rgba(148,226,213,.2); color: var(--teal); }
+.tag-idea { background: rgba(245,194,231,.2); color: var(--pink); }
+
+/* ── Time estimate indicators ─────────────────── */
+.est-indicator {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; padding: 2px 6px; border-radius: 4px;
+}
+.est-small { background: rgba(166,227,161,.15); color: var(--green); }
+.est-medium { background: rgba(249,226,175,.15); color: var(--yellow); }
+.est-large { background: rgba(243,139,168,.15); color: var(--red); }
 
 /* ── Empty state ──────────────────────────────── */
-.empty { color: var(--overlay0); font-size: 13px; text-align: center; padding: 24px 0; font-style: italic; }
+.empty {
+  color: var(--overlay0); font-size: 13px; text-align: center; padding: 32px 16px;
+  font-style: italic;
+}
+.empty .empty-icon { font-size: 36px; margin-bottom: 8px; display: block; opacity: .6; }
+.empty .empty-hint { font-size: 12px; margin-top: 6px; color: var(--surface2); }
+
+/* ── Loading skeleton ─────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface0) 25%, var(--surface1) 50%, var(--surface0) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease infinite;
+  border-radius: 6px;
+}
+.skeleton-line { height: 14px; margin-bottom: 8px; }
+.skeleton-line.short { width: 60%; }
+.skeleton-line.medium { width: 80%; }
+.skeleton-box { height: 60px; margin-bottom: 8px; }
+@keyframes skeleton-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ── Task items ───────────────────────────────── */
 .task-row {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 10px; border-radius: 6px; margin-bottom: 4px;
-  background: var(--bg-mantle); cursor: pointer; transition: background .15s;
+  background: var(--bg-mantle); cursor: pointer; transition: all .2s;
 }
-.task-row:hover { background: rgba(69,71,90,.3); }
+.task-row:hover { background: rgba(69,71,90,.3); transform: translateX(2px); }
+.task-row.dragging { opacity: .5; transform: scale(.98); }
+.task-row.drag-over { border-top: 2px solid var(--blue); }
 .task-check {
   width: 18px; height: 18px; border-radius: 4px;
   border: 2px solid var(--surface2); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: all .15s;
+  flex-shrink: 0; transition: all .2s;
 }
+.task-check:hover { border-color: var(--green); }
 .task-check.done { background: var(--green); border-color: var(--green); }
 .task-check.done::after { content: '✓'; color: var(--bg-crust); font-size: 12px; font-weight: 700; }
 .task-row.done .task-title { text-decoration: line-through; color: var(--overlay0); }
 .task-title { flex: 1; font-size: 13px; }
-.task-meta { display: flex; gap: 6px; align-items: center; }
+.task-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .task-time { font-size: 11px; color: var(--overlay0); }
+.task-tags { display: flex; gap: 3px; flex-wrap: wrap; }
+
+/* Task expansion panel */
+.task-expand {
+  max-height: 0; overflow: hidden; transition: max-height .3s ease, padding .3s ease;
+  background: rgba(17,17,27,.3); border-radius: 0 0 6px 6px; margin-top: -4px; margin-bottom: 4px;
+}
+.task-expand.open { max-height: 400px; padding: 12px; }
+.task-expand textarea {
+  width: 100%; min-height: 60px; margin-top: 8px; font-size: 12px;
+}
+.task-expand .subtask-list { margin-top: 8px; }
+.task-expand .subtask-row {
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+  font-size: 12px; border-left: 2px solid var(--surface1); margin-left: 8px;
+  margin-bottom: 2px; transition: background .15s;
+}
+.task-expand .subtask-row:hover { background: rgba(69,71,90,.2); }
 
 /* ── Tabs ─────────────────────────────────────── */
 .tabs { display: flex; gap: 2px; margin-bottom: 16px; background: var(--bg-mantle); border-radius: 8px; padding: 3px; }
 .tab {
   padding: 7px 14px; border-radius: 6px; font-size: 13px;
-  cursor: pointer; color: var(--subtext0); transition: all .15s;
+  cursor: pointer; color: var(--subtext0); transition: all .2s;
   flex: 1; text-align: center; user-select: none;
 }
-.tab:hover { color: var(--text); }
+.tab:hover { color: var(--text); background: rgba(69,71,90,.2); }
 .tab.active { background: var(--surface0); color: var(--text); font-weight: 600; }
 
 /* ── Modal ────────────────────────────────────── */
 .modal-overlay {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
   z-index: 1000; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
 }
 .modal-overlay.show { display: flex; }
 .modal {
   background: var(--surface0); border: 1px solid var(--surface1);
   border-radius: 12px; padding: 24px; width: 90%; max-width: 480px;
   max-height: 80vh; overflow-y: auto;
+  animation: modalIn .2s ease;
 }
+@keyframes modalIn { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: scale(1); } }
 .modal h2 { font-size: 18px; margin-bottom: 16px; }
 .modal .form-group { margin-bottom: 14px; }
 .modal .form-group label { display: block; font-size: 12px; color: var(--subtext0); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
@@ -215,7 +289,7 @@ input[type="range"]::-webkit-slider-thumb {
 .habit-dots { display: flex; gap: 3px; flex-wrap: wrap; }
 .habit-dot {
   width: 12px; height: 12px; border-radius: 2px;
-  background: var(--surface1);
+  background: var(--surface1); transition: background .15s;
 }
 .habit-dot.done { background: var(--green); }
 .habit-dot.missed { background: var(--surface1); }
@@ -233,6 +307,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--bg-mantle); border-left: 3px solid var(--surface2);
   margin-bottom: 4px; transition: all .2s;
 }
+.timeline-block:hover { background: rgba(69,71,90,.2); }
 .timeline-block.current {
   border-left-color: var(--blue); background: rgba(137,180,250,.08);
 }
@@ -244,13 +319,13 @@ input[type="range"]::-webkit-slider-thumb {
 .focus-timer-display { text-align: center; padding: 20px 0; }
 .focus-timer-display .time-text { font-size: 48px; font-weight: 700; font-family: monospace; letter-spacing: 2px; }
 .focus-timer-display .session-label { color: var(--purple); font-size: 14px; margin-top: 4px; }
-.focus-presets { display: flex; gap: 10px; justify-content: center; margin: 16px 0; }
+.focus-presets { display: flex; gap: 10px; justify-content: center; margin: 16px 0; flex-wrap: wrap; }
 .preset-btn {
   background: var(--bg-mantle); border: 1px solid var(--surface1);
   color: var(--text); padding: 10px 20px; border-radius: 8px;
-  cursor: pointer; font-size: 14px; text-align: center; transition: all .15s;
+  cursor: pointer; font-size: 14px; text-align: center; transition: all .2s;
 }
-.preset-btn:hover { border-color: var(--purple); background: rgba(203,166,247,.08); }
+.preset-btn:hover { border-color: var(--purple); background: rgba(203,166,247,.08); transform: translateY(-2px); }
 .preset-btn .mins { font-size: 22px; font-weight: 700; display: block; }
 .preset-btn .type { font-size: 11px; color: var(--subtext0); }
 
@@ -263,7 +338,9 @@ input[type="range"]::-webkit-slider-thumb {
 .goal-card {
   background: var(--bg-mantle); border-radius: 8px; padding: 14px;
   margin-bottom: 8px; border-left: 3px solid var(--surface2);
+  transition: all .2s;
 }
+.goal-card:hover { background: rgba(69,71,90,.2); }
 .goal-card .goal-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
 .goal-card .goal-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--subtext0); }
 .goal-progress-inline {
@@ -273,28 +350,65 @@ input[type="range"]::-webkit-slider-thumb {
 .goal-progress-inline .fill { height: 100%; border-radius: 3px; transition: width .3s; }
 .goal-children-list { padding-left: 16px; border-left: 1px solid var(--surface1); margin-left: 12px; margin-top: 8px; }
 
+/* Milestone items */
+.milestone-item {
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+  font-size: 12px; border-radius: 4px; margin-bottom: 2px;
+  transition: background .15s;
+}
+.milestone-item:hover { background: rgba(69,71,90,.2); }
+.milestone-check { width: 14px; height: 14px; border-radius: 3px; border: 2px solid var(--surface2); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .2s; }
+.milestone-check.done { background: var(--green); border-color: var(--green); }
+.milestone-check.done::after { content: '✓'; color: var(--bg-crust); font-size: 9px; font-weight: 700; }
+.milestone-text { flex: 1; }
+.milestone-text.done { text-decoration: line-through; color: var(--overlay0); }
+.key-results { margin-top: 6px; padding-left: 12px; border-left: 2px solid var(--surface1); }
+.key-result { font-size: 12px; color: var(--subtext0); padding: 2px 0; }
+
 /* ── Journal ──────────────────────────────────── */
 .mood-selector { display: flex; gap: 8px; margin-bottom: 12px; }
 .mood-btn {
   font-size: 24px; cursor: pointer; padding: 6px 10px;
   border-radius: 8px; border: 2px solid transparent;
-  background: var(--bg-mantle); transition: all .15s;
+  background: var(--bg-mantle); transition: all .2s;
 }
-.mood-btn:hover { border-color: var(--surface2); }
-.mood-btn.selected { border-color: var(--gold); background: rgba(232,168,56,.1); }
+.mood-btn:hover { border-color: var(--surface2); transform: scale(1.1); }
+.mood-btn.selected { border-color: var(--gold); background: rgba(232,168,56,.1); transform: scale(1.15); }
 .journal-entry {
   background: var(--bg-mantle); border-radius: 8px; padding: 14px;
-  margin-bottom: 8px;
+  margin-bottom: 8px; transition: all .2s;
 }
+.journal-entry:hover { background: rgba(69,71,90,.2); }
 .journal-entry .date { font-size: 12px; color: var(--overlay0); margin-bottom: 6px; }
 .journal-entry .mood-display { font-size: 18px; float: right; }
+
+/* Energy battery */
+.energy-selector { display: flex; gap: 6px; margin-bottom: 12px; }
+.energy-btn {
+  font-size: 20px; cursor: pointer; padding: 4px 6px;
+  border-radius: 6px; border: 2px solid transparent;
+  background: var(--bg-mantle); transition: all .2s; opacity: .4;
+}
+.energy-btn:hover { opacity: .7; }
+.energy-btn.active { opacity: 1; border-color: var(--yellow); }
+
+/* Journal prompt */
+.journal-prompt {
+  background: rgba(137,180,250,.06); border: 1px solid rgba(137,180,250,.15);
+  border-radius: 8px; padding: 12px; margin-bottom: 12px;
+  font-size: 13px; color: var(--subtext1); font-style: italic;
+  display: flex; align-items: center; gap: 8px;
+}
+.journal-prompt .refresh-btn { cursor: pointer; opacity: .6; transition: opacity .15s; }
+.journal-prompt .refresh-btn:hover { opacity: 1; }
 
 /* ── Rules ────────────────────────────────────── */
 .rule-item {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; background: var(--bg-mantle); border-radius: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 6px; transition: all .2s;
 }
+.rule-item:hover { background: rgba(69,71,90,.2); }
 .rule-item .rule-text { flex: 1; font-size: 13px; }
 .rule-toggle {
   position: relative; width: 36px; height: 20px;
@@ -342,11 +456,77 @@ input[type="range"]::-webkit-slider-thumb {
 .suggestion-card {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 12px; background: rgba(232,168,56,.06); border: 1px solid rgba(232,168,56,.2);
-  border-radius: 8px; margin-bottom: 8px;
+  border-radius: 8px; margin-bottom: 8px; transition: all .2s;
 }
+.suggestion-card:hover { background: rgba(232,168,56,.1); }
 .suggestion-card .icon { font-size: 20px; }
 .suggestion-card .content { flex: 1; font-size: 13px; }
 .suggestion-card .actions { display: flex; gap: 6px; }
+
+/* ── Agent Status Widget ──────────────────────── */
+.agent-status-widget {
+  background: var(--bg-mantle); border: 1px solid var(--surface1); border-radius: 8px;
+  padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+  transition: all .2s;
+}
+.agent-status-widget:hover { border-color: var(--surface2); }
+.agent-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.agent-status-dot.online { background: var(--green); box-shadow: 0 0 6px rgba(166,227,161,.5); }
+.agent-status-dot.offline { background: var(--red); }
+.agent-status-dot.loading { background: var(--yellow); animation: pulse-dot 1s infinite; }
+@keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* ── Calendar ─────────────────────────────────── */
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.cal-header { font-size: 11px; color: var(--overlay0); text-align: center; padding: 6px 0; font-weight: 600; }
+.cal-cell {
+  min-height: 80px; background: var(--bg-mantle); border-radius: 4px; padding: 4px 6px;
+  font-size: 11px; cursor: pointer; transition: all .2s; border: 1px solid transparent;
+}
+.cal-cell:hover { border-color: var(--surface2); }
+.cal-cell.today { border-color: var(--gold); background: rgba(232,168,56,.06); }
+.cal-cell.other-month { opacity: .3; }
+.cal-day-num { font-weight: 600; margin-bottom: 2px; }
+.cal-event { font-size: 10px; padding: 1px 4px; border-radius: 3px; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-event.focus { background: rgba(203,166,247,.2); color: var(--purple); }
+.cal-event.task { background: rgba(166,227,161,.2); color: var(--green); }
+.cal-event.journal { background: rgba(249,226,175,.2); color: var(--yellow); }
+
+/* ── Review checklist ─────────────────────────── */
+.review-check {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: var(--bg-mantle); border-radius: 6px; margin-bottom: 4px;
+  cursor: pointer; transition: all .15s;
+}
+.review-check:hover { background: rgba(69,71,90,.3); }
+.review-check.checked { opacity: .6; }
+.review-check.checked .review-label { text-decoration: line-through; }
+
+/* ── Ambient sound buttons ────────────────────── */
+.ambient-btn {
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  background: var(--bg-mantle); border: 1px solid var(--surface1);
+  color: var(--subtext0); font-size: 13px; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ambient-btn:hover { border-color: var(--surface2); color: var(--text); }
+.ambient-btn.active { border-color: var(--teal); background: rgba(148,226,213,.08); color: var(--teal); }
+
+/* ── Toast notifications ──────────────────────── */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--surface0); border: 1px solid var(--surface1); border-radius: 8px;
+  padding: 10px 16px; font-size: 13px; min-width: 200px; max-width: 320px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  animation: toastIn .3s ease;
+  display: flex; align-items: center; gap: 8px;
+}
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error { border-left: 3px solid var(--red); }
+.toast.info { border-left: 3px solid var(--blue); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ── Offline Banner ───────────────────────────── */
 .offline-banner {
@@ -360,6 +540,7 @@ input[type="range"]::-webkit-slider-thumb {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
 
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 768px) {
@@ -392,31 +573,23 @@ input[type="range"]::-webkit-slider-thumb {
 <body>
 
 <div class="offline-banner" id="offlineBanner">⚠ Bridge offline — using local data</div>
+<div class="toast-container" id="toastContainer"></div>
 
 <!-- Sidebar -->
 <nav class="sidebar">
   <div class="sidebar-brand"><span>🧬</span> Life OS</div>
   <div class="sidebar-nav">
     <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
-      <span class="icon">🏠</span><span class="label">Dashboard</span>
-    </div>
-    <div class="nav-item" data-page="daily" onclick="navigate('daily')">
-      <span class="icon">📅</span><span class="label">Daily</span>
-    </div>
-    <div class="nav-item" data-page="goals" onclick="navigate('goals')">
-      <span class="icon">🎯</span><span class="label">Goals</span>
+      <span class="icon">🏠</span><span class="label">Home</span>
     </div>
     <div class="nav-item" data-page="tasks" onclick="navigate('tasks')">
       <span class="icon">✅</span><span class="label">Tasks</span><span class="badge" id="taskBadge" style="display:none">0</span>
     </div>
-    <div class="nav-item" data-page="braindump" onclick="navigate('braindump')">
-      <span class="icon">🧠</span><span class="label">Brain Dump</span>
+    <div class="nav-item" data-page="goals" onclick="navigate('goals')">
+      <span class="icon">🎯</span><span class="label">Goals</span>
     </div>
     <div class="nav-item" data-page="focus" onclick="navigate('focus')">
       <span class="icon">⏱️</span><span class="label">Focus</span>
-    </div>
-    <div class="nav-item" data-page="analytics" onclick="navigate('analytics')">
-      <span class="icon">📊</span><span class="label">Analytics</span>
     </div>
     <div class="nav-item" data-page="habits" onclick="navigate('habits')">
       <span class="icon">⚡</span><span class="label">Habits</span>
@@ -424,30 +597,74 @@ input[type="range"]::-webkit-slider-thumb {
     <div class="nav-item" data-page="journal" onclick="navigate('journal')">
       <span class="icon">📔</span><span class="label">Journal</span>
     </div>
+    <div class="nav-item" data-page="calendar" onclick="navigate('calendar')">
+      <span class="icon">📅</span><span class="label">Calendar</span>
+    </div>
+    <div class="nav-item" data-page="review" onclick="navigate('review')">
+      <span class="icon">📊</span><span class="label">Review</span>
+    </div>
     <div class="nav-divider"></div>
+    <div class="nav-item" data-page="daily" onclick="navigate('daily')">
+      <span class="icon">🌅</span><span class="label">Daily</span>
+    </div>
+    <div class="nav-item" data-page="braindump" onclick="navigate('braindump')">
+      <span class="icon">🧠</span><span class="label">Brain Dump</span>
+    </div>
+    <div class="nav-item" data-page="notes" onclick="navigate('notes')">
+      <span class="icon">📝</span><span class="label">Notes</span>
+    </div>
     <div class="nav-item" data-page="rules" onclick="navigate('rules')">
       <span class="icon">⚙️</span><span class="label">Rules</span>
     </div>
   </div>
   <div class="nav-back">
-    <a href="/app/">← Back to Agent OS</a>
+    <a href="/app/">🔗 Open in Agent OS</a>
   </div>
 </nav>
 
 <!-- Main Content -->
 <div class="main">
 
-<!-- ════════════════ DASHBOARD ════════════════ -->
+<!-- ════════════════ DASHBOARD / HOME ════════════════ -->
 <div class="page active" id="page-dashboard">
   <div class="page-header">
     <h1 id="dashGreeting">Good morning 👋</h1>
     <div class="subtitle" id="dashSummary">Loading...</div>
   </div>
 
+  <!-- Agent OS Integration row -->
+  <div class="card-grid cols-2" style="margin-bottom:16px">
+    <div class="card" style="padding:14px">
+      <h3>🤖 Agent Status</h3>
+      <div id="agentStatusWidget">
+        <div class="agent-status-widget">
+          <div class="agent-status-dot loading"></div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">Checking...</div>
+            <div style="font-size:11px;color:var(--overlay0)">Connecting to Agent OS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:14px">
+      <h3>📋 Pending Decisions</h3>
+      <div id="pendingDecisions">
+        <div class="agent-status-widget">
+          <div style="font-size:24px;font-weight:700;color:var(--yellow)" id="pendingCount">—</div>
+          <div style="flex:1">
+            <div style="font-size:13px">proposals awaiting review</div>
+            <div style="font-size:11px;color:var(--overlay0)">from agent system</div>
+          </div>
+          <a href="/app/" class="btn sm ghost" style="text-decoration:none">View →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="card-grid cols-3" style="margin-bottom:16px">
     <div class="card">
       <h3>🎯 Today's Priorities</h3>
-      <div id="dashPriorities"><div class="empty">No priorities set</div></div>
+      <div id="dashPriorities"><div class="empty"><span class="empty-icon">🎯</span>No priorities set<div class="empty-hint">Set intentions in Daily view</div></div></div>
       <div style="margin-top:10px" id="dashFocusStatus"></div>
     </div>
     <div class="card">
@@ -465,20 +682,294 @@ input[type="range"]::-webkit-slider-thumb {
     </div>
     <div class="card">
       <h3>⚡ Today's Habits</h3>
-      <div id="dashHabits"><div class="empty">No habits defined</div></div>
+      <div id="dashHabits"><div class="empty"><span class="empty-icon">⚡</span>No habits defined<div class="empty-hint">Add habits in ⚡ Habits view</div></div></div>
     </div>
   </div>
 
   <div class="card">
     <h3>🤖 Agent Suggestions</h3>
-    <div id="dashSuggestions"><div class="empty">No suggestions from agents</div></div>
+    <div id="dashSuggestions"><div class="empty"><span class="empty-icon">💡</span>No suggestions from agents</div></div>
+  </div>
+</div>
+
+<!-- ════════════════ TASKS ════════════════ -->
+<div class="page" id="page-tasks">
+  <div class="page-header">
+    <h1>✅ Tasks</h1>
+    <div class="subtitle">GTD-inspired task management</div>
+  </div>
+  <div class="tabs" id="taskTabs">
+    <div class="tab active" onclick="switchTaskTab('inbox')">📥 Inbox</div>
+    <div class="tab" onclick="switchTaskTab('today')">📌 Today</div>
+    <div class="tab" onclick="switchTaskTab('scheduled')">📅 Scheduled</div>
+    <div class="tab" onclick="switchTaskTab('someday')">💭 Someday</div>
+    <div class="tab" onclick="switchTaskTab('completed')">✅ Done</div>
+  </div>
+
+  <!-- Tag filter bar -->
+  <div id="taskTagFilter" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px"></div>
+
+  <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap">
+    <input type="text" id="newTaskInput" placeholder="Add a new task..." style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')addTask()">
+    <select id="newTaskPriority" style="width:70px">
+      <option value="p1">P1</option>
+      <option value="p2" selected>P2</option>
+      <option value="p3">P3</option>
+      <option value="p0">P0</option>
+    </select>
+    <select id="newTaskEstimate" style="width:85px">
+      <option value="">Est...</option>
+      <option value="small">🟢 Small</option>
+      <option value="medium">🟡 Medium</option>
+      <option value="large">🔴 Large</option>
+    </select>
+    <input type="text" id="newTaskTags" placeholder="Tags (comma sep)" style="width:140px">
+    <button class="btn" onclick="addTask()">Add</button>
+  </div>
+  <div id="taskList"></div>
+</div>
+
+<!-- ════════════════ GOALS ════════════════ -->
+<div class="page" id="page-goals">
+  <div class="page-header">
+    <h1>🎯 Goals</h1>
+    <div class="subtitle">Aspirations → Missions → Plans → Tasks (OKR-style)</div>
+  </div>
+  <div id="goalsContent"></div>
+</div>
+
+<!-- ════════════════ FOCUS ════════════════ -->
+<div class="page" id="page-focus">
+  <div class="page-header">
+    <h1>⏱️ Focus</h1>
+    <div class="subtitle">Deep work sessions & distraction tracking</div>
+  </div>
+
+  <!-- Currently focused on -->
+  <div id="focusCurrentTask" style="margin-bottom:16px;display:none">
+    <div class="card" style="padding:12px;border-left:3px solid var(--purple)">
+      <div style="font-size:12px;color:var(--overlay0);margin-bottom:2px">Currently focused on:</div>
+      <div id="focusCurrentTaskName" style="font-size:14px;font-weight:600"></div>
+    </div>
+  </div>
+
+  <div class="card" style="text-align:center">
+    <svg id="focusRing" width="200" height="200" viewBox="0 0 200 200" style="margin:0 auto; display:block">
+      <circle cx="100" cy="100" r="88" fill="none" stroke="var(--surface1)" stroke-width="10"/>
+      <circle id="focusArc" cx="100" cy="100" r="88" fill="none" stroke="var(--purple)" stroke-width="10"
+        stroke-dasharray="553" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 100 100)" style="transition:stroke-dashoffset .5s"/>
+      <text x="100" y="95" text-anchor="middle" fill="var(--text)" font-size="36" font-weight="700" font-family="monospace" id="focusTimeDisplay">00:00</text>
+      <text x="100" y="118" text-anchor="middle" fill="var(--purple)" font-size="13" id="focusTaskDisplay"></text>
+    </svg>
+
+    <div id="focusStartControls" style="margin-top:16px">
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="focusTaskSelect" style="width:220px">
+          <option value="">Select a task...</option>
+        </select>
+        <input type="text" id="focusTaskName" placeholder="Or type what you're working on..." style="width:220px">
+      </div>
+      <div class="focus-presets">
+        <div class="preset-btn" onclick="startFocus(25,5,'Pomodoro')"><span class="mins">25</span><span class="type">Pomodoro (5m break)</span></div>
+        <div class="preset-btn" onclick="startFocus(50,10,'Deep Work')"><span class="mins">50</span><span class="type">Deep Work (10m break)</span></div>
+        <div class="preset-btn" onclick="startFocus(90,0,'Flow State')"><span class="mins">90</span><span class="type">Flow State</span></div>
+      </div>
+      <div style="margin-top:12px">
+        <span style="font-size:12px;color:var(--overlay0)">Custom:</span>
+        <input type="number" id="customFocusMins" placeholder="mins" style="width:60px;margin:0 4px" min="1" max="240">
+        <input type="number" id="customBreakMins" placeholder="break" style="width:60px;margin:0 4px" min="0" max="30">
+        <button class="btn sm purple" onclick="startCustomFocus()">Start</button>
+      </div>
+    </div>
+    <div id="focusActiveControls" style="display:none; margin-top:16px">
+      <button class="btn danger" onclick="stopFocus()" style="margin-right:8px">⏹ Stop</button>
+      <button class="btn ghost" onclick="logDistraction()">😵 I got distracted</button>
+    </div>
+    <div id="focusBreakControls" style="display:none; margin-top:16px">
+      <div style="font-size:14px;color:var(--green);margin-bottom:8px">☕ Break time!</div>
+      <button class="btn green" onclick="skipBreak()">Skip Break</button>
+    </div>
+  </div>
+
+  <!-- Ambient sounds -->
+  <div class="card" style="margin-top:16px">
+    <h3>🔊 Ambient Sounds</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="ambient-btn" id="amb-rain" onclick="toggleAmbient('rain')">🌧️ Rain</div>
+      <div class="ambient-btn" id="amb-coffee" onclick="toggleAmbient('coffee')">☕ Coffee Shop</div>
+      <div class="ambient-btn" id="amb-fire" onclick="toggleAmbient('fire')">🔥 Fireplace</div>
+      <div class="ambient-btn" id="amb-forest" onclick="toggleAmbient('forest')">🌲 Forest</div>
+    </div>
+  </div>
+
+  <!-- Daily focus stats -->
+  <div class="card-grid cols-4" style="margin-top:16px">
+    <div class="stat-box"><div class="val" id="focusTotalToday" style="color:var(--purple)">0</div><div class="label">min today</div></div>
+    <div class="stat-box"><div class="val" id="focusSessionsToday" style="color:var(--blue)">0</div><div class="label">sessions</div></div>
+    <div class="stat-box"><div class="val" id="focusStreak" style="color:var(--green)">0</div><div class="label">day streak</div></div>
+    <div class="stat-box"><div class="val" id="focusDeepScore" style="color:var(--gold)">-</div><div class="label">deep score</div></div>
+  </div>
+
+  <div class="card-grid cols-2" style="margin-top:16px">
+    <div class="card">
+      <h3>📋 Today's Sessions</h3>
+      <div id="focusSessionLog"><div class="empty"><span class="empty-icon">⏱️</span>No sessions yet<div class="empty-hint">Start a focus session above</div></div></div>
+    </div>
+    <div class="card">
+      <h3>😵 Distraction Log</h3>
+      <div id="distractionLog"><div class="empty"><span class="empty-icon">🧘</span>No distractions — nice!</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ HABITS ════════════════ -->
+<div class="page" id="page-habits">
+  <div class="page-header">
+    <h1>⚡ Habits</h1>
+    <div class="subtitle">Daily tracking & streaks</div>
+  </div>
+
+  <div class="card">
+    <h3>Today's Habits</h3>
+    <div id="habitTodayList"><div class="empty"><span class="empty-icon">⚡</span>No habits defined yet<div class="empty-hint">Add one below to start tracking</div></div></div>
+  </div>
+
+  <div class="card">
+    <h3>Habit Streaks</h3>
+    <div id="habitStreaks"><div class="empty">Add habits to see streaks</div></div>
+  </div>
+
+  <div style="display:flex; gap:8px; margin-top:16px">
+    <input type="text" id="newHabitName" placeholder="New habit name..." style="flex:1">
+    <select id="newHabitFreq" style="width:100px">
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+    </select>
+    <button class="btn green" onclick="addHabit()">+ Add Habit</button>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>🤖 Suggested Habits</h3>
+    <div id="habitSuggestions"><div class="empty">No agent suggestions</div></div>
+  </div>
+</div>
+
+<!-- ════════════════ JOURNAL ════════════════ -->
+<div class="page" id="page-journal">
+  <div class="page-header">
+    <h1>📔 Journal</h1>
+    <div class="subtitle">Daily reflections & gratitude</div>
+  </div>
+
+  <!-- Daily prompt -->
+  <div class="journal-prompt" id="journalPrompt">
+    <span>💭</span>
+    <span id="journalPromptText">Loading prompt...</span>
+    <span class="refresh-btn" onclick="refreshPrompt()">🔄</span>
+  </div>
+
+  <div class="card">
+    <h3>How are you feeling?</h3>
+    <div class="mood-selector">
+      <div class="mood-btn" onclick="selectMood('😫')">😫</div>
+      <div class="mood-btn" onclick="selectMood('😕')">😕</div>
+      <div class="mood-btn" onclick="selectMood('😐')">😐</div>
+      <div class="mood-btn" onclick="selectMood('🙂')">🙂</div>
+      <div class="mood-btn" onclick="selectMood('😄')">😄</div>
+    </div>
+
+    <h3 style="margin-top:12px">Energy Level</h3>
+    <div class="energy-selector" id="energySelector">
+      <div class="energy-btn" onclick="selectEnergy(1)" data-level="1">🪫</div>
+      <div class="energy-btn" onclick="selectEnergy(2)" data-level="2">🔋</div>
+      <div class="energy-btn" onclick="selectEnergy(3)" data-level="3">🔋</div>
+      <div class="energy-btn" onclick="selectEnergy(4)" data-level="4">🔋</div>
+      <div class="energy-btn" onclick="selectEnergy(5)" data-level="5">⚡</div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px">
+      <div>
+        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What are you grateful for?</label>
+        <textarea id="journalGratitude" rows="2" style="width:100%" placeholder="Three things..."></textarea>
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">Reflection</label>
+        <textarea id="journalReflection" rows="3" style="width:100%" placeholder="How was your day? What did you learn?"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn gold" onclick="saveJournalEntry()">💾 Save Entry</button>
+      <button class="btn ghost" onclick="saveToVault()">🗃️ Save to Vault</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📖 Past Entries</h3>
+    <div id="journalEntries"><div class="empty"><span class="empty-icon">📝</span>No journal entries yet<div class="empty-hint">Start writing above!</div></div></div>
+  </div>
+</div>
+
+<!-- ════════════════ CALENDAR ════════════════ -->
+<div class="page" id="page-calendar">
+  <div class="page-header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h1>📅 Calendar</h1>
+      <div style="display:flex;gap:4px;margin-left:auto">
+        <button class="btn sm ghost" onclick="changeCalMonth(-1)">◀</button>
+        <span id="calMonthLabel" style="font-size:16px;font-weight:600;min-width:140px;text-align:center"></span>
+        <button class="btn sm ghost" onclick="changeCalMonth(1)">▶</button>
+        <button class="btn sm" onclick="calToday()" style="margin-left:8px">Today</button>
+      </div>
+    </div>
+    <div class="subtitle">Focus sessions, completed tasks & journal entries</div>
+  </div>
+  <div class="card">
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+  <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--overlay0)">
+    <span><span class="cal-event focus" style="display:inline-block;width:8px;height:8px;border-radius:2px"></span> Focus</span>
+    <span><span class="cal-event task" style="display:inline-block;width:8px;height:8px;border-radius:2px"></span> Task</span>
+    <span><span class="cal-event journal" style="display:inline-block;width:8px;height:8px;border-radius:2px"></span> Journal</span>
+  </div>
+</div>
+
+<!-- ════════════════ REVIEW ════════════════ -->
+<div class="page" id="page-review">
+  <div class="page-header">
+    <h1>📊 Weekly Review</h1>
+    <div class="subtitle" id="reviewSubtitle">Review your week and plan ahead</div>
+  </div>
+
+  <div class="card-grid cols-3" style="margin-bottom:16px">
+    <div class="stat-box"><div class="val" style="color:var(--green)" id="reviewTasksDone">0</div><div class="label">tasks completed</div></div>
+    <div class="stat-box"><div class="val" style="color:var(--purple)" id="reviewFocusTime">0h</div><div class="label">focus time</div></div>
+    <div class="stat-box"><div class="val" style="color:var(--yellow)" id="reviewJournalCount">0</div><div class="label">journal entries</div></div>
+  </div>
+
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3>📋 Review Checklist</h3>
+      <div id="reviewChecklist"></div>
+    </div>
+    <div class="card">
+      <h3>📈 Weekly Stats</h3>
+      <div id="reviewStats"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>📝 Weekly Summary</h3>
+    <div id="reviewSummary" style="font-size:13px;color:var(--subtext0)">
+      <div class="empty"><span class="empty-icon">📝</span>Click "Generate Review" to see your weekly summary</div>
+    </div>
+    <button class="btn gold" style="margin-top:12px" onclick="generateReview()">✨ Generate Review</button>
   </div>
 </div>
 
 <!-- ════════════════ DAILY ════════════════ -->
 <div class="page" id="page-daily">
   <div class="page-header">
-    <h1>📅 Daily</h1>
+    <h1>🌅 Daily</h1>
     <div class="subtitle" id="dailyDate"></div>
   </div>
 
@@ -495,8 +986,8 @@ input[type="range"]::-webkit-slider-thumb {
     <div class="card">
       <h3>🕐 Time Blocks</h3>
       <div id="dailyTimeline"></div>
-      <div style="margin-top:10px; display:flex; gap:8px">
-        <input type="text" id="blockLabel" placeholder="Block name..." style="flex:1">
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+        <input type="text" id="blockLabel" placeholder="Block name..." style="flex:1;min-width:120px">
         <input type="text" id="blockStart" placeholder="09:00" style="width:70px">
         <input type="text" id="blockEnd" placeholder="11:00" style="width:70px">
         <select id="blockCat" style="width:90px">
@@ -535,73 +1026,23 @@ input[type="range"]::-webkit-slider-thumb {
     </div>
   </div>
 
-  <div class="card-grid cols-2">
-    <div class="card">
-      <h3>⏱️ Quick Focus</h3>
-      <div class="focus-presets">
-        <div class="preset-btn" onclick="quickFocus(25)"><span class="mins">25</span><span class="type">Pomodoro</span></div>
-        <div class="preset-btn" onclick="quickFocus(45)"><span class="mins">45</span><span class="type">Deep Work</span></div>
-        <div class="preset-btn" onclick="quickFocus(90)"><span class="mins">90</span><span class="type">Flow State</span></div>
+  <div class="card">
+    <h3>🌙 Evening Review</h3>
+    <div style="display:flex; flex-direction:column; gap:10px">
+      <div>
+        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What went well?</label>
+        <textarea id="reviewWell" rows="2" style="width:100%" onchange="saveReview()"></textarea>
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What to improve?</label>
+        <textarea id="reviewImprove" rows="2" style="width:100%" onchange="saveReview()"></textarea>
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">Gratitude</label>
+        <textarea id="reviewGratitude" rows="2" style="width:100%" onchange="saveReview()"></textarea>
       </div>
     </div>
-
-    <div class="card">
-      <h3>🌙 Evening Review</h3>
-      <details>
-        <summary style="cursor:pointer; color:var(--subtext0); font-size:13px; margin-bottom:10px">Expand to reflect</summary>
-        <div style="display:flex; flex-direction:column; gap:10px">
-          <div>
-            <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What went well?</label>
-            <textarea id="reviewWell" rows="2" style="width:100%" onchange="saveReview()"></textarea>
-          </div>
-          <div>
-            <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What to improve?</label>
-            <textarea id="reviewImprove" rows="2" style="width:100%" onchange="saveReview()"></textarea>
-          </div>
-          <div>
-            <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">Gratitude</label>
-            <textarea id="reviewGratitude" rows="2" style="width:100%" onchange="saveReview()"></textarea>
-          </div>
-        </div>
-      </details>
-    </div>
   </div>
-</div>
-
-<!-- ════════════════ GOALS ════════════════ -->
-<div class="page" id="page-goals">
-  <div class="page-header">
-    <h1>🎯 Goals</h1>
-    <div class="subtitle">Aspirations → Missions → Plans → Tasks</div>
-  </div>
-  <div id="goalsContent"></div>
-</div>
-
-<!-- ════════════════ TASKS ════════════════ -->
-<div class="page" id="page-tasks">
-  <div class="page-header">
-    <h1>✅ Tasks</h1>
-    <div class="subtitle">GTD-inspired task management</div>
-  </div>
-  <div class="tabs" id="taskTabs">
-    <div class="tab active" onclick="switchTaskTab('inbox')">📥 Inbox</div>
-    <div class="tab" onclick="switchTaskTab('today')">📌 Today</div>
-    <div class="tab" onclick="switchTaskTab('scheduled')">📅 Scheduled</div>
-    <div class="tab" onclick="switchTaskTab('someday')">💭 Someday</div>
-    <div class="tab" onclick="switchTaskTab('completed')">✅ Done</div>
-  </div>
-  <div style="display:flex; gap:8px; margin-bottom:16px">
-    <input type="text" id="newTaskInput" placeholder="Add a new task..." style="flex:1" onkeydown="if(event.key==='Enter')addTask()">
-    <select id="newTaskPriority" style="width:70px">
-      <option value="p1">P1</option>
-      <option value="p2" selected>P2</option>
-      <option value="p3">P3</option>
-      <option value="p0">P0</option>
-    </select>
-    <input type="text" id="newTaskTime" placeholder="30m" style="width:60px">
-    <button class="btn" onclick="addTask()">Add</button>
-  </div>
-  <div id="taskList"></div>
 </div>
 
 <!-- ════════════════ BRAIN DUMP ════════════════ -->
@@ -623,153 +1064,24 @@ input[type="range"]::-webkit-slider-thumb {
   </div>
 </div>
 
-<!-- ════════════════ FOCUS ════════════════ -->
-<div class="page" id="page-focus">
+<!-- ════════════════ NOTES ════════════════ -->
+<div class="page" id="page-notes">
   <div class="page-header">
-    <h1>⏱️ Focus</h1>
-    <div class="subtitle">Deep work sessions & distraction tracking</div>
+    <h1>📝 Notes</h1>
+    <div class="subtitle">Quick notes & scratch space</div>
   </div>
-
-  <div class="card" style="text-align:center">
-    <svg id="focusRing" width="200" height="200" viewBox="0 0 200 200" style="margin:0 auto; display:block">
-      <circle cx="100" cy="100" r="88" fill="none" stroke="var(--surface1)" stroke-width="10"/>
-      <circle id="focusArc" cx="100" cy="100" r="88" fill="none" stroke="var(--purple)" stroke-width="10"
-        stroke-dasharray="553" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 100 100)" style="transition:stroke-dashoffset .5s"/>
-      <text x="100" y="95" text-anchor="middle" fill="var(--text)" font-size="36" font-weight="700" font-family="monospace" id="focusTimeDisplay">00:00</text>
-      <text x="100" y="118" text-anchor="middle" fill="var(--purple)" font-size="13" id="focusTaskDisplay"></text>
-    </svg>
-
-    <div id="focusStartControls" style="margin-top:16px">
-      <input type="text" id="focusTaskName" placeholder="What are you working on?" style="width:260px; margin-bottom:10px">
-      <div class="focus-presets">
-        <div class="preset-btn" onclick="startFocus(25,'Pomodoro')"><span class="mins">25</span><span class="type">Pomodoro</span></div>
-        <div class="preset-btn" onclick="startFocus(45,'Deep Work')"><span class="mins">45</span><span class="type">Deep Work</span></div>
-        <div class="preset-btn" onclick="startFocus(90,'Flow State')"><span class="mins">90</span><span class="type">Flow State</span></div>
-      </div>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <input type="text" id="newNoteTitle" placeholder="Note title..." style="flex:1" onkeydown="if(event.key==='Enter')addNote()">
+    <button class="btn" onclick="addNote()">+ New Note</button>
+  </div>
+  <div id="notesList"></div>
+  <div id="noteEditor" style="display:none" class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <button class="btn sm ghost" onclick="closeNoteEditor()">← Back</button>
+      <input type="text" id="noteEditorTitle" style="flex:1;font-size:16px;font-weight:600;background:transparent;border:none;color:var(--text)" onchange="saveCurrentNote()">
+      <button class="btn sm danger" onclick="deleteCurrentNote()">🗑</button>
     </div>
-    <div id="focusActiveControls" style="display:none; margin-top:16px">
-      <button class="btn danger" onclick="stopFocus()" style="margin-right:8px">⏹ Stop</button>
-      <button class="btn ghost" onclick="logDistraction()">😵 I got distracted</button>
-    </div>
-  </div>
-
-  <div class="card-grid cols-4" style="margin-top:16px">
-    <div class="stat-box"><div class="val" id="focusTotalToday" style="color:var(--purple)">0</div><div class="label">min today</div></div>
-    <div class="stat-box"><div class="val" id="focusSessionsToday" style="color:var(--blue)">0</div><div class="label">sessions</div></div>
-    <div class="stat-box"><div class="val" id="focusStreak" style="color:var(--green)">0</div><div class="label">day streak</div></div>
-    <div class="stat-box"><div class="val" id="focusDeepScore" style="color:var(--gold)">-</div><div class="label">deep score</div></div>
-  </div>
-
-  <div class="card-grid cols-2" style="margin-top:16px">
-    <div class="card">
-      <h3>📋 Today's Sessions</h3>
-      <div id="focusSessionLog"><div class="empty">No sessions yet</div></div>
-    </div>
-    <div class="card">
-      <h3>😵 Distraction Log</h3>
-      <div id="distractionLog"><div class="empty">No distractions — nice!</div></div>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════ ANALYTICS ════════════════ -->
-<div class="page" id="page-analytics">
-  <div class="page-header">
-    <h1>📊 Analytics</h1>
-    <div class="subtitle" id="analyticsSummary">Loading weekly summary...</div>
-  </div>
-
-  <div class="card-grid cols-2">
-    <div class="card">
-      <h3>🔋 Energy Trend (7 days)</h3>
-      <div class="chart-container" id="analyticsEnergyChart">
-        <svg viewBox="0 0 300 130" preserveAspectRatio="none" style="height:130px">
-          <g id="energyLineChart"></g>
-        </svg>
-      </div>
-    </div>
-    <div class="card">
-      <h3>⏱️ Focus Hours (7 days)</h3>
-      <div class="bar-chart" id="focusBarChart"></div>
-    </div>
-  </div>
-
-  <div class="card-grid cols-2">
-    <div class="card">
-      <h3>🎯 Mission Progress</h3>
-      <div id="analyticsGoals"><div class="empty">No missions tracked</div></div>
-    </div>
-    <div class="card">
-      <h3>⚡ Habit Streaks</h3>
-      <div id="analyticsHabitGraph"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════ HABITS ════════════════ -->
-<div class="page" id="page-habits">
-  <div class="page-header">
-    <h1>⚡ Habits</h1>
-    <div class="subtitle">Daily tracking & streaks</div>
-  </div>
-
-  <div class="card">
-    <h3>Today's Habits</h3>
-    <div id="habitTodayList"><div class="empty">No habits defined yet</div></div>
-  </div>
-
-  <div class="card">
-    <h3>Habit Streaks</h3>
-    <div id="habitStreaks"><div class="empty">Add habits to see streaks</div></div>
-  </div>
-
-  <div style="display:flex; gap:8px; margin-top:16px">
-    <input type="text" id="newHabitName" placeholder="New habit name..." style="flex:1">
-    <select id="newHabitFreq" style="width:100px">
-      <option value="daily">Daily</option>
-      <option value="weekly">Weekly</option>
-    </select>
-    <button class="btn green" onclick="addHabit()">+ Add Habit</button>
-  </div>
-
-  <div class="card" style="margin-top:16px">
-    <h3>🤖 Suggested Habits</h3>
-    <div id="habitSuggestions"><div class="empty">No agent suggestions</div></div>
-  </div>
-</div>
-
-<!-- ════════════════ JOURNAL ════════════════ -->
-<div class="page" id="page-journal">
-  <div class="page-header">
-    <h1>📔 Journal</h1>
-    <div class="subtitle">Daily reflections & gratitude</div>
-  </div>
-
-  <div class="card">
-    <h3>How are you feeling?</h3>
-    <div class="mood-selector">
-      <div class="mood-btn" onclick="selectMood('😊')">😊</div>
-      <div class="mood-btn" onclick="selectMood('😐')">😐</div>
-      <div class="mood-btn" onclick="selectMood('😔')">😔</div>
-      <div class="mood-btn" onclick="selectMood('😤')">😤</div>
-      <div class="mood-btn" onclick="selectMood('😴')">😴</div>
-    </div>
-    <div style="display:flex; flex-direction:column; gap:10px">
-      <div>
-        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What are you grateful for?</label>
-        <textarea id="journalGratitude" rows="2" style="width:100%" placeholder="Three things..."></textarea>
-      </div>
-      <div>
-        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">Reflection</label>
-        <textarea id="journalReflection" rows="3" style="width:100%" placeholder="How was your day? What did you learn?"></textarea>
-      </div>
-    </div>
-    <button class="btn gold" style="margin-top:12px" onclick="saveJournalEntry()">💾 Save Entry</button>
-  </div>
-
-  <div class="card">
-    <h3>📖 Past Entries</h3>
-    <div id="journalEntries"><div class="empty">No journal entries yet</div></div>
+    <textarea id="noteEditorContent" style="width:100%;min-height:300px;font-size:13px" onchange="saveCurrentNote()" placeholder="Write your note..."></textarea>
   </div>
 </div>
 
@@ -830,6 +1142,22 @@ input[type="range"]::-webkit-slider-thumb {
   </div>
 </div>
 
+<!-- ═══ Dispatch Modal ═══ -->
+<div class="modal-overlay" id="dispatchModal">
+  <div class="modal">
+    <h2>🤖 Delegate to Agent</h2>
+    <div style="background:var(--bg-mantle); padding:12px; border-radius:8px; margin-bottom:16px; font-size:14px" id="dispatchTaskText"></div>
+    <div class="form-group">
+      <label>Additional instructions</label>
+      <textarea id="dispatchInstructions" rows="3" style="width:100%" placeholder="Any specific instructions for the agent..."></textarea>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" onclick="closeModal('dispatchModal')">Cancel</button>
+      <button class="btn teal" onclick="confirmDispatch()">🚀 Dispatch</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -851,13 +1179,27 @@ function nowISO() { return new Date().toISOString(); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
 // ═══════════════════════════════════════════════════
+// Toast system
+// ═══════════════════════════════════════════════════
+function showToast(message, type = 'info', duration = 3000) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)'; setTimeout(() => toast.remove(), 300); }, duration);
+}
+
+// ═══════════════════════════════════════════════════
 // Bridge API (graceful fallback)
 // ═══════════════════════════════════════════════════
+const AGENT_OS_BASE = 'http://192.168.122.10:18790';
 const Bridge = {
   online: false,
   async _fetch(path, opts = {}) {
     try {
-      const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) } });
+      const url = path.startsWith('http') ? path : path;
+      const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(3000), headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) } });
       if (!r.ok) throw new Error(r.status);
       this.online = true;
       document.getElementById('offlineBanner').classList.remove('show');
@@ -867,44 +1209,54 @@ const Bridge = {
       return null;
     }
   },
+  getSystemOverview() { return this._fetch(AGENT_OS_BASE + '/api/system/overview'); },
+  getPendingProposals() { return this._fetch(AGENT_OS_BASE + '/api/proposals?status=pending'); },
   getProposals() { return this._fetch('/api/proposals'); },
+  postTask(task) { return this._fetch(AGENT_OS_BASE + '/api/tasks', { method:'POST', body: JSON.stringify(task) }); },
   postRule(rule) { return this._fetch('/api/agent/rules', { method:'POST', body: JSON.stringify(rule) }); },
   syncData(key, data) { return this._fetch('/api/life/sync', { method:'POST', body: JSON.stringify({ key, data }) }); },
+  saveToVault(data) { return this._fetch(AGENT_OS_BASE + '/api/vault/write', { method:'POST', body: JSON.stringify(data) }); },
 };
 
 // ═══════════════════════════════════════════════════
-// Navigation
+// Navigation with smooth transitions
 // ═══════════════════════════════════════════════════
 let currentPage = 'dashboard';
 
 function navigate(page) {
+  if (currentPage === page) return;
+  const oldPage = document.getElementById('page-' + currentPage);
+  if (oldPage) { oldPage.style.opacity = '0'; oldPage.style.transform = 'translateY(6px)'; }
+
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pageEl = document.getElementById('page-' + page);
   const navEl = document.querySelector(`.nav-item[data-page="${page}"]`);
-  if (pageEl) pageEl.classList.add('active');
-  if (navEl) navEl.classList.add('active');
-  // Render the page
-  const renderers = {
-    dashboard: renderDashboard,
-    daily: renderDaily,
-    goals: renderGoals,
-    tasks: renderTasks,
-    braindump: renderBrainDump,
-    focus: renderFocus,
-    analytics: renderAnalytics,
-    habits: renderHabits,
-    journal: renderJournal,
-    rules: renderRules,
-  };
-  if (renderers[page]) renderers[page]();
+
+  setTimeout(() => {
+    if (pageEl) {
+      pageEl.classList.add('active');
+      // Force reflow then animate in
+      void pageEl.offsetHeight;
+      requestAnimationFrame(() => { pageEl.style.opacity = '1'; pageEl.style.transform = 'translateY(0)'; });
+    }
+    if (navEl) navEl.classList.add('active');
+    const renderers = {
+      dashboard: renderDashboard, daily: renderDaily, goals: renderGoals,
+      tasks: renderTasks, braindump: renderBrainDump, focus: renderFocus,
+      analytics: renderAnalytics, habits: renderHabits, journal: renderJournal,
+      rules: renderRules, calendar: renderCalendar, review: renderReview,
+      notes: renderNotes,
+    };
+    if (renderers[page]) renderers[page]();
+  }, 100);
 }
 
 // ═══════════════════════════════════════════════════
-// DASHBOARD
+// DASHBOARD / HOME
 // ═══════════════════════════════════════════════════
-function renderDashboard() {
+async function renderDashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   document.getElementById('dashGreeting').textContent = greeting + ' 👋';
@@ -913,11 +1265,10 @@ function renderDashboard() {
   const habits = LS.get('habits', []);
   const focusSessions = getTodayFocusSessions();
   const todayTasks = tasks.filter(t => t.bucket === 'today' && !t.done);
-  const todayHabits = habits.length;
 
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   document.getElementById('dashSummary').textContent =
-    `Today is ${dateStr} — you have ${todayTasks.length} tasks, ${todayHabits} habits, ${focusSessions.length} focus blocks planned`;
+    `Today is ${dateStr} — ${todayTasks.length} tasks, ${habits.length} habits, ${focusSessions.length} focus sessions`;
 
   // Priorities
   const priEl = document.getElementById('dashPriorities');
@@ -931,7 +1282,7 @@ function renderDashboard() {
       `<div class="task-row"><span class="tag ${t.priority}">${t.priority.toUpperCase()}</span><span class="task-title" style="margin-left:8px">${esc(t.title)}</span></div>`
     ).join('');
   } else {
-    priEl.innerHTML = '<div class="empty">Set your intentions in Daily view</div>';
+    priEl.innerHTML = '<div class="empty"><span class="empty-icon">🎯</span>Set your intentions in Daily view</div>';
   }
 
   // Focus status
@@ -942,7 +1293,6 @@ function renderDashboard() {
     fsEl.innerHTML = `<div style="font-size:12px;color:var(--overlay0)">No active focus session</div>`;
   }
 
-  // Sparklines
   renderDashSparklines();
 
   // Habits
@@ -957,11 +1307,50 @@ function renderDashboard() {
       </div>`
     ).join('');
   } else {
-    dhEl.innerHTML = '<div class="empty">Add habits in ⚡ Habits view</div>';
+    dhEl.innerHTML = '<div class="empty"><span class="empty-icon">⚡</span>Add habits in ⚡ Habits view</div>';
   }
 
-  // Agent suggestions
+  // Agent OS Integration
+  loadAgentStatus();
+  loadPendingDecisions();
   loadSuggestions();
+}
+
+async function loadAgentStatus() {
+  const el = document.getElementById('agentStatusWidget');
+  const data = await Bridge.getSystemOverview();
+  if (data) {
+    const agentCount = data.agents?.length || data.agentCount || '?';
+    const uptime = data.uptime || 'unknown';
+    el.innerHTML = `<div class="agent-status-widget">
+      <div class="agent-status-dot online"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--green)">Online</div>
+        <div style="font-size:11px;color:var(--overlay0)">${agentCount} agents · uptime: ${uptime}</div>
+      </div>
+      <a href="/app/" class="btn sm ghost" style="text-decoration:none">Open →</a>
+    </div>`;
+  } else {
+    el.innerHTML = `<div class="agent-status-widget">
+      <div class="agent-status-dot offline"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--overlay0)">Offline</div>
+        <div style="font-size:11px;color:var(--overlay0)">Agent OS not reachable</div>
+      </div>
+    </div>`;
+  }
+}
+
+async function loadPendingDecisions() {
+  const data = await Bridge.getPendingProposals();
+  const countEl = document.getElementById('pendingCount');
+  if (data && Array.isArray(data)) {
+    countEl.textContent = data.length;
+    countEl.style.color = data.length > 0 ? 'var(--yellow)' : 'var(--green)';
+  } else {
+    countEl.textContent = '—';
+    countEl.style.color = 'var(--overlay0)';
+  }
 }
 
 function toggleHabitFromDash(id) {
@@ -976,7 +1365,7 @@ function renderDashSparklines() {
   const readings = getRecentEnergyReadings(7);
   if (!readings.length) return;
   const svgW = 240, svgH = 100, pad = 20;
-  ['Energy', 'Focus', 'Mood'].forEach((key, ki) => {
+  ['Energy', 'Focus', 'Mood'].forEach((key) => {
     const prop = key.toLowerCase();
     const el = document.getElementById('dashSpark' + key);
     const vals = readings.map(r => r[prop] || 5);
@@ -995,7 +1384,7 @@ async function loadSuggestions() {
     if (!Bridge.online) {
       document.getElementById('offlineBanner').classList.add('show');
     }
-    el.innerHTML = '<div class="empty">No suggestions from agents</div>';
+    el.innerHTML = '<div class="empty"><span class="empty-icon">💡</span>No suggestions from agents</div>';
     return;
   }
   el.innerHTML = data.slice(0, 5).map(s =>
@@ -1015,20 +1404,12 @@ async function loadSuggestions() {
 // ═══════════════════════════════════════════════════
 function renderDaily() {
   document.getElementById('dailyDate').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
-  // Load intentions
   const intentions = LS.get('intentions-' + todayStr(), ['','','']);
   document.getElementById('intention1').value = intentions[0] || '';
   document.getElementById('intention2').value = intentions[1] || '';
   document.getElementById('intention3').value = intentions[2] || '';
-
-  // Time blocks
   renderTimeBlocks();
-
-  // Energy sparklines
   renderEnergySparklines();
-
-  // Review
   const review = LS.get('review-' + todayStr(), {});
   document.getElementById('reviewWell').value = review.well || '';
   document.getElementById('reviewImprove').value = review.improve || '';
@@ -1055,7 +1436,7 @@ function renderTimeBlocks() {
   const blocks = LS.get('blocks-' + todayStr(), []);
   const el = document.getElementById('dailyTimeline');
   if (!blocks.length) {
-    el.innerHTML = '<div class="empty">No time blocks — add one below</div>';
+    el.innerHTML = '<div class="empty"><span class="empty-icon">🕐</span>No time blocks — add one below</div>';
     return;
   }
   const now = new Date();
@@ -1109,6 +1490,7 @@ function logEnergy() {
   readings.push({ date: todayStr(), time: nowISO(), energy: e, focus: f, mood: m });
   LS.set('energy', readings);
   Bridge.syncData('energy', readings);
+  showToast('Energy logged!', 'success');
   renderEnergySparklines();
 }
 
@@ -1133,13 +1515,8 @@ function renderEnergySparklines() {
   });
 }
 
-function quickFocus(mins) {
-  navigate('focus');
-  setTimeout(() => startFocus(mins, mins === 25 ? 'Pomodoro' : mins === 45 ? 'Deep Work' : 'Flow State'), 100);
-}
-
 // ═══════════════════════════════════════════════════
-// GOALS (4-level hierarchy)
+// GOALS (4-level hierarchy with milestones & OKR)
 // ═══════════════════════════════════════════════════
 function renderGoals() {
   const goals = LS.get('goals', getDefaultGoals());
@@ -1160,17 +1537,36 @@ function renderGoals() {
         <span style="font-size:12px;color:var(--overlay0)">${level.desc}</span>
         <button class="btn sm ghost" style="margin-left:auto" onclick="addGoal('${level.key}')">+ Add</button>
       </div>
-      ${items.length ? items.map(g => renderGoalCard(g, goals, level.color)).join('') : '<div class="empty">No ' + level.key + 's defined</div>'}
+      ${items.length ? items.map(g => renderGoalCard(g, goals, level.color)).join('') : `<div class="empty"><span class="empty-icon">${level.label.split(' ')[0]}</span>No ${level.key}s defined</div>`}
     </div>`;
   }).join('');
 }
 
 function renderGoalCard(goal, allGoals, color) {
   const children = allGoals.filter(g => g.parentId === goal.id);
+  const milestones = goal.milestones || [];
+  const keyResults = goal.keyResults || [];
   const progress = calcGoalProgress(goal, allGoals);
   const pctText = Math.round(progress * 100);
   const circumference = 2 * Math.PI * 16;
   const offset = circumference * (1 - progress);
+
+  let milestonesHtml = '';
+  if (milestones.length) {
+    milestonesHtml = `<div style="margin-top:8px">${milestones.map((m, mi) =>
+      `<div class="milestone-item">
+        <div class="milestone-check ${m.done ? 'done' : ''}" onclick="event.stopPropagation();toggleMilestone('${goal.id}',${mi})"></div>
+        <span class="milestone-text ${m.done ? 'done' : ''}">${esc(m.text)}</span>
+      </div>`
+    ).join('')}</div>`;
+  }
+
+  let keyResultsHtml = '';
+  if (keyResults.length) {
+    keyResultsHtml = `<div class="key-results">${keyResults.map(kr =>
+      `<div class="key-result">📏 ${esc(kr)}</div>`
+    ).join('')}</div>`;
+  }
 
   return `<div class="goal-card" style="border-left-color:${color}">
     <div style="display:flex;align-items:center;gap:12px">
@@ -1186,25 +1582,41 @@ function renderGoalCard(goal, allGoals, color) {
         <div class="goal-meta">
           ${goal.deadline ? `<span>Due: ${goal.deadline}</span>` : ''}
           <span>${children.length} children</span>
+          ${milestones.length ? `<span>${milestones.filter(m=>m.done).length}/${milestones.length} milestones</span>` : ''}
+          ${goal.missionStatus ? `<span class="tag tag-agent">🤖 ${goal.missionStatus}</span>` : ''}
         </div>
       </div>
-      <button class="btn sm danger" onclick="removeGoal('${goal.id}')" style="padding:2px 6px;font-size:10px">✕</button>
+      <div style="display:flex;gap:4px">
+        <button class="btn sm ghost" onclick="event.stopPropagation();addMilestone('${goal.id}')" title="Add milestone">+🏁</button>
+        <button class="btn sm ghost" onclick="event.stopPropagation();addKeyResult('${goal.id}')" title="Add key result">+📏</button>
+        <button class="btn sm danger" onclick="removeGoal('${goal.id}')" style="padding:2px 6px;font-size:10px">✕</button>
+      </div>
     </div>
+    ${keyResultsHtml}
+    ${milestonesHtml}
   </div>`;
 }
 
 function calcGoalProgress(goal, allGoals) {
+  const milestones = goal.milestones || [];
   const children = allGoals.filter(g => g.parentId === goal.id);
-  if (!children.length) return goal.done ? 1 : 0;
-  const childProgress = children.map(c => calcGoalProgress(c, allGoals));
-  return childProgress.reduce((a, b) => a + b, 0) / children.length;
+
+  // If has milestones, progress = milestone completion
+  if (milestones.length) {
+    return milestones.filter(m => m.done).length / milestones.length;
+  }
+  // If has children, average their progress
+  if (children.length) {
+    const childProgress = children.map(c => calcGoalProgress(c, allGoals));
+    return childProgress.reduce((a, b) => a + b, 0) / children.length;
+  }
+  return goal.done ? 1 : 0;
 }
 
 function addGoal(level) {
   const title = prompt(`New ${level} title:`);
   if (!title) return;
   const goals = LS.get('goals', getDefaultGoals());
-  // For non-aspirations, try to link to parent
   let parentId = null;
   if (level !== 'aspiration') {
     const parentLevel = level === 'mission' ? 'aspiration' : level === 'plan' ? 'mission' : 'plan';
@@ -1216,14 +1628,46 @@ function addGoal(level) {
       }
     }
   }
-  goals.push({ id: uid(), level, title, parentId, done: false, createdAt: nowISO() });
+  goals.push({ id: uid(), level, title, parentId, done: false, milestones: [], keyResults: [], createdAt: nowISO() });
+  LS.set('goals', goals);
+  renderGoals();
+}
+
+function addMilestone(goalId) {
+  const text = prompt('Milestone description:');
+  if (!text) return;
+  const goals = LS.get('goals', getDefaultGoals());
+  const goal = goals.find(g => g.id === goalId);
+  if (!goal) return;
+  if (!goal.milestones) goal.milestones = [];
+  goal.milestones.push({ text, done: false });
+  LS.set('goals', goals);
+  renderGoals();
+}
+
+function toggleMilestone(goalId, milestoneIdx) {
+  const goals = LS.get('goals', getDefaultGoals());
+  const goal = goals.find(g => g.id === goalId);
+  if (!goal || !goal.milestones || !goal.milestones[milestoneIdx]) return;
+  goal.milestones[milestoneIdx].done = !goal.milestones[milestoneIdx].done;
+  LS.set('goals', goals);
+  renderGoals();
+}
+
+function addKeyResult(goalId) {
+  const text = prompt('Key Result (OKR-style):');
+  if (!text) return;
+  const goals = LS.get('goals', getDefaultGoals());
+  const goal = goals.find(g => g.id === goalId);
+  if (!goal) return;
+  if (!goal.keyResults) goal.keyResults = [];
+  goal.keyResults.push(text);
   LS.set('goals', goals);
   renderGoals();
 }
 
 function removeGoal(id) {
   let goals = LS.get('goals', []);
-  // Remove this goal and all children
   const toRemove = new Set([id]);
   let changed = true;
   while (changed) {
@@ -1237,20 +1681,33 @@ function removeGoal(id) {
 
 function getDefaultGoals() {
   return [
-    { id: 'a1', level: 'aspiration', title: 'Master AI agent architecture', parentId: null, done: false },
-    { id: 'a2', level: 'aspiration', title: 'Build financial independence', parentId: null, done: false },
-    { id: 'm1', level: 'mission', title: 'Ship Agent OS v2', parentId: 'a1', done: false },
-    { id: 'm2', level: 'mission', title: 'Launch consulting practice', parentId: 'a2', done: false },
-    { id: 'p1', level: 'plan', title: 'Redesign proposals page', parentId: 'm1', done: false },
-    { id: 'p2', level: 'plan', title: 'Write pitch deck', parentId: 'm2', done: false },
+    { id: 'a1', level: 'aspiration', title: 'Master AI agent architecture', parentId: null, done: false, milestones: [], keyResults: ['Build 3 production agent systems', 'Contribute to 2 open-source agent frameworks'] },
+    { id: 'a2', level: 'aspiration', title: 'Build financial independence', parentId: null, done: false, milestones: [], keyResults: [] },
+    { id: 'm1', level: 'mission', title: 'Ship Agent OS v2', parentId: 'a1', done: false, milestones: [{text:'Core engine rewrite',done:true},{text:'Plugin system',done:false},{text:'UI dashboard',done:false}], keyResults: ['100+ daily active users', 'Sub-2s response time'] },
+    { id: 'm2', level: 'mission', title: 'Launch consulting practice', parentId: 'a2', done: false, milestones: [{text:'Write pitch deck',done:false},{text:'Land first client',done:false}], keyResults: [] },
+    { id: 'p1', level: 'plan', title: 'Redesign proposals page', parentId: 'm1', done: false, milestones: [], keyResults: [] },
+    { id: 'p2', level: 'plan', title: 'Write pitch deck', parentId: 'm2', done: false, milestones: [], keyResults: [] },
   ];
 }
 
 // ═══════════════════════════════════════════════════
-// TASKS (GTD)
+// TASKS (GTD) — Enhanced with notes, tags, subtasks, drag, delegate
 // ═══════════════════════════════════════════════════
 let currentTaskTab = 'inbox';
 let processingTaskId = null;
+let expandedTaskId = null;
+let activeTagFilter = null;
+let dragTaskId = null;
+
+const TAG_COLORS = {
+  work: 'tag-work', personal: 'tag-personal', health: 'tag-health',
+  learning: 'tag-learning', finance: 'tag-finance', urgent: 'tag-urgent',
+  agent: 'tag-agent', idea: 'tag-idea',
+};
+
+function getTagClass(tag) {
+  return TAG_COLORS[tag.toLowerCase()] || '';
+}
 
 function renderTasks() {
   const tasks = LS.get('tasks', []);
@@ -1259,6 +1716,26 @@ function renderTasks() {
   if (inbox.length) { badge.textContent = inbox.length; badge.style.display = 'inline'; }
   else { badge.style.display = 'none'; }
 
+  renderTagFilter();
+  renderTaskList();
+}
+
+function renderTagFilter() {
+  const tasks = LS.get('tasks', []);
+  const allTags = new Set();
+  tasks.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
+  const el = document.getElementById('taskTagFilter');
+  if (!allTags.size) { el.innerHTML = ''; return; }
+  el.innerHTML = `<span style="font-size:11px;color:var(--overlay0);padding:4px 0">Filter:</span>` +
+    [...allTags].map(tag =>
+      `<span class="tag ${getTagClass(tag)} clickable ${activeTagFilter === tag ? 'active-filter' : ''}" onclick="toggleTagFilter('${esc(tag)}')">${esc(tag)}</span>`
+    ).join('') +
+    (activeTagFilter ? `<span class="tag clickable" onclick="toggleTagFilter(null)" style="cursor:pointer">✕ Clear</span>` : '');
+}
+
+function toggleTagFilter(tag) {
+  activeTagFilter = activeTagFilter === tag ? null : tag;
+  renderTagFilter();
   renderTaskList();
 }
 
@@ -1283,8 +1760,21 @@ function renderTaskList() {
     default: filtered = [];
   }
 
+  // Apply tag filter
+  if (activeTagFilter) {
+    filtered = filtered.filter(t => (t.tags || []).includes(activeTagFilter));
+  }
+
   if (!filtered.length) {
-    el.innerHTML = `<div class="empty">${currentTaskTab === 'completed' ? 'No completed tasks yet' : 'No tasks here — great!'}</div>`;
+    const emptyMessages = {
+      inbox: { icon: '📥', msg: 'Inbox is empty — great!', hint: 'Add tasks above or brain dump ideas' },
+      today: { icon: '📌', msg: 'No tasks for today', hint: 'Process your inbox to schedule tasks' },
+      scheduled: { icon: '📅', msg: 'Nothing scheduled', hint: 'Defer tasks here for later' },
+      someday: { icon: '💭', msg: 'No someday/maybe items', hint: 'Park ideas you want to revisit' },
+      completed: { icon: '✅', msg: 'No completed tasks yet', hint: 'Check off tasks to see them here' },
+    };
+    const e = emptyMessages[currentTaskTab] || { icon: '📋', msg: 'No tasks', hint: '' };
+    el.innerHTML = `<div class="empty"><span class="empty-icon">${e.icon}</span>${e.msg}<div class="empty-hint">${e.hint}</div></div>`;
     return;
   }
 
@@ -1294,32 +1784,196 @@ function renderTaskList() {
     filtered.sort((a, b) => (priOrder[a.priority] || 2) - (priOrder[b.priority] || 2));
   }
 
-  el.innerHTML = filtered.map(t => `
-    <div class="task-row ${t.done ? 'done' : ''}">
-      <div class="task-check ${t.done ? 'done' : ''}" onclick="toggleTask('${t.id}')"></div>
-      <span class="tag ${t.priority}">${t.priority.toUpperCase()}</span>
-      <span class="task-title">${esc(t.title)}</span>
-      <span class="task-meta">
-        ${t.est ? `<span class="task-time">${esc(t.est)}</span>` : ''}
-        ${t.goalId ? '<span class="tag">🎯</span>' : ''}
-        ${currentTaskTab === 'inbox' ? `<button class="btn sm purple" onclick="event.stopPropagation();processTaskModal('${t.id}')">Process</button>` : ''}
-        ${currentTaskTab === 'completed' ? `<span class="task-time">${relTime(t.doneAt)}</span>` : ''}
-        <button class="btn sm danger" onclick="event.stopPropagation();removeTask('${t.id}')" style="padding:2px 6px;font-size:10px">✕</button>
-      </span>
+  el.innerHTML = filtered.map(t => {
+    const estClass = t.estimate === 'small' ? 'est-small' : t.estimate === 'medium' ? 'est-medium' : t.estimate === 'large' ? 'est-large' : '';
+    const estLabel = t.estimate === 'small' ? '🟢 S' : t.estimate === 'medium' ? '🟡 M' : t.estimate === 'large' ? '🔴 L' : '';
+    const subtasks = t.subtasks || [];
+    const subtasksDone = subtasks.filter(s => s.done).length;
+    const isExpanded = expandedTaskId === t.id;
+    const tagsHtml = (t.tags || []).map(tag => `<span class="tag ${getTagClass(tag)}">${esc(tag)}</span>`).join('');
+
+    return `
+      <div class="task-row ${t.done ? 'done' : ''}" draggable="true" data-task-id="${t.id}"
+        ondragstart="onDragStart(event,'${t.id}')" ondragover="onDragOver(event)" ondragend="onDragEnd(event)"
+        ondrop="onDrop(event,'${t.id}')">
+        <div class="task-check ${t.done ? 'done' : ''}" onclick="event.stopPropagation();toggleTask('${t.id}')"></div>
+        <span class="tag ${t.priority}">${t.priority.toUpperCase()}</span>
+        <span class="task-title" onclick="toggleTaskExpand('${t.id}')">${esc(t.title)}</span>
+        <span class="task-meta">
+          <span class="task-tags">${tagsHtml}</span>
+          ${estLabel ? `<span class="est-indicator ${estClass}">${estLabel}</span>` : ''}
+          ${subtasks.length ? `<span style="font-size:11px;color:var(--overlay0)">${subtasksDone}/${subtasks.length}</span>` : ''}
+          ${currentTaskTab === 'inbox' ? `<button class="btn sm purple" onclick="event.stopPropagation();processTaskModal('${t.id}')">Process</button>` : ''}
+          ${currentTaskTab === 'completed' ? `<span class="task-time">${relTime(t.doneAt)}</span>` : ''}
+          <button class="btn sm ghost" onclick="event.stopPropagation();delegateTask('${t.id}')" title="Delegate to Agent" style="padding:2px 6px;font-size:12px">🤖</button>
+          <button class="btn sm danger" onclick="event.stopPropagation();removeTask('${t.id}')" style="padding:2px 6px;font-size:10px">✕</button>
+        </span>
+      </div>
+      <div class="task-expand ${isExpanded ? 'open' : ''}" id="expand-${t.id}">
+        ${isExpanded ? renderTaskExpandContent(t) : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTaskExpandContent(t) {
+  const subtasks = t.subtasks || [];
+  return `
+    <div style="font-size:12px;color:var(--overlay0);margin-bottom:6px">Notes</div>
+    <textarea placeholder="Add notes..." style="width:100%;font-size:12px" onchange="updateTaskNotes('${t.id}',this.value)">${esc(t.notes || '')}</textarea>
+    <div style="display:flex;gap:4px;margin-top:8px;align-items:center">
+      <span style="font-size:12px;color:var(--overlay0)">Tags:</span>
+      <input type="text" placeholder="Add tag..." style="width:100px;font-size:11px;padding:3px 6px" id="addTagInput-${t.id}"
+        onkeydown="if(event.key==='Enter'){addTagToTask('${t.id}',this.value);this.value=''}">
     </div>
-  `).join('');
+    <div style="font-size:12px;color:var(--overlay0);margin-top:10px;margin-bottom:4px">Subtasks (${subtasks.filter(s=>s.done).length}/${subtasks.length})</div>
+    <div class="subtask-list">
+      ${subtasks.map((s, si) => `
+        <div class="subtask-row">
+          <div class="task-check ${s.done ? 'done' : ''}" style="width:14px;height:14px" onclick="toggleSubtask('${t.id}',${si})"></div>
+          <span style="${s.done ? 'text-decoration:line-through;color:var(--overlay0)' : ''}">${esc(s.text)}</span>
+          <button class="btn sm danger" onclick="removeSubtask('${t.id}',${si})" style="padding:1px 4px;font-size:9px;margin-left:auto">✕</button>
+        </div>
+      `).join('')}
+      <div style="display:flex;gap:4px;margin-top:4px">
+        <input type="text" placeholder="Add subtask..." style="flex:1;font-size:11px;padding:3px 6px" id="addSubInput-${t.id}"
+          onkeydown="if(event.key==='Enter'){addSubtask('${t.id}',this.value);this.value=''}">
+        <button class="btn sm" onclick="addSubtask('${t.id}',document.getElementById('addSubInput-${t.id}').value);document.getElementById('addSubInput-${t.id}').value=''" style="padding:2px 6px;font-size:10px">+</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleTaskExpand(id) {
+  if (expandedTaskId === id) {
+    expandedTaskId = null;
+  } else {
+    expandedTaskId = id;
+  }
+  renderTaskList();
+}
+
+function updateTaskNotes(id, notes) {
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === id);
+  if (t) { t.notes = notes; LS.set('tasks', tasks); }
+}
+
+function addTagToTask(id, tag) {
+  tag = tag.trim().toLowerCase();
+  if (!tag) return;
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  if (!t.tags) t.tags = [];
+  if (!t.tags.includes(tag)) t.tags.push(tag);
+  LS.set('tasks', tasks);
+  renderTaskList();
+  renderTagFilter();
+}
+
+function addSubtask(id, text) {
+  text = text.trim();
+  if (!text) return;
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  if (!t.subtasks) t.subtasks = [];
+  t.subtasks.push({ text, done: false });
+  LS.set('tasks', tasks);
+  renderTaskList();
+}
+
+function toggleSubtask(taskId, subIdx) {
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === taskId);
+  if (!t || !t.subtasks || !t.subtasks[subIdx]) return;
+  t.subtasks[subIdx].done = !t.subtasks[subIdx].done;
+  LS.set('tasks', tasks);
+  renderTaskList();
+}
+
+function removeSubtask(taskId, subIdx) {
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === taskId);
+  if (!t || !t.subtasks) return;
+  t.subtasks.splice(subIdx, 1);
+  LS.set('tasks', tasks);
+  renderTaskList();
+}
+
+// Drag and drop reorder
+function onDragStart(e, id) {
+  dragTaskId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => e.target.classList.add('dragging'), 0);
+}
+function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('drag-over'); }
+function onDragEnd(e) {
+  dragTaskId = null;
+  document.querySelectorAll('.task-row').forEach(r => { r.classList.remove('dragging','drag-over'); });
+}
+function onDrop(e, targetId) {
+  e.preventDefault();
+  if (!dragTaskId || dragTaskId === targetId) return;
+  const tasks = LS.get('tasks', []);
+  const fromIdx = tasks.findIndex(t => t.id === dragTaskId);
+  const toIdx = tasks.findIndex(t => t.id === targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = tasks.splice(fromIdx, 1);
+  tasks.splice(toIdx, 0, moved);
+  LS.set('tasks', tasks);
+  renderTaskList();
+  document.querySelectorAll('.task-row').forEach(r => r.classList.remove('drag-over'));
+}
+
+// Delegate to Agent
+let dispatchingTaskId = null;
+function delegateTask(id) {
+  dispatchingTaskId = id;
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('dispatchTaskText').textContent = t.title;
+  document.getElementById('dispatchInstructions').value = '';
+  document.getElementById('dispatchModal').classList.add('show');
+}
+
+async function confirmDispatch() {
+  if (!dispatchingTaskId) return;
+  const tasks = LS.get('tasks', []);
+  const t = tasks.find(x => x.id === dispatchingTaskId);
+  if (!t) return;
+  const instructions = document.getElementById('dispatchInstructions').value.trim();
+  const payload = { title: t.title, description: (t.notes || '') + (instructions ? '\n\n' + instructions : ''), source: 'life-os' };
+  const result = await Bridge.postTask(payload);
+  if (result) {
+    showToast('Task dispatched to Agent OS!', 'success');
+    if (!t.tags) t.tags = [];
+    if (!t.tags.includes('agent')) t.tags.push('agent');
+    LS.set('tasks', tasks);
+  } else {
+    showToast('Could not dispatch — Agent OS offline', 'error');
+  }
+  closeModal('dispatchModal');
+  dispatchingTaskId = null;
+  renderTaskList();
 }
 
 function addTask() {
   const title = document.getElementById('newTaskInput').value.trim();
   if (!title) return;
   const priority = document.getElementById('newTaskPriority').value;
-  const est = document.getElementById('newTaskTime').value.trim();
+  const estimate = document.getElementById('newTaskEstimate').value;
+  const tagsRaw = document.getElementById('newTaskTags').value.trim();
+  const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
   const tasks = LS.get('tasks', []);
-  tasks.push({ id: uid(), title, priority, est, bucket: 'inbox', done: false, createdAt: nowISO() });
+  tasks.push({ id: uid(), title, priority, estimate, tags, bucket: 'inbox', done: false, notes: '', subtasks: [], createdAt: nowISO() });
   LS.set('tasks', tasks);
   document.getElementById('newTaskInput').value = '';
-  document.getElementById('newTaskTime').value = '';
+  document.getElementById('newTaskTags').value = '';
+  document.getElementById('newTaskEstimate').value = '';
+  showToast('Task added', 'success');
   renderTasks();
 }
 
@@ -1356,9 +2010,7 @@ function processTask(bucket) {
   const t = tasks.find(x => x.id === processingTaskId);
   if (t) {
     if (bucket === 'do') {
-      t.bucket = 'today';
-      t.done = true;
-      t.doneAt = nowISO();
+      t.bucket = 'today'; t.done = true; t.doneAt = nowISO();
     } else {
       t.bucket = bucket;
     }
@@ -1367,6 +2019,10 @@ function processTask(bucket) {
   processingTaskId = null;
   document.getElementById('taskProcessModal').classList.remove('show');
   renderTasks();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
 }
 
 // ═══════════════════════════════════════════════════
@@ -1380,10 +2036,10 @@ function renderBrainDump() {
   const el = document.getElementById('dumpList');
   const unprocessed = dumps.filter(d => !d.processed);
   if (!unprocessed.length) {
-    el.innerHTML = '<div class="empty">No unprocessed thoughts — brain clear! 🧘</div>';
+    el.innerHTML = '<div class="empty"><span class="empty-icon">🧘</span>No unprocessed thoughts — brain clear!</div>';
     return;
   }
-  el.innerHTML = unprocessed.map((d, i) =>
+  el.innerHTML = unprocessed.map((d) =>
     `<div class="task-row">
       <span class="task-title">${esc(d.text)}</span>
       <span class="task-time">${relTime(d.createdAt)}</span>
@@ -1397,20 +2053,17 @@ function captureDump() {
   const text = document.getElementById('dumpTextarea').value.trim();
   if (!text) return;
   const dumps = LS.get('dumps', []);
-  // Split by newlines if multiple
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   lines.forEach(line => {
     dumps.push({ id: uid(), text: line, processed: false, createdAt: nowISO() });
   });
   LS.set('dumps', dumps);
   document.getElementById('dumpTextarea').value = '';
-  Bridge.syncData('dumps', dumps);
+  showToast(`Captured ${lines.length} thought${lines.length > 1 ? 's' : ''}`, 'success');
   renderBrainDump();
 }
 
 function processSingleDump(idx) {
-  const dumps = LS.get('dumps', []);
-  if (!dumps[idx]) return;
   dumpProcessQueue = [idx];
   processingDumpIdx = 0;
   showProcessModal();
@@ -1440,21 +2093,18 @@ function routeDump(dest) {
   const dumps = LS.get('dumps', []);
   const idx = dumpProcessQueue[processingDumpIdx];
   const dump = dumps[idx];
-
   if (dest === 'task') {
     const tasks = LS.get('tasks', []);
-    tasks.push({ id: uid(), title: dump.text, priority: 'p2', est: '', bucket: 'inbox', done: false, createdAt: nowISO() });
+    tasks.push({ id: uid(), title: dump.text, priority: 'p2', estimate: '', tags: [], bucket: 'inbox', done: false, notes: '', subtasks: [], createdAt: nowISO() });
     LS.set('tasks', tasks);
   } else if (dest === 'journal') {
     const entries = LS.get('journal', []);
-    entries.push({ id: uid(), date: todayStr(), mood: '😐', gratitude: '', reflection: dump.text, createdAt: nowISO() });
+    entries.push({ id: uid(), date: todayStr(), mood: '😐', energy: 0, gratitude: '', reflection: dump.text, createdAt: nowISO() });
     LS.set('journal', entries);
   }
-  // vault = just mark processed (would need bridge)
   dump.processed = true;
   dump.routedTo = dest;
   LS.set('dumps', dumps);
-
   processingDumpIdx++;
   showProcessModal();
 }
@@ -1468,27 +2118,51 @@ function dismissDump(idx) {
 }
 
 // ═══════════════════════════════════════════════════
-// FOCUS TIMER
+// FOCUS TIMER — Enhanced with presets, session log, ambient, task link
 // ═══════════════════════════════════════════════════
-const FOCUS_CIRC = 2 * Math.PI * 88; // ~553
-const focusState = { active: false, task: '', endTime: 0, totalMs: 0, remaining: 0, interval: null };
+const FOCUS_CIRC = 2 * Math.PI * 88;
+const focusState = { active: false, onBreak: false, task: '', endTime: 0, totalMs: 0, remaining: 0, breakMs: 0, interval: null };
+let activeAmbient = null;
 
 function renderFocus() {
+  populateFocusTaskSelect();
   renderFocusStats();
   renderFocusSessionLog();
   renderDistractionLog();
   updateFocusUI();
 }
 
-function startFocus(mins, type) {
-  const task = document.getElementById('focusTaskName')?.value.trim() || type || 'Focus';
+function populateFocusTaskSelect() {
+  const tasks = LS.get('tasks', []);
+  const todayTasks = tasks.filter(t => t.bucket === 'today' && !t.done);
+  const sel = document.getElementById('focusTaskSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select a task...</option>' +
+    todayTasks.map(t => `<option value="${esc(t.title)}">${esc(t.title)}</option>`).join('');
+}
+
+function startFocus(mins, breakMins, type) {
+  const selTask = document.getElementById('focusTaskSelect')?.value;
+  const typedTask = document.getElementById('focusTaskName')?.value.trim();
+  const task = selTask || typedTask || type || 'Focus';
   focusState.active = true;
+  focusState.onBreak = false;
   focusState.task = task;
   focusState.totalMs = mins * 60000;
   focusState.endTime = Date.now() + focusState.totalMs;
   focusState.type = type;
+  focusState.breakMs = (breakMins || 0) * 60000;
   updateFocusUI();
+  runFocusTimer();
+}
 
+function startCustomFocus() {
+  const mins = parseInt(document.getElementById('customFocusMins')?.value) || 25;
+  const breakMins = parseInt(document.getElementById('customBreakMins')?.value) || 0;
+  startFocus(mins, breakMins, 'Custom');
+}
+
+function runFocusTimer() {
   if (focusState.interval) clearInterval(focusState.interval);
   focusState.interval = setInterval(() => {
     focusState.remaining = Math.max(0, focusState.endTime - Date.now());
@@ -1498,8 +2172,20 @@ function startFocus(mins, type) {
     const progress = 1 - (focusState.remaining / focusState.totalMs);
     document.getElementById('focusArc').setAttribute('stroke-dashoffset', FOCUS_CIRC * (1 - progress));
 
+    // Update current task display
+    const ctEl = document.getElementById('focusCurrentTask');
+    const ctNameEl = document.getElementById('focusCurrentTaskName');
+    if (focusState.active && !focusState.onBreak) {
+      ctEl.style.display = 'block';
+      ctNameEl.textContent = focusState.task;
+    }
+
     if (focusState.remaining <= 0) {
-      completeFocus();
+      if (focusState.onBreak) {
+        endBreak();
+      } else {
+        completeFocus();
+      }
     }
   }, 500);
 }
@@ -1512,16 +2198,45 @@ function stopFocus() {
 
 function completeFocus() {
   logFocusSession(focusState.task, Math.round(focusState.totalMs / 60000), focusState.type, true);
+  showToast('Focus session complete! 🎉', 'success');
+
+  // Start break if configured
+  if (focusState.breakMs > 0) {
+    focusState.onBreak = true;
+    focusState.totalMs = focusState.breakMs;
+    focusState.endTime = Date.now() + focusState.breakMs;
+    focusState.remaining = focusState.breakMs;
+    document.getElementById('focusArc').setAttribute('stroke', 'var(--green)');
+    document.getElementById('focusTaskDisplay').textContent = '☕ Break';
+    document.getElementById('focusActiveControls').style.display = 'none';
+    document.getElementById('focusBreakControls').style.display = 'block';
+    renderFocusSessionLog();
+    renderFocusStats();
+    return;
+  }
+  resetFocusState();
+}
+
+function endBreak() {
+  showToast('Break over — back to work!', 'info');
+  resetFocusState();
+}
+
+function skipBreak() {
   resetFocusState();
 }
 
 function resetFocusState() {
   if (focusState.interval) clearInterval(focusState.interval);
   focusState.active = false;
+  focusState.onBreak = false;
   focusState.task = '';
   focusState.remaining = 0;
   document.getElementById('focusTimeDisplay').textContent = '00:00';
   document.getElementById('focusArc').setAttribute('stroke-dashoffset', '0');
+  document.getElementById('focusArc').setAttribute('stroke', 'var(--purple)');
+  document.getElementById('focusCurrentTask').style.display = 'none';
+  document.getElementById('focusBreakControls').style.display = 'none';
   updateFocusUI();
   renderFocusStats();
   renderFocusSessionLog();
@@ -1531,14 +2246,28 @@ function updateFocusUI() {
   const startEl = document.getElementById('focusStartControls');
   const activeEl = document.getElementById('focusActiveControls');
   const taskEl = document.getElementById('focusTaskDisplay');
-  if (focusState.active) {
+  if (focusState.active && !focusState.onBreak) {
     if (startEl) startEl.style.display = 'none';
     if (activeEl) activeEl.style.display = 'block';
     if (taskEl) taskEl.textContent = focusState.task;
-  } else {
+  } else if (!focusState.onBreak) {
     if (startEl) startEl.style.display = 'block';
     if (activeEl) activeEl.style.display = 'none';
     if (taskEl) taskEl.textContent = '';
+  }
+}
+
+function toggleAmbient(type) {
+  const btn = document.getElementById('amb-' + type);
+  if (activeAmbient === type) {
+    activeAmbient = null;
+    btn.classList.remove('active');
+    showToast('Ambient sound stopped', 'info');
+  } else {
+    document.querySelectorAll('.ambient-btn').forEach(b => b.classList.remove('active'));
+    activeAmbient = type;
+    btn.classList.add('active');
+    showToast(`Playing: ${type} (placeholder)`, 'info');
   }
 }
 
@@ -1556,6 +2285,8 @@ function renderFocusStats() {
   const today = getTodayFocusSessions();
   const totalMin = today.reduce((s, f) => s + (f.mins || 0), 0);
   const distractions = LS.get('distractions', []).filter(d => d.date === todayStr());
+  const hrs = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
 
   document.getElementById('focusTotalToday').textContent = totalMin;
   document.getElementById('focusSessionsToday').textContent = today.length;
@@ -1567,12 +2298,11 @@ function renderFocusStats() {
   for (let i = 0; i < 365; i++) {
     const ds = d.toISOString().slice(0, 10);
     if (allSessions.some(s => s.date === ds)) { streak++; d.setDate(d.getDate() - 1); }
-    else if (i === 0) { d.setDate(d.getDate() - 1); continue; } // Today might not have sessions yet
+    else if (i === 0) { d.setDate(d.getDate() - 1); continue; }
     else break;
   }
   document.getElementById('focusStreak').textContent = streak;
 
-  // Deep work score
   if (totalMin > 0) {
     const score = Math.max(0, Math.round(((totalMin - distractions.length * 5) / totalMin) * 100));
     document.getElementById('focusDeepScore').textContent = score + '%';
@@ -1585,8 +2315,17 @@ function renderFocusSessionLog() {
   const today = getTodayFocusSessions();
   const el = document.getElementById('focusSessionLog');
   if (!el) return;
-  if (!today.length) { el.innerHTML = '<div class="empty">No sessions yet</div>'; return; }
-  el.innerHTML = today.map(s =>
+  if (!today.length) { el.innerHTML = '<div class="empty"><span class="empty-icon">⏱️</span>No sessions yet</div>'; return; }
+
+  // Daily stats summary
+  const totalMin = today.reduce((s, f) => s + (f.mins || 0), 0);
+  const hrs = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  const statsHtml = `<div style="font-size:12px;color:var(--subtext0);margin-bottom:8px;padding:6px;background:var(--bg-crust);border-radius:4px">
+    ${today.length} session${today.length!==1?'s':''}, ${hrs > 0 ? hrs + 'h ' : ''}${mins}m focused today
+  </div>`;
+
+  el.innerHTML = statsHtml + today.map(s =>
     `<div class="task-row">
       <span style="color:${s.completed ? 'var(--green)' : 'var(--red)'}; margin-right:6px">${s.completed ? '✓' : '✕'}</span>
       <span class="task-title">${esc(s.task)}</span>
@@ -1608,7 +2347,7 @@ function renderDistractionLog() {
   const distractions = LS.get('distractions', []).filter(d => d.date === todayStr());
   const el = document.getElementById('distractionLog');
   if (!el) return;
-  if (!distractions.length) { el.innerHTML = '<div class="empty">No distractions — nice!</div>'; return; }
+  if (!distractions.length) { el.innerHTML = '<div class="empty"><span class="empty-icon">🧘</span>No distractions — nice!</div>'; return; }
   el.innerHTML = distractions.map(d =>
     `<div class="distraction-item">
       <span class="ts">${new Date(d.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
@@ -1617,160 +2356,9 @@ function renderDistractionLog() {
   ).join('');
 }
 
-// ═══════════════════════════════════════════════════
-// ANALYTICS
-// ═══════════════════════════════════════════════════
-function renderAnalytics() {
-  renderAnalyticsEnergy();
-  renderAnalyticsFocus();
-  renderAnalyticsGoals();
-  renderAnalyticsHabits();
-  renderWeeklySummary();
-}
-
-function renderAnalyticsEnergy() {
-  const readings = getRecentEnergyReadings(7);
-  const el = document.getElementById('energyLineChart');
-  if (!readings.length) { el.innerHTML = '<text x="150" y="70" text-anchor="middle" fill="var(--overlay0)" font-size="13">No energy data yet</text>'; return; }
-
-  const w = 300, h = 130, pad = 30;
-  const grouped = {};
-  readings.forEach(r => {
-    const d = r.date || r.time?.slice(0,10);
-    if (!grouped[d]) grouped[d] = { energy: [], focus: [], mood: [] };
-    grouped[d].energy.push(r.energy);
-    grouped[d].focus.push(r.focus);
-    grouped[d].mood.push(r.mood);
-  });
-  const days = Object.keys(grouped).sort().slice(-7);
-  const avg = arr => arr.reduce((a,b) => a+b, 0) / arr.length;
-
-  // Grid lines
-  let svg = '';
-  for (let i = 2; i <= 10; i += 2) {
-    const y = h - pad - ((i - 1) / 9) * (h - pad * 2);
-    svg += `<line x1="${pad}" y1="${y}" x2="${w-10}" y2="${y}" stroke="var(--surface1)" stroke-width="0.5"/>`;
-    svg += `<text x="${pad-4}" y="${y+3}" text-anchor="end" fill="var(--overlay0)" font-size="8">${i}</text>`;
-  }
-
-  ['energy', 'focus', 'mood'].forEach((key, ki) => {
-    const colors = ['var(--yellow)', 'var(--blue)', 'var(--pink)'];
-    const vals = days.map(d => avg(grouped[d][key]));
-    const xStep = days.length > 1 ? (w - pad - 10) / (days.length - 1) : 0;
-    const pts = vals.map((v, i) => `${pad + i * xStep},${h - pad - ((v - 1) / 9) * (h - pad * 2)}`);
-    svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[ki]}" stroke-width="2" stroke-linecap="round"/>`;
-    // Dots
-    pts.forEach(p => {
-      const [x, y] = p.split(',');
-      svg += `<circle cx="${x}" cy="${y}" r="3" fill="${colors[ki]}"/>`;
-    });
-  });
-
-  // Day labels
-  days.forEach((d, i) => {
-    const xStep = days.length > 1 ? (w - pad - 10) / (days.length - 1) : 0;
-    const x = pad + i * xStep;
-    const label = new Date(d + 'T00:00').toLocaleDateString('en', { weekday: 'short' });
-    svg += `<text x="${x}" y="${h-8}" text-anchor="middle" fill="var(--overlay0)" font-size="9">${label}</text>`;
-  });
-
-  el.innerHTML = svg;
-}
-
-function renderAnalyticsFocus() {
-  const el = document.getElementById('focusBarChart');
-  const allSessions = LS.get('focus-sessions', []);
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-  const maxMin = Math.max(60, ...days.map(d => allSessions.filter(s => s.date === d).reduce((s, f) => s + f.mins, 0)));
-
-  el.innerHTML = days.map(d => {
-    const mins = allSessions.filter(s => s.date === d).reduce((s, f) => s + f.mins, 0);
-    const pct = (mins / maxMin) * 100;
-    const label = new Date(d + 'T00:00').toLocaleDateString('en', { weekday: 'short' });
-    const hrs = (mins / 60).toFixed(1);
-    return `<div class="bar-col">
-      <div class="bar-value">${hrs}h</div>
-      <div class="bar" style="height:${pct}%;background:var(--purple);width:100%"></div>
-      <div class="bar-label">${label}</div>
-    </div>`;
-  }).join('');
-}
-
-function renderAnalyticsGoals() {
-  const goals = LS.get('goals', getDefaultGoals());
-  const missions = goals.filter(g => g.level === 'mission');
-  const el = document.getElementById('analyticsGoals');
-  if (!missions.length) { el.innerHTML = '<div class="empty">No missions tracked</div>'; return; }
-
-  el.innerHTML = missions.map(m => {
-    const progress = Math.round(calcGoalProgress(m, goals) * 100);
-    return `<div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-        <span>${esc(m.title)}</span><span style="color:var(--subtext0)">${progress}%</span>
-      </div>
-      <div style="height:8px;background:var(--surface1);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${progress}%;background:var(--purple);border-radius:4px;transition:width .3s"></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderAnalyticsHabits() {
-  const habits = LS.get('habits', []);
-  const el = document.getElementById('analyticsHabitGraph');
-  if (!habits.length) { el.innerHTML = '<div class="empty">No habits to graph</div>'; return; }
-
-  // 4 weeks of data
-  const days = [];
-  for (let i = 27; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-
-  const totalHabits = habits.length;
-  el.innerHTML = `<div style="display:flex;gap:2px;flex-wrap:wrap">${days.map(d => {
-    const log = LS.get('habit-log-' + d, {});
-    const done = Object.values(log).filter(Boolean).length;
-    const ratio = totalHabits ? done / totalHabits : 0;
-    const level = ratio === 0 ? '' : ratio < 0.34 ? 'l1' : ratio < 0.67 ? 'l2' : ratio < 1 ? 'l3' : 'l4';
-    const isToday = d === todayStr();
-    return `<div class="contrib-cell ${level}" title="${d}: ${done}/${totalHabits}" ${isToday ? 'style="border:1px solid var(--gold)"' : ''}></div>`;
-  }).join('')}</div>
-  <div style="font-size:10px;color:var(--overlay0);margin-top:6px;display:flex;gap:8px;align-items:center">
-    Less <div class="contrib-cell" style="display:inline-block;width:10px;height:10px"></div>
-    <div class="contrib-cell l1" style="display:inline-block;width:10px;height:10px"></div>
-    <div class="contrib-cell l2" style="display:inline-block;width:10px;height:10px"></div>
-    <div class="contrib-cell l3" style="display:inline-block;width:10px;height:10px"></div>
-    <div class="contrib-cell l4" style="display:inline-block;width:10px;height:10px"></div> More
-  </div>`;
-}
-
-function renderWeeklySummary() {
-  const allSessions = LS.get('focus-sessions', []);
-  const tasks = LS.get('tasks', []);
-  const habits = LS.get('habits', []);
-
-  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekStr = weekAgo.toISOString().slice(0, 10);
-
-  const weekSessions = allSessions.filter(s => s.date >= weekStr);
-  const weekMins = weekSessions.reduce((s, f) => s + f.mins, 0);
-  const weekTasksDone = tasks.filter(t => t.done && t.doneAt && t.doneAt.slice(0, 10) >= weekStr).length;
-
-  let habitsKept = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().slice(0, 10);
-    const log = LS.get('habit-log-' + ds, {});
-    if (Object.values(log).some(Boolean)) habitsKept++;
-  }
-
-  document.getElementById('analyticsSummary').textContent =
-    `This week: ${(weekMins / 60).toFixed(1)} hours focused, ${weekTasksDone} tasks done, ${habitsKept}/7 days with habits`;
+function quickFocus(mins) {
+  navigate('focus');
+  setTimeout(() => startFocus(mins, mins === 25 ? 5 : 0, mins === 25 ? 'Pomodoro' : 'Deep Work'), 200);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1780,10 +2368,9 @@ function renderHabits() {
   const habits = LS.get('habits', []);
   const todayLog = LS.get('habit-log-' + todayStr(), {});
 
-  // Today's checklist
   const todayEl = document.getElementById('habitTodayList');
   if (!habits.length) {
-    todayEl.innerHTML = '<div class="empty">No habits defined — add one below!</div>';
+    todayEl.innerHTML = '<div class="empty"><span class="empty-icon">⚡</span>No habits defined — add one below!</div>';
   } else {
     todayEl.innerHTML = habits.map(h =>
       `<div class="task-row" onclick="toggleHabit('${h.id}')" style="cursor:pointer">
@@ -1796,7 +2383,6 @@ function renderHabits() {
     ).join('');
   }
 
-  // Streaks
   const streakEl = document.getElementById('habitStreaks');
   if (!habits.length) {
     streakEl.innerHTML = '<div class="empty">Add habits to see streaks</div>';
@@ -1817,7 +2403,6 @@ function renderHabits() {
     }).join('');
   }
 
-  // Suggestions
   loadHabitSuggestions();
 }
 
@@ -1829,6 +2414,7 @@ function addHabit() {
   habits.push({ id: uid(), name, freq, createdAt: nowISO() });
   LS.set('habits', habits);
   document.getElementById('newHabitName').value = '';
+  showToast('Habit added!', 'success');
   renderHabits();
 }
 
@@ -1883,20 +2469,50 @@ function adoptHabitSuggestion(name) {
 }
 
 // ═══════════════════════════════════════════════════
-// JOURNAL
+// JOURNAL — Enhanced with mood (5 emojis), energy, prompts, vault
 // ═══════════════════════════════════════════════════
 let selectedMood = '';
+let selectedEnergy = 0;
+
+const JOURNAL_PROMPTS = [
+  "What's one thing you learned today that surprised you?",
+  "What would you tell your past self from a week ago?",
+  "What's draining your energy right now? What's energizing you?",
+  "If today were your last day working on this project, what would you prioritize?",
+  "What assumption are you making that might be wrong?",
+  "What's one small win you can celebrate today?",
+  "Who helped you recently? How can you pay it forward?",
+  "What would you do differently if you could restart this week?",
+  "What are you avoiding? Why?",
+  "What does 'good enough' look like for your current task?",
+];
 
 function renderJournal() {
   selectedMood = '';
+  selectedEnergy = 0;
   document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.energy-btn').forEach(b => b.classList.remove('active'));
+  refreshPrompt();
   renderJournalEntries();
+}
+
+function refreshPrompt() {
+  const idx = Math.floor(Math.random() * JOURNAL_PROMPTS.length);
+  document.getElementById('journalPromptText').textContent = JOURNAL_PROMPTS[idx];
 }
 
 function selectMood(emoji) {
   selectedMood = emoji;
   document.querySelectorAll('.mood-btn').forEach(b => {
     b.classList.toggle('selected', b.textContent === emoji);
+  });
+}
+
+function selectEnergy(level) {
+  selectedEnergy = level;
+  document.querySelectorAll('.energy-btn').forEach(b => {
+    const bl = parseInt(b.dataset.level);
+    b.classList.toggle('active', bl <= level);
   });
 }
 
@@ -1907,31 +2523,43 @@ function saveJournalEntry() {
 
   const entries = LS.get('journal', []);
   entries.push({
-    id: uid(),
-    date: todayStr(),
-    mood: selectedMood || '😐',
-    gratitude,
-    reflection,
-    createdAt: nowISO(),
+    id: uid(), date: todayStr(), mood: selectedMood || '😐', energy: selectedEnergy,
+    gratitude, reflection, createdAt: nowISO(),
   });
   LS.set('journal', entries);
 
   document.getElementById('journalGratitude').value = '';
   document.getElementById('journalReflection').value = '';
   selectedMood = '';
+  selectedEnergy = 0;
   document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.energy-btn').forEach(b => b.classList.remove('active'));
+  showToast('Journal entry saved!', 'success');
   renderJournalEntries();
+}
+
+async function saveToVault() {
+  const gratitude = document.getElementById('journalGratitude').value.trim();
+  const reflection = document.getElementById('journalReflection').value.trim();
+  const content = `# Journal Entry — ${todayStr()}\n\nMood: ${selectedMood || '😐'}\nEnergy: ${selectedEnergy || '?'}/5\n\n## Grateful For\n${gratitude || 'N/A'}\n\n## Reflection\n${reflection || 'N/A'}`;
+  const result = await Bridge.saveToVault({ path: `journal/${todayStr()}.md`, content });
+  if (result) {
+    showToast('Saved to vault!', 'success');
+  } else {
+    showToast('Vault save unavailable — entry saved locally', 'info');
+  }
 }
 
 function renderJournalEntries() {
   const entries = LS.get('journal', []).slice().reverse();
   const el = document.getElementById('journalEntries');
-  if (!entries.length) { el.innerHTML = '<div class="empty">No journal entries yet — start writing!</div>'; return; }
+  if (!entries.length) { el.innerHTML = '<div class="empty"><span class="empty-icon">📝</span>No journal entries yet<div class="empty-hint">Start writing above!</div></div>'; return; }
 
   el.innerHTML = entries.slice(0, 20).map(e => {
     const tags = autoTag(e.reflection + ' ' + e.gratitude);
+    const energyDisplay = e.energy ? '⚡'.repeat(e.energy) : '';
     return `<div class="journal-entry">
-      <div class="mood-display">${e.mood}</div>
+      <div class="mood-display">${e.mood} ${energyDisplay}</div>
       <div class="date">${formatDate(e.date)} ${e.createdAt ? '· ' + new Date(e.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : ''}</div>
       ${e.gratitude ? `<div style="font-size:13px;margin-bottom:6px"><strong>Grateful for:</strong> ${esc(e.gratitude)}</div>` : ''}
       ${e.reflection ? `<div style="font-size:13px">${esc(e.reflection)}</div>` : ''}
@@ -1954,6 +2582,289 @@ function autoTag(text) {
 }
 
 // ═══════════════════════════════════════════════════
+// CALENDAR — Shows focus sessions, completed tasks, journal
+// ═══════════════════════════════════════════════════
+let calYear, calMonth;
+{
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+}
+
+function renderCalendar() {
+  const now = new Date();
+  document.getElementById('calMonthLabel').textContent = new Date(calYear, calMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+  const todayDate = todayStr();
+
+  // Gather data
+  const allSessions = LS.get('focus-sessions', []);
+  const allTasks = LS.get('tasks', []);
+  const allJournal = LS.get('journal', []);
+
+  let html = '<div class="cal-header">Sun</div><div class="cal-header">Mon</div><div class="cal-header">Tue</div><div class="cal-header">Wed</div><div class="cal-header">Thu</div><div class="cal-header">Fri</div><div class="cal-header">Sat</div>';
+
+  // Previous month padding
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const day = daysInPrev - i;
+    html += `<div class="cal-cell other-month"><div class="cal-day-num">${day}</div></div>`;
+  }
+
+  // Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = dateStr === todayDate;
+    const sessions = allSessions.filter(s => s.date === dateStr);
+    const completedTasks = allTasks.filter(t => t.done && t.doneAt && t.doneAt.slice(0, 10) === dateStr);
+    const journals = allJournal.filter(j => j.date === dateStr);
+
+    let events = '';
+    sessions.forEach(s => { events += `<div class="cal-event focus">${s.mins}m ${esc(s.task).slice(0,15)}</div>`; });
+    completedTasks.slice(0, 2).forEach(t => { events += `<div class="cal-event task">✅ ${esc(t.title).slice(0,15)}</div>`; });
+    if (completedTasks.length > 2) events += `<div class="cal-event task">+${completedTasks.length - 2} more</div>`;
+    journals.forEach(j => { events += `<div class="cal-event journal">📝 ${j.mood}</div>`; });
+
+    html += `<div class="cal-cell ${isToday ? 'today' : ''}"><div class="cal-day-num">${d}</div>${events}</div>`;
+  }
+
+  // Next month padding
+  const totalCells = firstDay + daysInMonth;
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= remaining; i++) {
+    html += `<div class="cal-cell other-month"><div class="cal-day-num">${i}</div></div>`;
+  }
+
+  document.getElementById('calGrid').innerHTML = html;
+}
+
+function changeCalMonth(delta) {
+  calMonth += delta;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function calToday() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  renderCalendar();
+}
+
+// ═══════════════════════════════════════════════════
+// REVIEW — Weekly review template with stats
+// ═══════════════════════════════════════════════════
+const REVIEW_ITEMS = [
+  'Process inbox to zero',
+  'Review active tasks',
+  'Review goals progress',
+  'Clear completed items',
+  'Plan next week\'s priorities',
+];
+
+function renderReview() {
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekStr = weekAgo.toISOString().slice(0, 10);
+
+  const tasks = LS.get('tasks', []);
+  const weekTasksDone = tasks.filter(t => t.done && t.doneAt && t.doneAt.slice(0, 10) >= weekStr).length;
+
+  const allSessions = LS.get('focus-sessions', []);
+  const weekSessions = allSessions.filter(s => s.date >= weekStr);
+  const weekMins = weekSessions.reduce((s, f) => s + f.mins, 0);
+
+  const allJournal = LS.get('journal', []);
+  const weekJournal = allJournal.filter(j => j.date >= weekStr).length;
+
+  document.getElementById('reviewTasksDone').textContent = weekTasksDone;
+  document.getElementById('reviewFocusTime').textContent = (weekMins / 60).toFixed(1) + 'h';
+  document.getElementById('reviewJournalCount').textContent = weekJournal;
+
+  // Checklist
+  const checks = LS.get('review-checks-' + getWeekStr(), {});
+  const checkEl = document.getElementById('reviewChecklist');
+  checkEl.innerHTML = REVIEW_ITEMS.map((item, i) =>
+    `<div class="review-check ${checks[i] ? 'checked' : ''}" onclick="toggleReviewCheck(${i})">
+      <div class="task-check ${checks[i] ? 'done' : ''}"></div>
+      <span class="review-label">${item}</span>
+    </div>`
+  ).join('');
+
+  // Stats
+  const statsEl = document.getElementById('reviewStats');
+  let habitsKept = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    const log = LS.get('habit-log-' + ds, {});
+    if (Object.values(log).some(Boolean)) habitsKept++;
+  }
+
+  const activeTasks = tasks.filter(t => !t.done).length;
+  const inboxCount = tasks.filter(t => t.bucket === 'inbox' && !t.done).length;
+  const distractions = LS.get('distractions', []).filter(d => d.date >= weekStr).length;
+
+  statsEl.innerHTML = `
+    <div class="task-row"><span class="task-title">Active tasks</span><span style="font-weight:700">${activeTasks}</span></div>
+    <div class="task-row"><span class="task-title">Inbox items</span><span style="font-weight:700;color:${inboxCount > 5 ? 'var(--red)' : 'var(--green)'}">${inboxCount}</span></div>
+    <div class="task-row"><span class="task-title">Focus sessions</span><span style="font-weight:700">${weekSessions.length}</span></div>
+    <div class="task-row"><span class="task-title">Distractions</span><span style="font-weight:700">${distractions}</span></div>
+    <div class="task-row"><span class="task-title">Days with habits</span><span style="font-weight:700">${habitsKept}/7</span></div>
+  `;
+}
+
+function getWeekStr() {
+  const d = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+function toggleReviewCheck(i) {
+  const key = 'review-checks-' + getWeekStr();
+  const checks = LS.get(key, {});
+  checks[i] = !checks[i];
+  LS.set(key, checks);
+  renderReview();
+}
+
+function generateReview() {
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekStr = weekAgo.toISOString().slice(0, 10);
+
+  const tasks = LS.get('tasks', []);
+  const completedTasks = tasks.filter(t => t.done && t.doneAt && t.doneAt.slice(0, 10) >= weekStr);
+  const activeTasks = tasks.filter(t => !t.done && t.bucket === 'today');
+  const inboxTasks = tasks.filter(t => !t.done && t.bucket === 'inbox');
+
+  const allSessions = LS.get('focus-sessions', []);
+  const weekSessions = allSessions.filter(s => s.date >= weekStr);
+  const weekMins = weekSessions.reduce((s, f) => s + f.mins, 0);
+
+  const allJournal = LS.get('journal', []);
+  const weekJournal = allJournal.filter(j => j.date >= weekStr);
+  const moods = weekJournal.map(j => j.mood).filter(Boolean);
+
+  let summary = `<div style="background:var(--bg-mantle);border-radius:8px;padding:16px;font-size:13px;line-height:1.8">`;
+  summary += `<strong>📊 Weekly Review — ${formatDate(weekStr)} to ${formatDate(todayStr())}</strong><br><br>`;
+  summary += `<strong>✅ Completed (${completedTasks.length}):</strong><br>`;
+  if (completedTasks.length) {
+    completedTasks.slice(0, 10).forEach(t => { summary += `&nbsp;&nbsp;• ${esc(t.title)}<br>`; });
+    if (completedTasks.length > 10) summary += `&nbsp;&nbsp;...and ${completedTasks.length - 10} more<br>`;
+  } else { summary += '&nbsp;&nbsp;No tasks completed<br>'; }
+
+  summary += `<br><strong>⏱️ Focus:</strong> ${(weekMins/60).toFixed(1)} hours across ${weekSessions.length} sessions<br>`;
+  summary += `<strong>📔 Journal:</strong> ${weekJournal.length} entries`;
+  if (moods.length) summary += ` (moods: ${moods.join(' ')})`;
+  summary += `<br>`;
+
+  if (inboxTasks.length) {
+    summary += `<br><strong>📥 Inbox:</strong> ${inboxTasks.length} items need processing<br>`;
+  }
+  if (activeTasks.length) {
+    summary += `<br><strong>📌 Carry forward:</strong><br>`;
+    activeTasks.slice(0, 5).forEach(t => { summary += `&nbsp;&nbsp;• ${esc(t.title)}<br>`; });
+  }
+  summary += `</div>`;
+
+  document.getElementById('reviewSummary').innerHTML = summary;
+  showToast('Review generated!', 'success');
+}
+
+// ═══════════════════════════════════════════════════
+// NOTES
+// ═══════════════════════════════════════════════════
+let currentNoteId = null;
+
+function renderNotes() {
+  const notes = LS.get('notes', []);
+  const listEl = document.getElementById('notesList');
+  const editorEl = document.getElementById('noteEditor');
+
+  if (currentNoteId) {
+    listEl.style.display = 'none';
+    editorEl.style.display = 'block';
+    const note = notes.find(n => n.id === currentNoteId);
+    if (note) {
+      document.getElementById('noteEditorTitle').value = note.title;
+      document.getElementById('noteEditorContent').value = note.content;
+    }
+    return;
+  }
+
+  listEl.style.display = 'block';
+  editorEl.style.display = 'none';
+
+  if (!notes.length) {
+    listEl.innerHTML = '<div class="empty"><span class="empty-icon">📝</span>No notes yet<div class="empty-hint">Create a note above</div></div>';
+    return;
+  }
+
+  listEl.innerHTML = notes.slice().reverse().map(n =>
+    `<div class="task-row" onclick="openNote('${n.id}')" style="cursor:pointer">
+      <span class="task-title" style="font-weight:600">${esc(n.title)}</span>
+      <span class="task-time">${relTime(n.updatedAt || n.createdAt)}</span>
+      <span style="font-size:11px;color:var(--overlay0)">${(n.content || '').length} chars</span>
+    </div>`
+  ).join('');
+}
+
+function addNote() {
+  const title = document.getElementById('newNoteTitle').value.trim();
+  if (!title) return;
+  const notes = LS.get('notes', []);
+  const id = uid();
+  notes.push({ id, title, content: '', createdAt: nowISO(), updatedAt: nowISO() });
+  LS.set('notes', notes);
+  document.getElementById('newNoteTitle').value = '';
+  currentNoteId = id;
+  renderNotes();
+}
+
+function openNote(id) {
+  currentNoteId = id;
+  renderNotes();
+}
+
+function closeNoteEditor() {
+  saveCurrentNote();
+  currentNoteId = null;
+  renderNotes();
+}
+
+function saveCurrentNote() {
+  if (!currentNoteId) return;
+  const notes = LS.get('notes', []);
+  const note = notes.find(n => n.id === currentNoteId);
+  if (!note) return;
+  note.title = document.getElementById('noteEditorTitle').value;
+  note.content = document.getElementById('noteEditorContent').value;
+  note.updatedAt = nowISO();
+  LS.set('notes', notes);
+}
+
+function deleteCurrentNote() {
+  if (!currentNoteId) return;
+  if (!confirm('Delete this note?')) return;
+  let notes = LS.get('notes', []);
+  notes = notes.filter(n => n.id !== currentNoteId);
+  LS.set('notes', notes);
+  currentNoteId = null;
+  renderNotes();
+}
+
+// ═══════════════════════════════════════════════════
+// ANALYTICS (kept for backward compat, also used by review)
+// ═══════════════════════════════════════════════════
+function renderAnalytics() {
+  // Redirect to review page
+  navigate('review');
+}
+
+// ═══════════════════════════════════════════════════
 // RULES
 // ═══════════════════════════════════════════════════
 const RULE_TEMPLATES = [
@@ -1969,7 +2880,7 @@ function renderRules() {
   const el = document.getElementById('ruleList');
 
   if (!rules.length) {
-    el.innerHTML = '<div class="empty">No rules defined — add one above or use a template</div>';
+    el.innerHTML = '<div class="empty"><span class="empty-icon">⚙️</span>No rules defined<div class="empty-hint">Add one above or use a template</div></div>';
   } else {
     el.innerHTML = rules.map((r, i) =>
       `<div class="rule-item">
@@ -1980,7 +2891,6 @@ function renderRules() {
     ).join('');
   }
 
-  // Templates
   const tplEl = document.getElementById('ruleTemplates');
   tplEl.innerHTML = RULE_TEMPLATES.map(t =>
     `<div class="rule-item" style="cursor:pointer" onclick="adoptTemplate('${esc(t.text)}')">
@@ -1999,16 +2909,18 @@ function addRule() {
   LS.set('rules', rules);
   Bridge.postRule(rule);
   document.getElementById('newRuleInput').value = '';
+  showToast('Rule added', 'success');
   renderRules();
 }
 
 function adoptTemplate(text) {
   const rules = LS.get('rules', []);
-  if (rules.some(r => r.text === text)) return; // Already exists
+  if (rules.some(r => r.text === text)) return;
   const rule = { id: uid(), text, active: true, createdAt: nowISO() };
   rules.push(rule);
   LS.set('rules', rules);
   Bridge.postRule(rule);
+  showToast('Rule adopted!', 'success');
   renderRules();
 }
 

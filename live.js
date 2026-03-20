@@ -793,28 +793,18 @@ async function loadQueueState() {
 
 // Sync initial queue items to backend (posts to Discord #queue)
 async function syncQueueToBackend() {
+  // Skip sync when bridge handles proposals, or when no local items exist
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) return;
   if (typeof queueCards === 'undefined' || !queueCards.length) return;
   
-  // Check which items are already synced
+  // Check which items are already synced (API returns flat array)
   const state = await apiFetch('queue');
-  const existingIds = new Set((state?.items || []).map(i => i.id));
+  const items = Array.isArray(state) ? state : (state?.items || []);
+  const existingIds = new Set(items.map(i => i.id));
   
-  for (const q of queueCards) {
-    if (existingIds.has(q.id)) continue;
-    // Post new item to backend (which posts to Discord)
-    await apiPost('queue', {
-      type: 'add',
-      id: q.id,
-      question: q.question,
-      agent: q.agent || 'righthand',
-      qtype: q.type || 'approval',
-      choices: q.choices || null,
-      priority: q.priority || 'normal',
-      ttl: q.ttl || 300,
-    });
-    // Small delay to avoid rate limits
-    await new Promise(r => setTimeout(r, 500));
-  }
+  // Only sync items that have a POST endpoint — skip for now since
+  // POST /api/queue doesn't exist on the bridge
+  console.log(`[LIVE] Queue sync: ${existingIds.size} items in backend, ${queueCards.length} local`);
 }
 
 // ── Metrics display helpers ───────────────────────────────
@@ -831,6 +821,19 @@ async function loadAgentInfo() {
 
 // ── Init on page load ─────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Wait a tick for other scripts to initialize
-  setTimeout(initLive, 1000);
+  // Wait for bridge.js to finish its async init (health check + bridgeGoLive)
+  // Bridge fires 'status' event when connected. Wait up to 3s, then init regardless.
+  let liveInited = false;
+  function doInit() {
+    if (liveInited) return;
+    liveInited = true;
+    initLive();
+  }
+  if (typeof Bridge !== 'undefined') {
+    Bridge.on('status', (s) => { if (s.connected) setTimeout(doInit, 200); });
+    // Also check if bridge is already live (bridgeGoLive sets liveMode early)
+    setTimeout(() => { if (Bridge.liveMode) doInit(); }, 500);
+  }
+  // Fallback: init after 3s regardless
+  setTimeout(doInit, 3000);
 });

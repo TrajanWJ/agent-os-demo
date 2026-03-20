@@ -144,11 +144,131 @@ function seedInboxItems() {
   ];
 }
 
-function initInbox() {
-  if (inboxItems.length === 0) {
+let inboxPollTimer = null;
+
+async function fetchRealInboxItems() {
+  const items = [];
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+
+  try {
+    // Fetch pending proposals → "Needs Decision" items
+    const proposals = await fetch(`${baseUrl}/api/proposals?status=pending`).then(r => r.ok ? r.json() : []).catch(() => []);
+    proposals.forEach(p => {
+      items.push({
+        id: p.id || 'prop_' + Date.now(),
+        agent: p.source || p.source_agent || 'righthand',
+        category: 'proposals',
+        priority: (p.priority || 'P3') <= 'P2' ? 'urgent' : 'normal',
+        unread: true,
+        subject: p.title || 'Proposal',
+        preview: (p.body || p.description || '').substring(0, 100),
+        body: p.body || p.description || '',
+        time: p.created_at || new Date().toISOString(),
+        mission: null,
+        thread: [],
+        _proposalId: p.id,
+        _type: 'proposal',
+      });
+    });
+
+    // Fetch active tasks → "Active Work" items
+    const tasks = await fetch(`${baseUrl}/api/tasks/active`).then(r => r.ok ? r.json() : []).catch(() => []);
+    tasks.forEach(t => {
+      items.push({
+        id: t.id || 'task_' + Date.now(),
+        agent: t.agent || 'coder',
+        category: 'review',
+        priority: (t.priority || 'P3') <= 'P2' ? 'urgent' : 'normal',
+        unread: true,
+        subject: `Active: ${t.title || t.task || 'Task'}`,
+        preview: (t.description || t.context || '').substring(0, 100),
+        body: t.description || t.context || `Task ${t.id} is currently active.`,
+        time: t.created_at || t.created || new Date().toISOString(),
+        mission: null,
+        thread: [],
+        _taskId: t.id,
+        _type: 'task',
+      });
+    });
+
+    // Fetch recent feed events → items that need attention (errors, questions)
+    const feed = await fetch(`${baseUrl}/api/feed?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []);
+    feed.forEach(f => {
+      if (f.type === 'error' || f.type === 'system_alert') {
+        items.push({
+          id: f.id || 'feed_' + Date.now(),
+          agent: f.agent || 'ops',
+          category: 'urgent',
+          priority: 'urgent',
+          unread: true,
+          subject: `⚠️ ${f.content || f.summary || 'System Alert'}`,
+          preview: (f.detail || f.content || '').substring(0, 100),
+          body: f.detail || f.content || '',
+          time: f.timestamp || new Date().toISOString(),
+          mission: null,
+          thread: [],
+          _feedId: f.id,
+          _type: 'feed_error',
+        });
+      } else if (f.type === 'question_asked' || f.type === 'queue_item_created') {
+        items.push({
+          id: f.id || 'feed_' + Date.now(),
+          agent: f.agent || 'righthand',
+          category: 'questions',
+          priority: 'normal',
+          unread: true,
+          subject: f.content || f.summary || 'Question',
+          preview: (f.detail || f.content || '').substring(0, 100),
+          body: f.detail || f.content || '',
+          time: f.timestamp || new Date().toISOString(),
+          mission: null,
+          thread: [],
+          _feedId: f.id,
+          _type: 'feed_question',
+        });
+      }
+    });
+
+    // Sort by urgency: urgent first, then newest
+    items.sort((a, b) => {
+      if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+      if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+      return new Date(b.time) - new Date(a.time);
+    });
+
+    return items;
+  } catch (e) {
+    console.error('[Inbox] Failed to fetch real data:', e);
+    return null; // null = fallback to seed
+  }
+}
+
+async function initInbox() {
+  // Try to fetch real data first
+  const realItems = await fetchRealInboxItems();
+  if (realItems && realItems.length > 0) {
+    inboxItems = realItems;
+  } else if (inboxItems.length === 0) {
     inboxItems = seedInboxItems();
   }
   renderInbox();
+
+  // Start polling every 15 seconds
+  if (!inboxPollTimer) {
+    inboxPollTimer = setInterval(async () => {
+      if (currentPage !== 'inbox') return;
+      const updated = await fetchRealInboxItems();
+      if (updated && updated.length > 0) {
+        // Merge: keep read state of existing items
+        const readIds = new Set(inboxItems.filter(i => !i.unread).map(i => i.id));
+        updated.forEach(item => {
+          if (readIds.has(item.id)) item.unread = false;
+        });
+        inboxItems = updated;
+        renderInboxList();
+      }
+    }, 15000);
+  }
 }
 
 function renderInbox() {
@@ -360,57 +480,121 @@ function selectInboxItem(id) {
 }
 
 function markAllInboxRead() {
-  inboxItems.forEach(i => i.unread = false);
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  inboxItems.forEach(i => {
+    i.unread = false;
+    // Notify server of read state
+    fetch(`${baseUrl}/api/inbox/${i.id}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mark-read' }),
+    }).catch(() => {});
+  });
   toast('✓ All items marked as read', 'success');
   renderInbox();
+  // Update badge
+  const badge = document.getElementById('inbox-badge');
+  if (badge) { badge.textContent = ''; badge.style.display = 'none'; }
 }
 
-function inboxAction(id, action) {
+async function inboxAction(id, action) {
   const item = inboxItems.find(i => i.id === id);
   if (!item) return;
   const agent = iga(item.agent);
-
-  fetch('/api/inbox/' + id + '/action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action }),
-  }).catch(() => {});
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
   switch (action) {
     case 'approve':
-      toast(`✅ Approved — ${agent.name} notified`, 'success');
-      addXP(10, 'inbox approve');
-      removeInboxItem(id);
+      // If it's a real proposal, resolve via bridge
+      if (item._proposalId || item._type === 'proposal') {
+        try {
+          await fetch(`${baseUrl}/api/proposals/${item._proposalId || id}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'approve' }),
+          });
+          toast(`✅ Approved — ${agent.name} notified`, 'success');
+          addXP(10, 'inbox approve');
+          removeInboxItem(id);
+        } catch (e) {
+          toast(`❌ Approve failed: ${e.message}`, 'error');
+        }
+      } else {
+        // Generic approval via inbox action endpoint
+        fetch(`${baseUrl}/api/inbox/${id}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'approve' }),
+        }).catch(() => {});
+        toast(`✅ Approved — ${agent.name} notified`, 'success');
+        addXP(10, 'inbox approve');
+        removeInboxItem(id);
+      }
       break;
     case 'reject':
-      const reason = prompt('Rejection reason (optional):');
-      toast(`❌ Rejected${reason ? ': ' + reason : ''}`, 'info');
-      removeInboxItem(id);
+      if (item._proposalId || item._type === 'proposal') {
+        try {
+          await fetch(`${baseUrl}/api/proposals/${item._proposalId || id}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'dismiss' }),
+          });
+          toast('❌ Rejected', 'info');
+          removeInboxItem(id);
+        } catch (e) {
+          toast(`❌ Reject failed: ${e.message}`, 'error');
+        }
+      } else {
+        fetch(`${baseUrl}/api/inbox/${id}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reject' }),
+        }).catch(() => {});
+        toast('❌ Rejected', 'info');
+        removeInboxItem(id);
+      }
       break;
     case 'forward':
-      const targets = Object.keys(INBOX_AGENTS).filter(a => a !== item.agent);
-      const targetId = targets[Math.floor(Math.random() * targets.length)];
-      const target = iga(targetId);
-      toast(`➡️ Forwarded to ${target.emoji} ${target.name}`, 'success');
-      item.agent = targetId;
-      renderInbox();
+      // Create a dispatch task
+      try {
+        await fetch(`${baseUrl}/api/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: item.subject,
+            description: item.body || item.preview,
+            agent: null,
+            priority: item.priority === 'urgent' ? 'P1' : 'P3',
+          }),
+        });
+        toast(`➡️ Forwarded as dispatch task`, 'success');
+        removeInboxItem(id);
+      } catch (e) {
+        toast(`❌ Forward failed: ${e.message}`, 'error');
+      }
       break;
     case 'pin':
       toast('📌 Pinned to vault', 'success');
       break;
     case 'archive':
+      fetch(`${baseUrl}/api/inbox/${id}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'archive' }),
+      }).catch(() => {});
       toast('🗑️ Archived', 'info');
       removeInboxItem(id);
       break;
   }
 }
 
-function inboxReply(id) {
+async function inboxReply(id) {
   const input = document.getElementById('inbox-reply-input');
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
   const item = inboxItems.find(i => i.id === id);
   if (!item) return;
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
   if (!item.thread) item.thread = [];
   item.thread.push({
@@ -420,26 +604,62 @@ function inboxReply(id) {
   });
 
   input.value = '';
-  toast('💬 Reply sent', 'success');
-  addXP(5, 'inbox reply');
   renderInboxDetail();
 
-  // Simulate agent response after 1-2s
-  setTimeout(() => {
-    const responses = [
-      'Got it, I\'ll take that into account.',
-      'Understood. Adjusting my approach.',
-      'Thanks for the feedback. Updated.',
-      'Acknowledged. Will proceed accordingly.',
-      'Noted. I\'ll factor this in.',
-    ];
-    item.thread.push({
-      sender: item.agent,
-      content: responses[Math.floor(Math.random() * responses.length)],
-      time: new Date().toISOString(),
+  // Send to real endpoint: agent message or channel message
+  try {
+    await fetch(`${baseUrl}/api/agent/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        agent: item.agent,
+        context: `inbox-reply:${id}`,
+      }),
     });
-    if (inboxSelectedId === id) renderInboxDetail();
-  }, 1500 + Math.random() * 1500);
+    toast('📨 Reply sent', 'success');
+    addXP(5, 'inbox reply');
+  } catch (e) {
+    toast(`❌ Reply failed: ${e.message}`, 'error');
+  }
+
+  // Dispatch to agent for real response
+  try {
+    const resp = await fetch(`${baseUrl}/api/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        agent: item.agent,
+        context: `inbox-reply:${id}`,
+        page: 'inbox',
+      }),
+    });
+    if (resp.ok) {
+      // Show dispatched status
+      item.thread.push({
+        sender: item.agent,
+        content: '🔄 Dispatched to agent. Response will appear in the feed.',
+        time: new Date().toISOString(),
+      });
+      if (inboxSelectedId === id) renderInboxDetail();
+    }
+  } catch {
+    // Fallback: show simulated response
+    setTimeout(() => {
+      const responses = [
+        'Got it, I\'ll take that into account.',
+        'Understood. Adjusting my approach.',
+        'Acknowledged. Will proceed accordingly.',
+      ];
+      item.thread.push({
+        sender: item.agent,
+        content: responses[Math.floor(Math.random() * responses.length)],
+        time: new Date().toISOString(),
+      });
+      if (inboxSelectedId === id) renderInboxDetail();
+    }, 1500);
+  }
 }
 
 function removeInboxItem(id) {

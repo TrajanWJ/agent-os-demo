@@ -23,84 +23,93 @@
         <span class="logo-text">Agent OS</span>
         <span class="logo-version">v7</span>
       </div>
-      <div class="sidebar-nav">
-        <button class="nav-item active" data-page="feed" onclick="nav('feed')">
-          <i data-lucide="zap" class="nav-icon-svg"></i>
-          <span class="nav-label">Stream</span>
-          <span class="nav-badge" id="feed-badge"></span>
-        </button>
-        <button class="nav-item" data-page="inbox" onclick="nav('inbox')">
-          <i data-lucide="mail" class="nav-icon-svg"></i>
-          <span class="nav-label">Inbox</span>
-          <span class="nav-badge" id="inbox-badge"></span>
-        </button>
-        <button class="nav-item" data-page="talk" onclick="nav('talk')">
-          <i data-lucide="message-circle" class="nav-icon-svg"></i>
-          <span class="nav-label">Talk</span>
-          <span class="nav-badge" id="talk-badge">7</span>
-        </button>
-        <button class="nav-item" data-page="rooms" onclick="nav('rooms')">
-          <i data-lucide="users" class="nav-icon-svg"></i>
-          <span class="nav-label">Rooms</span>
-          <span class="nav-badge" id="rooms-badge"></span>
-        </button>
-        <button class="nav-item" data-page="queue" onclick="nav('queue')">
-          <i data-lucide="inbox" class="nav-icon-svg"></i>
-          <span class="nav-label">Proposals</span>
-          <span class="nav-badge" id="queue-badge"></span>
-        </button>
-        <button class="nav-item" data-page="mind" onclick="nav('mind')">
-          <i data-lucide="brain" class="nav-icon-svg"></i>
-          <span class="nav-label">Mind</span>
-          <span class="nav-badge" id="mind-badge"></span>
-        </button>
-        <button class="nav-item" data-page="pulse" onclick="nav('pulse')">
-          <i data-lucide="activity" class="nav-icon-svg"></i>
-          <span class="nav-label">System</span>
-          <span class="nav-badge" id="pulse-badge">1</span>
-        </button>
-        <button class="nav-item" data-page="briefing" onclick="nav('briefing')">
-          <i data-lucide="file-text" class="nav-icon-svg"></i>
-          <span class="nav-label">Briefing</span>
-          <span class="nav-badge" id="briefing-badge"></span>
-        </button>
-        <button class="nav-item" data-page="plans" onclick="nav('plans')">
-          <i data-lucide="kanban" class="nav-icon-svg"></i>
-          <span class="nav-label">Plans</span>
-          <span class="nav-badge" id="plans-badge"></span>
-        </button>
+      <nav class="sidebar-nav">
+        <div class="nav-group">
+          <div class="nav-group-label">⚡ OPERATE</div>
+          <a class="nav-item active" data-page="feed" onclick="nav('feed')">
+            <span class="nav-icon">📡</span>
+            <span class="nav-label">Stream</span>
+            <span class="nav-badge" id="feed-badge"></span>
+          </a>
+          <a class="nav-item" data-page="inbox" onclick="nav('inbox')">
+            <span class="nav-icon">📬</span>
+            <span class="nav-label">Inbox</span>
+            <span class="nav-badge" id="inbox-badge"></span>
+          </a>
+          <a class="nav-item" data-page="briefing" onclick="nav('briefing')">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">Briefing</span>
+            <span class="nav-badge" id="briefing-badge"></span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-label">💬 COMMUNICATE</div>
+          <a class="nav-item" data-page="talk" onclick="nav('talk')">
+            <span class="nav-icon">💬</span>
+            <span class="nav-label">Talk</span>
+            <span class="nav-badge" id="talk-badge">7</span>
+          </a>
+          <a class="nav-item" data-page="rooms" onclick="nav('rooms')">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">Rooms</span>
+            <span class="nav-badge" id="rooms-badge"></span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-label">🎯 DIRECT</div>
+          <a class="nav-item" data-page="missions" onclick="nav('missions')">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-label">Missions</span>
+            <span class="nav-badge" id="missions-badge">3</span>
+          </a>
+          <a class="nav-item" data-page="pipelines" onclick="nav('pipelines')">
+            <span class="nav-icon">🔀</span>
+            <span class="nav-label">Pipelines</span>
+            <span class="nav-badge" id="pipelines-badge"></span>
+          </a>
+          <a class="nav-item" data-page="queue" onclick="nav('queue')">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Proposals</span>
+            <span class="nav-badge" id="proposals-badge"></span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-label">🧠 KNOW</div>
+          <a class="nav-item" data-page="mind" onclick="nav('mind')">
+            <span class="nav-icon">🧠</span>
+            <span class="nav-label">Mind</span>
+            <span class="nav-badge" id="mind-badge"></span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-label">⚙️ CONFIGURE</div>
+          <a class="nav-item" data-page="roles" onclick="nav('roles')">
+            <span class="nav-icon">🛡️</span>
+            <span class="nav-label">Roles</span>
+            <span class="nav-badge" id="roles-badge"></span>
+          </a>
+          <a class="nav-item" data-page="records" onclick="nav('records')">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Records</span>
+            <span class="nav-badge" id="records-badge"></span>
+          </a>
+          <a class="nav-item" data-page="pulse" onclick="nav('pulse')">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">System</span>
+            <span class="nav-badge" id="pulse-badge">1</span>
+          </a>
+        </div>
+
         <div class="nav-divider"></div>
-        <button class="nav-item" data-page="schedule" onclick="nav('schedule')">
-          <i data-lucide="calendar" class="nav-icon-svg"></i>
-          <span class="nav-label">Schedule</span>
-          <span class="nav-badge" id="schedule-badge"></span>
-        </button>
-        <button class="nav-item" data-page="missions" onclick="nav('missions')">
-          <i data-lucide="trophy" class="nav-icon-svg"></i>
-          <span class="nav-label">Missions</span>
-          <span class="nav-badge" id="missions-badge">3</span>
-        </button>
-        <button class="nav-item" data-page="records" onclick="nav('records')">
-          <i data-lucide="database" class="nav-icon-svg"></i>
-          <span class="nav-label">Records</span>
-          <span class="nav-badge" id="records-badge"></span>
-        </button>
-        <button class="nav-item" data-page="pipelines" onclick="nav('pipelines')">
-          <i data-lucide="git-branch" class="nav-icon-svg"></i>
-          <span class="nav-label">Pipelines</span>
-          <span class="nav-badge" id="pipelines-badge"></span>
-        </button>
-        <button class="nav-item" data-page="roles" onclick="nav('roles')">
-          <i data-lucide="shield" class="nav-icon-svg"></i>
-          <span class="nav-label">Roles</span>
-          <span class="nav-badge" id="roles-badge"></span>
-        </button>
-        <button class="nav-item" data-page="explore" onclick="nav('explore')">
-          <i data-lucide="search" class="nav-icon-svg"></i>
-          <span class="nav-label">Explore</span>
-          <span class="nav-badge" id="explore-badge"></span>
-        </button>
-      </div>
+        <a class="nav-item nav-external" href="life.html" target="_blank">
+          <span class="nav-icon">🌿</span>
+          <span class="nav-label">Life OS ↗</span>
+        </a>
+      </nav>
       <div class="sidebar-footer">
         <div class="sidebar-agents">
           <span class="agents-dot active"></span>
@@ -110,9 +119,7 @@
           <span class="xp-icon">⭐</span>
           <span id="sidebar-xp">Lv3 · 2840 XP</span>
         </div>
-        <a href="life.html" class="sidebar-life-link" title="Open Life OS" style="display:flex;align-items:center;gap:8px;padding:8px 16px;color:#a6adc8;text-decoration:none;font-size:13px;border-top:1px solid #45475a;margin-top:8px;">
-          <span>🧬</span> <span>Life OS</span> <span style="font-size:10px;color:#6c7086">↗</span>
-        </a>
+
       </div>
     </nav>
 

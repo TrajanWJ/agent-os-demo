@@ -778,12 +778,12 @@ async function submitNewProposal() {
 // HOOK: Nav — Refresh live data on view switch
 // ═══════════════════════════════════════════════════════════
 
-const _origNav = typeof nav === 'function' ? nav : null;
+const _origNavBridge = typeof nav === 'function' ? nav : null;
 
 if (typeof window !== 'undefined' && typeof window.nav === 'function') {
-  const _realNav = window.nav;
+  const _realNavBridge = window.nav;
   window.nav = function(page) {
-    _realNav.call(this, page);
+    _realNavBridge.call(this, page);
     if (!Bridge.liveMode) return;
     // Refresh live data for the view
     if (page === 'talk') {
