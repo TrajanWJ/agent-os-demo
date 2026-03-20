@@ -320,6 +320,27 @@ const MISSION_PIPELINE_STAGES = [
 
 let pipelinesActiveTab = 'tasks';
 let pipelineDragItem = null;
+let _pipelinesRefreshTimer = null;
+let _pipelineLiveData = { queue: null, active: null, done: null, failed: null, proposals: null, missions: null };
+
+async function fetchPipelineData() {
+  if (typeof Bridge === 'undefined' || !Bridge.liveMode) return false;
+  try {
+    const [queue, active, done, failed, proposals, missions] = await Promise.all([
+      Bridge.apiFetch('/api/tasks/queue').catch(() => null),
+      Bridge.apiFetch('/api/tasks/active').catch(() => null),
+      Bridge.apiFetch('/api/tasks/done?limit=10').catch(() => null),
+      Bridge.apiFetch('/api/tasks/failed').catch(() => null),
+      Bridge.getProposals('all').catch(() => null),
+      Bridge.apiFetch('/api/missions').catch(() => null),
+    ]);
+    _pipelineLiveData = { queue, active, done, failed, proposals, missions };
+    return true;
+  } catch (e) {
+    console.warn('[Pipelines] Bridge load failed:', e.message);
+    return false;
+  }
+}
 
 function renderPipelines() {
   const el = $('pipelines-content');
@@ -334,7 +355,9 @@ function renderPipelines() {
     <div class="pipelines-body" id="pipelines-body"></div>
   `;
 
-  renderPipelineBody();
+  // Fetch live data then render
+  fetchPipelineData().then(() => renderPipelineBody());
+  startPipelinesRefresh();
 }
 
 function switchPipelineTab(type) {
@@ -355,15 +378,68 @@ function renderPipelineBody() {
   }
 }
 
+function startPipelinesRefresh() {
+  if (_pipelinesRefreshTimer) return;
+  _pipelinesRefreshTimer = setInterval(async () => {
+    if (currentPage !== 'pipelines') { stopPipelinesRefresh(); return; }
+    const updated = await fetchPipelineData();
+    if (updated) renderPipelineBody();
+  }, 15000);
+}
+
+function stopPipelinesRefresh() {
+  if (_pipelinesRefreshTimer) { clearInterval(_pipelinesRefreshTimer); _pipelinesRefreshTimer = null; }
+}
+
 function renderTaskPipeline(body) {
-  // Map board cards to pipeline stages
-  const stageMap = { inbox: 'inbox', queued: 'specced', active: 'inprogress', review: 'review', done: 'done' };
+  // Use real dispatch data if available, else fall back to BOARD_CARDS
+  const liveQueue = _pipelineLiveData.queue;
+  const liveActive = _pipelineLiveData.active;
+  const liveDone = _pipelineLiveData.done;
+  const liveFailed = _pipelineLiveData.failed;
+  const hasLive = liveQueue || liveActive || liveDone;
+
   const stageCards = {};
   TASK_PIPELINE_STAGES.forEach(s => stageCards[s.id] = []);
-  Object.entries(BOARD_CARDS).forEach(([col, cards]) => {
-    const stageId = stageMap[col] || 'inbox';
-    cards.forEach(c => stageCards[stageId].push(c));
-  });
+
+  if (hasLive) {
+    // Map real dispatch data to pipeline stages
+    (liveQueue || []).forEach(t => {
+      stageCards.inbox.push({
+        id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+        priority: t.priority || 'P3', tags: [], _raw: t,
+        _timeInStage: timeAgoShort(t.created_at || t.created),
+      });
+    });
+    (liveActive || []).forEach(t => {
+      stageCards.inprogress.push({
+        id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+        priority: t.priority || 'P3', tags: [], progress: t.progress, _raw: t,
+        _timeInStage: timeAgoShort(t.started_at || t.created_at || t.created),
+      });
+    });
+    (liveDone || []).forEach(t => {
+      stageCards.done.push({
+        id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+        priority: t.priority || 'P3', tags: [], _raw: t,
+        _timeInStage: timeAgoShort(t.completed_at || t.created_at),
+      });
+    });
+  } else {
+    // Fallback to static BOARD_CARDS
+    const stageMap = { inbox: 'inbox', queued: 'specced', active: 'inprogress', review: 'review', done: 'done' };
+    Object.entries(BOARD_CARDS).forEach(([col, cards]) => {
+      const stageId = stageMap[col] || 'inbox';
+      cards.forEach(c => stageCards[stageId].push(c));
+    });
+  }
+  
+  // Add failed tasks section if any
+  const failedCards = (liveFailed || []).map(t => ({
+    id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+    priority: t.priority || 'P3', tags: [], _raw: t,
+    _timeInStage: timeAgoShort(t.failed_at || t.created_at),
+  }));
 
   body.innerHTML = `
     <div class="pipeline-stages">
@@ -382,15 +458,43 @@ function renderTaskPipeline(body) {
         </div>
       `).join('')}
     </div>
+    ${failedCards.length > 0 ? `
+      <div style="margin-top:16px">
+        <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:8px">❌ Failed (${failedCards.length})</div>
+        <div class="pipeline-stages" style="grid-template-columns:1fr">
+          <div class="pipeline-stage-col" style="border-top:3px solid var(--red)">
+            <div class="pipeline-cards">
+              ${failedCards.map(c => renderPipelineCard(c, 'tasks')).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    ` : ''}
   `;
+}
+
+function timeAgoShort(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins + 'm';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h';
+  return Math.floor(hrs / 24) + 'd';
 }
 
 function renderProposalPipeline2(body) {
   const stageCards = {};
   PROPOSAL_PIPELINE_STAGES.forEach(s => stageCards[s.id] = []);
-  queueCards.forEach(q => {
-    const status = q._status || 'pending';
-    const verdict = q._triageVerdict || '';
+  
+  // Use live proposals if available, else fall back to queueCards
+  const proposals = _pipelineLiveData.proposals || queueCards;
+  
+  proposals.forEach(q => {
+    // Handle both raw proposal format and converted queueCards format
+    const status = q.status || q._status || 'pending';
+    const verdict = q.triage_verdict || q._triageVerdict || '';
+    
     if (status === 'approved' || status === 'rejected' || status === 'auto-approved' || status === 'dismissed') {
       stageCards.resolved.push(q);
     } else if (verdict === 'auto-execute') {
@@ -414,13 +518,15 @@ function renderProposalPipeline2(body) {
           </div>
           <div class="pipeline-cards">
             ${(stageCards[stage.id] || []).map(q => {
-              const src = getSourceAgent(q._source || q.agent);
+              const srcId = q.source || q._source || q.agent || 'righthand';
+              const src = typeof getSourceAgent === 'function' ? getSourceAgent(srcId) : { emoji: '🤖', name: srcId };
               return `
-                <div class="pipeline-card" onclick="togglePipelineCardDetail(this)">
-                  <div class="pipeline-card-title">${(q.question || q.title || 'Untitled').substring(0, 50)}</div>
+                <div class="pipeline-card" onclick="togglePipelineCardDetail(this)" data-ctx-type="task" data-ctx-id="${q.id || ''}">
+                  <div class="pipeline-card-title">${(q.title || q.question || 'Untitled').substring(0, 50)}</div>
                   <div class="pipeline-card-meta">
                     <span class="pipeline-card-agent">${src.emoji}</span>
-                    <span class="pipeline-card-priority">${q._priority || 'P3'}</span>
+                    <span class="pipeline-card-priority">${q.priority || q._priority || 'P3'}</span>
+                    ${q.triage_verdict || q._triageVerdict ? `<span style="font-size:10px;color:var(--text-muted)">${q.triage_verdict || q._triageVerdict}</span>` : ''}
                   </div>
                 </div>
               `;
@@ -433,10 +539,15 @@ function renderProposalPipeline2(body) {
 }
 
 function renderMissionPipeline(body) {
+  // Use real mission data if available
+  const missions = (_pipelineLiveData.missions && _pipelineLiveData.missions.length > 0)
+    ? _pipelineLiveData.missions
+    : (typeof mcMissions !== 'undefined' && mcMissions.length > 0 ? mcMissions : MISSIONS_DATA);
+
   // Assign missions to stages based on progress
   const stageCards = {};
   MISSION_PIPELINE_STAGES.forEach(s => stageCards[s.id] = []);
-  MISSIONS_DATA.forEach(m => {
+  missions.forEach(m => {
     if (m.status === 'completed') stageCards.complete.push(m);
     else if (m.status === 'planned') stageCards.planning.push(m);
     else if (m.progress >= 70) stageCards.downhill.push(m);
@@ -456,10 +567,10 @@ function renderMissionPipeline(body) {
           <div class="pipeline-cards">
             ${(stageCards[stage.id] || []).map(m => `
               <div class="pipeline-card pipeline-card-mission" onclick="selectMCMission('${m.id}');nav('missions')">
-                <div class="pipeline-card-title">${m.icon} ${m.title}</div>
+                <div class="pipeline-card-title">${m.icon || '🎯'} ${m.title}</div>
                 <div class="pipeline-card-meta">
                   <span>${m.progress}%</span>
-                  <span>${m.agents_active} agents</span>
+                  <span>${m.agents_active || 0} agents</span>
                 </div>
                 <div class="pipeline-card-bar">
                   <div class="pipeline-card-bar-fill" style="width:${m.progress}%;background:${stage.color}"></div>
@@ -472,13 +583,17 @@ function renderMissionPipeline(body) {
     </div>
   `;
 
-  // Render hill chart SVG
-  setTimeout(() => renderHillChart(), 50);
+  // Render hill chart SVG with real data
+  setTimeout(() => renderHillChart(missions), 50);
 }
 
-function renderHillChart() {
+function renderHillChart(missionsInput) {
   const container = $('pipeline-hill-chart');
   if (!container) return;
+
+  const missionSource = missionsInput
+    || (_pipelineLiveData.missions && _pipelineLiveData.missions.length > 0 ? _pipelineLiveData.missions : null)
+    || (typeof mcMissions !== 'undefined' && mcMissions.length > 0 ? mcMissions : MISSIONS_DATA);
 
   const W = container.clientWidth || 700;
   const H = 200;
@@ -495,7 +610,7 @@ function renderHillChart() {
   const pathD = `M ${hillStartX} ${hillBaseY} Q ${hillPeakX} ${hillPeakY * 2 - hillBaseY} ${hillEndX} ${hillBaseY}`;
 
   // Place missions on the hill
-  const activeMissions = MISSIONS_DATA.filter(m => m.status !== 'completed' && m.status !== 'planned');
+  const activeMissions = missionSource.filter(m => m.status !== 'completed' && m.status !== 'planned');
   const dots = activeMissions.map(m => {
     // Map progress 0-100 to position along the curve
     const t = m.progress / 100;
@@ -531,17 +646,28 @@ function renderHillChart() {
 
 function renderCapacityPipeline(body) {
   const maxConcurrent = 5; // max tasks per agent
+  
+  // Use live active tasks if available, else BOARD_CARDS
+  const liveActive = _pipelineLiveData.active;
+  const liveQueue = _pipelineLiveData.queue;
+  const allLiveTasks = [...(liveActive || []), ...(liveQueue || [])];
+  const hasLive = allLiveTasks.length > 0;
 
   body.innerHTML = `
     <div class="capacity-grid">
       ${AGENTS.map(a => {
-        const assignedTasks = Object.values(BOARD_CARDS).flat().filter(c => c.agent === a.id);
+        let assignedTasks;
+        if (hasLive) {
+          assignedTasks = allLiveTasks.filter(t => (t.agent || '').toLowerCase() === a.id || (t.agent || '').toLowerCase() === a.name.toLowerCase());
+        } else {
+          assignedTasks = Object.values(BOARD_CARDS).flat().filter(c => c.agent === a.id);
+        }
         const load = assignedTasks.length;
         const utilization = Math.round((load / maxConcurrent) * 100);
         const barColor = utilization > 80 ? 'var(--red)' : utilization > 50 ? 'var(--yellow)' : 'var(--green)';
         const statusDot = a.status === 'active' ? 'var(--green)' : 'var(--text-muted)';
         return `
-          <div class="capacity-card">
+          <div class="capacity-card" data-ctx-type="agent" data-ctx-id="${a.id}" style="cursor:pointer">
             <div class="capacity-card-header">
               <span class="capacity-agent-avatar" style="border-color:${a.color}">${a.emoji}</span>
               <div class="capacity-agent-info">
@@ -552,13 +678,13 @@ function renderCapacityPipeline(body) {
             </div>
             <div class="capacity-bar-wrap">
               <div class="capacity-bar-track">
-                <div class="capacity-bar-fill" style="width:${utilization}%;background:${barColor}"></div>
+                <div class="capacity-bar-fill" style="width:${Math.min(100, utilization)}%;background:${barColor}"></div>
               </div>
               <span class="capacity-bar-label">${load}/${maxConcurrent}</span>
             </div>
             <div class="capacity-utilization" style="color:${barColor}">${utilization}% utilized</div>
             <div class="capacity-tasks">
-              ${assignedTasks.slice(0, 3).map(t => `<div class="capacity-task-item">${t.title.substring(0, 30)}</div>`).join('')}
+              ${assignedTasks.slice(0, 3).map(t => `<div class="capacity-task-item">${(t.title || t.task || 'Untitled').substring(0, 30)}</div>`).join('')}
               ${assignedTasks.length > 3 ? `<div class="capacity-task-more">+${assignedTasks.length - 3} more</div>` : ''}
               ${assignedTasks.length === 0 ? '<div class="capacity-task-empty">No tasks assigned</div>' : ''}
             </div>
@@ -571,14 +697,17 @@ function renderCapacityPipeline(body) {
 
 function renderPipelineCard(card, type) {
   const ag = ga(card.agent) || { emoji: '⬜', color: '#6c7086' };
+  const timeInStage = card._timeInStage || '';
   return `
     <div class="pipeline-card" draggable="true"
       ondragstart="pipelineDragStart(event,'${card.id}')"
-      onclick="togglePipelineCardDetail(this)">
-      <div class="pipeline-card-title">${card.title}</div>
+      onclick="togglePipelineCardDetail(this)"
+      data-ctx-type="task" data-ctx-id="${card.id || ''}">
+      <div class="pipeline-card-title">${card.title || 'Untitled'}</div>
       <div class="pipeline-card-meta">
         <span class="pipeline-card-agent" style="border-color:${ag.color}">${ag.emoji}</span>
         <span class="pipeline-card-priority ${(card.priority || 'P3').toLowerCase()}">${card.priority || 'P3'}</span>
+        ${timeInStage ? `<span style="font-size:10px;color:var(--text-muted);margin-left:auto">${timeInStage}</span>` : ''}
       </div>
     </div>
   `;

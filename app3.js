@@ -2051,12 +2051,19 @@ function renderProgressRing(pct, color, size) {
   `;
 }
 
-function mcRenderPlans(el, missionId) {
+async function mcRenderPlans(el, missionId) {
   const plans = mcPlans.filter(p => p.mission === missionId);
+  
+  // Also try to load real dispatch tasks related to this mission
+  let relatedTasks = [];
+  const detail = await mcLoadMissionDetail(missionId);
+  if (detail && detail.related_tasks) {
+    relatedTasks = detail.related_tasks;
+  }
 
   el.innerHTML = `
     <div class="mc-plans-list">
-      ${plans.length === 0 ? '<div class="mc-empty">No plans linked to this mission yet.</div>' : ''}
+      ${plans.length === 0 && relatedTasks.length === 0 ? '<div class="mc-empty">No plans or tasks linked to this mission yet.</div>' : ''}
       ${plans.map(p => {
         const total = p.backlog + p.active + p.done;
         const donePct = total > 0 ? Math.round((p.done / total) * 100) : 0;
@@ -2073,6 +2080,22 @@ function mcRenderPlans(el, missionId) {
           </div>
         `;
       }).join('')}
+      ${relatedTasks.length > 0 ? `
+        <div class="mc-section-label" style="margin-top:12px">Related Dispatch Tasks</div>
+        ${relatedTasks.map(t => {
+          const statusColors = { queued: '#6c7086', active: '#f9e2af', done: '#a6e3a1', completed: '#a6e3a1', failed: '#f38ba8' };
+          const statusColor = statusColors[t.status] || '#6c7086';
+          return `
+            <div class="mc-plan-card" style="cursor:default" data-ctx-type="task" data-ctx-id="${t.id || ''}">
+              <div class="mc-plan-header">
+                <span class="mc-plan-name">${t.title || t.task || 'Untitled'}</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${statusColor}20;color:${statusColor}">${t.status || 'queued'}</span>
+              </div>
+              <div class="mc-plan-summary">${t.agent || 'unassigned'} · ${t.priority || 'P3'} · ${t.source || ''}</div>
+            </div>
+          `;
+        }).join('')}
+      ` : ''}
       <button class="mc-create-plan-btn" onclick="toast('Plan creation coming soon','info')">＋ Create Plan</button>
     </div>
   `;
@@ -2144,6 +2167,78 @@ function mcRenderDecisions(el, missionId) {
       }).join('')}
     </div>
   `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// NEW MISSION MODAL
+// ═══════════════════════════════════════════════════════════
+
+function showNewMissionModal() {
+  const m = document.createElement('div');
+  m.id = 'new-mission-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  m.innerHTML = `
+    <div style="background:var(--bg-secondary,#1e1e2e);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:480px;">
+      <h3 style="margin:0 0 16px;color:var(--text);font-size:16px;">🎯 New Mission</h3>
+      <input id="nm-title" placeholder="Mission title..." style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;box-sizing:border-box;" />
+      <textarea id="nm-desc" placeholder="Description / success criteria..." rows="3" style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;resize:vertical;box-sizing:border-box;"></textarea>
+      <input id="nm-deadline" type="date" placeholder="Deadline (optional)" style="width:100%;padding:8px 12px;margin-bottom:16px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;box-sizing:border-box;" />
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('new-mission-modal').remove()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;">Cancel</button>
+        <button onclick="submitNewMission()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#000;font-weight:600;cursor:pointer;">Create Mission</button>
+      </div>
+      <div id="nm-status" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
+    </div>
+  `;
+  m.onclick = (e) => { if (e.target === m) m.remove(); };
+  document.body.appendChild(m);
+  setTimeout(() => document.getElementById('nm-title')?.focus(), 100);
+}
+
+async function submitNewMission() {
+  const title = document.getElementById('nm-title').value.trim();
+  const desc = document.getElementById('nm-desc').value.trim();
+  const deadline = document.getElementById('nm-deadline').value;
+  const status = document.getElementById('nm-status');
+  
+  if (!title) { status.textContent = '❌ Title required'; return; }
+  status.textContent = '⏳ Creating...';
+  
+  try {
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+      await Bridge.apiFetch('/api/missions', {
+        method: 'POST',
+        body: JSON.stringify({ title, description: desc || title, deadline: deadline || null }),
+      });
+    } else {
+      // Offline fallback: add to local data
+      const id = 'local-' + Date.now();
+      mcMissions.unshift({
+        id, icon: '🎯', title, desc: desc || title, goal: '', status: 'planned',
+        progress: 0, tasks_done: 0, tasks_total: 0, agents_active: 0,
+        days_active: 0, velocity: 0, milestones: [], blocking_items: 0,
+        target_date: deadline || '', success_criteria: desc || '',
+      });
+    }
+    status.textContent = '✅ Created!';
+    setTimeout(() => {
+      document.getElementById('new-mission-modal')?.remove();
+      renderMissions();
+    }, 500);
+  } catch (e) {
+    status.textContent = '❌ ' + e.message;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MISSION DETAIL — Plans tab with real dispatch tasks
+// ═══════════════════════════════════════════════════════════
+
+async function mcLoadMissionDetail(missionId) {
+  if (typeof Bridge === 'undefined' || !Bridge.liveMode) return null;
+  try {
+    return await Bridge.apiFetch(`/api/missions/${encodeURIComponent(missionId)}`);
+  } catch { return null; }
 }
 
 // ═══════════════════════════════════════════════════════════

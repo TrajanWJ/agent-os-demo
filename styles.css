@@ -28,6 +28,14 @@
   --safe-left:   env(safe-area-inset-left, 0px);
   --safe-right:  env(safe-area-inset-right, 0px);
   --radius:     8px;
+
+  /* ── Spacing System ── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
   --radius-sm:  4px;
   --radius-lg:  12px;
   --radius-xl:  16px;
@@ -8139,4 +8147,828 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   .tutorial-header h2 { font-size: 18px; }
   .help-icon { font-size: 11px; }
   [data-tooltip]:hover::after { max-width: 220px; min-width: 120px; font-size: 11px; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TASKS PAGE
+═══════════════════════════════════════════════════════════ */
+
+.tasks-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  gap: 1px;
+  background: var(--border);
+}
+
+/* Left Panel: Task List */
+.tasks-list-panel {
+  width: 280px;
+  min-width: 280px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tasks-filter-bar {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tasks-filter-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.tasks-filter-tab {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tasks-filter-tab:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.tasks-filter-tab.active {
+  background: var(--accent);
+  color: var(--bg-base);
+}
+
+.tasks-filter-count {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.tasks-sort-bar {
+  display: flex;
+  gap: 6px;
+}
+
+.tasks-sort-select {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.tasks-list-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.tasks-empty-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* Task Cards */
+.tasks-card {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+}
+
+.tasks-card:hover {
+  background: var(--bg-raised);
+}
+
+.tasks-card.selected {
+  background: var(--bg-overlay);
+  border-color: var(--accent);
+}
+
+.tasks-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tasks-card-priority {
+  font-size: 12px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.tasks-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tasks-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tasks-card-agent {
+  font-weight: 500;
+}
+
+.tasks-card-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tasks-card-status-dot.pulsing {
+  animation: taskPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes taskPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.tasks-card-time {
+  flex: 1;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Gold glow animation for completed tasks */
+.tasks-card-glow {
+  animation: tasksGoldGlow 2.5s ease-out;
+}
+
+@keyframes tasksGoldGlow {
+  0% { box-shadow: 0 0 0 0 rgba(249, 226, 175, 0); }
+  20% { box-shadow: 0 0 20px 4px rgba(249, 226, 175, 0.6); border-color: #f9e2af; }
+  100% { box-shadow: 0 0 0 0 rgba(249, 226, 175, 0); border-color: transparent; }
+}
+
+/* Center Panel: Detail */
+.tasks-detail-panel {
+  flex: 1;
+  background: var(--bg-base);
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.tasks-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+.tasks-detail-header {
+  margin-bottom: 20px;
+}
+
+.tasks-detail-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+.tasks-detail-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-detail-status-badge,
+.tasks-detail-priority-badge,
+.tasks-detail-agent-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tasks-detail-description {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.tasks-detail-description code {
+  background: var(--bg-raised);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.tasks-detail-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Origin */
+.tasks-detail-origin {
+  margin-bottom: 20px;
+}
+
+.tasks-detail-origin-card {
+  padding: 12px;
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.tasks-detail-origin-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-overlay);
+}
+
+.tasks-detail-origin-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent2);
+}
+
+.tasks-detail-origin-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Timeline */
+.tasks-detail-timeline {
+  margin-bottom: 20px;
+}
+
+.tasks-timeline-items {
+  position: relative;
+  padding-left: 16px;
+}
+
+.tasks-timeline-items::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--border);
+}
+
+.tasks-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  position: relative;
+}
+
+.tasks-timeline-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+.tasks-timeline-content {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.tasks-timeline-text {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.tasks-timeline-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Output */
+.tasks-detail-output,
+.tasks-detail-error {
+  margin-bottom: 20px;
+}
+
+.tasks-detail-output-content,
+.tasks-detail-error-content {
+  padding: 14px;
+  background: var(--bg-crust);
+  border-radius: var(--radius);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tasks-detail-error-content {
+  border-left: 3px solid var(--red);
+}
+
+/* Related */
+.tasks-detail-related {
+  margin-bottom: 20px;
+}
+
+.tasks-detail-related-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+  font-size: 13px;
+}
+
+.tasks-detail-related-item:hover {
+  background: var(--bg-surface);
+}
+
+.tasks-related-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.tasks-related-value {
+  color: var(--accent2);
+  font-weight: 500;
+}
+
+/* Right Panel: Actions */
+.tasks-actions-panel {
+  width: 240px;
+  min-width: 240px;
+  background: var(--bg-surface);
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.tasks-action-group,
+.tasks-meta-group,
+.tasks-linked-group {
+  margin-bottom: 20px;
+}
+
+.tasks-action-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.tasks-action-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.tasks-action-btn:hover {
+  background: var(--bg-overlay);
+  border-color: var(--accent);
+}
+
+.tasks-action-btn.danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.tasks-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.tasks-meta-label {
+  color: var(--text-muted);
+}
+
+.tasks-meta-value {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tasks-linked-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.tasks-linked-item:hover {
+  background: var(--bg-raised);
+}
+
+.tasks-linked-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-linked-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.tasks-linked-value {
+  font-size: 12px;
+  color: var(--accent2);
+  font-weight: 500;
+}
+
+/* Mobile responsive */
+@media (max-width: 1024px) {
+  .tasks-layout {
+    flex-direction: column;
+  }
+  .tasks-list-panel {
+    width: 100%;
+    min-width: 100%;
+    max-height: 280px;
+  }
+  .tasks-actions-panel {
+    width: 100%;
+    min-width: 100%;
+    max-height: 200px;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .tasks-actions-panel {
+    display: none;
+  }
+  .tasks-list-panel {
+    max-height: 240px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UX DESIGN SYSTEM — Visual Hierarchy + Micro-interactions
+═══════════════════════════════════════════════════════════ */
+
+/* ── 1. Button Hierarchy ────────────────────────────────── */
+.btn-primary {
+  background: var(--accent);
+  color: #1e1e2e;
+  font-weight: 600;
+  border: none;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.btn-primary:hover {
+  background: #b48bf0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(203,166,247,0.3);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+.btn-secondary:hover {
+  border-color: #6c7086;
+  background: #313244;
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #1e1e2e;
+  border: none;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+.btn-danger:hover {
+  background: #e67a97;
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 4px;
+  font-size: 13px;
+  transition: color 0.15s ease;
+}
+.btn-ghost:hover { color: var(--text); }
+
+/* ── 2. Micro-interactions ──────────────────────────────── */
+
+/* Card hover lift */
+.card:hover, .inbox-item:hover, .task-card:hover,
+.proposal-card:hover, .mission-card:hover,
+.mc-overview-card:hover, .vault-card:hover,
+.board-card:hover, .pipeline-card:hover,
+.capacity-card:hover, .explore-result:hover,
+.rooms-list-item:hover, .records-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Smooth page transitions */
+.view {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.view.active {
+  opacity: 1;
+}
+
+/* ── 3. Better Focus States ─────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Remove double outlines on elements that already style focus */
+.message-input:focus-visible,
+.mind-search-input:focus-visible,
+.omnibus-input:focus-visible,
+.command-input:focus-visible,
+.stream-reply-input:focus-visible,
+.freetext-input:focus-visible,
+.rooms-input:focus-visible,
+input[type="text"]:focus-visible,
+textarea:focus-visible,
+.stream-search:focus-visible {
+  outline: none;
+}
+
+/* ── 4. Status Indicator Colors (consistent) ────────────── */
+.status-dot-active, .status-active-dot { color: var(--green); }
+.status-idle-dot { color: var(--text-muted); }
+.status-error-dot { color: var(--red); }
+.status-warning-dot { color: var(--yellow); }
+.status-info-dot { color: var(--accent2); }
+
+/* ── 5. Enhanced Scrollbar Styling ──────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #181825; }
+::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #585b70; }
+
+/* ── 6. Enhanced Toast System ───────────────────────────── */
+.toast-success { background: #1e3a2f; border-left: 3px solid var(--green); }
+.toast-error   { background: #3a1e1e; border-left: 3px solid var(--red); }
+.toast-info    { background: #1e2a3a; border-left: 3px solid var(--accent2); }
+
+/* ── 7. Keyboard Shortcut Overlay ───────────────────────── */
+.shortcut-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 11000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.2s ease;
+}
+.shortcut-overlay.hidden { display: none; }
+
+.shortcut-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 28px 32px;
+  max-width: 420px;
+  width: 90%;
+  animation: slideInDown 0.25s ease;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.shortcut-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.shortcut-keys {
+  display: flex;
+  gap: 4px;
+}
+
+.shortcut-keys kbd {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  min-width: 24px;
+  text-align: center;
+}
+
+.shortcut-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.shortcut-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.shortcut-close {
+  margin-top: 16px;
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+  text-align: center;
+}
+.shortcut-close:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── 8. Skeleton Loading Enhancement ────────────────────── */
+.skeleton-loading {
+  background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-overlay) 50%, var(--bg-raised) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: var(--radius);
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── 9. Confirmation Dialog ─────────────────────────────── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease;
+}
+.confirm-dialog {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 380px;
+  width: 90%;
+  animation: slideInDown 0.2s ease;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+.confirm-dialog h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.confirm-dialog p {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── 10. Enhanced Nav Item Hover ─────────────────────────── */
+.nav-item {
+  transition: all 0.15s ease, background 0.15s ease;
+}
+.nav-item:hover {
+  transform: translateX(2px);
+}
+
+/* ── 11. Improved Empty States ──────────────────────────── */
+.empty-state-illustration {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.8;
+}
+
+/* ── 12. Badge pulse for attention ──────────────────────── */
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+.nav-badge:not(:empty) {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+.mobile-badge:not(:empty) {
+  animation: badge-pulse 2s ease-in-out infinite;
 }
