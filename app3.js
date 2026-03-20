@@ -932,6 +932,485 @@ function closeMobileDrawer() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// CONTEXTUAL PANEL SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+let ctxPanelOpen = false;
+
+function openCtxPanel(type, id) {
+  const panel = $('context-panel');
+  const overlay = $('ctx-panel-overlay');
+  const title = $('ctx-title');
+  const body = $('ctx-body');
+  const footer = $('ctx-footer');
+  if (!panel || !body) return;
+
+  // Build content based on type
+  switch (type) {
+    case 'agent': renderAgentCtx(id, title, body, footer); break;
+    case 'task':  renderTaskCtx(id, title, body, footer); break;
+    case 'vault': renderVaultCtx(id, title, body, footer); break;
+    case 'mission': renderMissionCtx(id, title, body, footer); break;
+    default: return;
+  }
+
+  // Show panel
+  panel.classList.remove('hidden');
+  overlay.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    panel.classList.add('visible');
+  });
+  ctxPanelOpen = true;
+}
+
+function closeCtxPanel() {
+  const panel = $('context-panel');
+  const overlay = $('ctx-panel-overlay');
+  if (!panel) return;
+  panel.classList.remove('visible');
+  overlay.classList.add('hidden');
+  ctxPanelOpen = false;
+}
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && ctxPanelOpen) closeCtxPanel();
+});
+
+function renderAgentCtx(agentId, titleEl, bodyEl, footerEl) {
+  const agent = ga(agentId);
+  if (!agent) return;
+  titleEl.innerHTML = `${agent.emoji} ${agent.name}`;
+
+  const statusColor = agent.status === 'active' ? 'var(--green)' : 'var(--text-muted)';
+  const statusText = agent.status === 'active' ? 'Active' : 'Idle';
+
+  // Find recent feed events for this agent
+  const recentEvents = feedEvents.filter(e => e.agent === agentId).slice(0, 5);
+
+  bodyEl.innerHTML = `
+    <div class="ctx-section">
+      <div class="ctx-status-row">
+        <span class="ctx-status-dot" style="background:${statusColor}"></span>
+        <span style="color:${statusColor};font-weight:600">${statusText}</span>
+        ${agent.task ? `<span style="color:var(--text-dim);margin-left:8px">— ${agent.task}</span>` : ''}
+      </div>
+    </div>
+
+    <div class="ctx-section">
+      <div class="ctx-section-title">Statistics</div>
+      <div class="ctx-stat-grid">
+        <div class="ctx-stat"><div class="ctx-stat-val">${agent.tasks || 0}</div><div class="ctx-stat-label">Tasks Done</div></div>
+        <div class="ctx-stat"><div class="ctx-stat-val">${agent.files || 0}</div><div class="ctx-stat-label">Files</div></div>
+        <div class="ctx-stat"><div class="ctx-stat-val">${((agent.tokens || 0) / 1000).toFixed(1)}K</div><div class="ctx-stat-label">Tokens</div></div>
+        <div class="ctx-stat"><div class="ctx-stat-val">${Math.round((agent.fitness || 0) * 100)}%</div><div class="ctx-stat-label">Fitness</div></div>
+      </div>
+    </div>
+
+    <div class="ctx-section">
+      <div class="ctx-section-title">Recent Activity</div>
+      ${recentEvents.length > 0 ? recentEvents.map(e => `
+        <div class="ctx-timeline-item">
+          <span class="ctx-timeline-time">${e.time}</span>
+          <span class="ctx-timeline-text">${e.content.substring(0, 80)}${e.content.length > 80 ? '…' : ''}</span>
+        </div>
+      `).join('') : '<div style="color:var(--text-muted);font-size:12px">No recent activity</div>'}
+    </div>
+
+    <div class="ctx-section">
+      <div class="ctx-section-title">Quick Message</div>
+      <div class="ctx-quick-input">
+        <input type="text" id="ctx-agent-msg-input" placeholder="Message ${agent.name}..." onkeydown="if(event.key==='Enter'){sendCtxAgentMsg('${agentId}');event.preventDefault();}">
+        <button onclick="sendCtxAgentMsg('${agentId}')">Send</button>
+      </div>
+    </div>
+  `;
+
+  footerEl.innerHTML = `
+    <button class="ctx-action-btn" onclick="openTalkWithAgent('${agentId}');closeCtxPanel()">💬 Open Chat</button>
+    <button class="ctx-action-btn" onclick="openMemberProfile('${agentId}');closeCtxPanel()">👤 Full Profile</button>
+  `;
+}
+
+function sendCtxAgentMsg(agentId) {
+  const input = $('ctx-agent-msg-input');
+  if (!input || !input.value.trim()) return;
+  const text = input.value.trim();
+  input.value = '';
+  // Navigate to DM and send
+  nav('talk');
+  setTimeout(() => {
+    selectDM(agentId);
+    setTimeout(() => {
+      $('message-input').value = text;
+      sendMessage();
+    }, 200);
+  }, 200);
+  closeCtxPanel();
+}
+
+function renderTaskCtx(taskId, titleEl, bodyEl, footerEl) {
+  // Search across board cards and plan tasks
+  let task = null;
+  let source = null;
+  for (const col of Object.keys(BOARD_CARDS)) {
+    const found = BOARD_CARDS[col].find(c => c.id === taskId);
+    if (found) { task = found; source = 'board'; break; }
+  }
+  if (!task && currentPlanData) {
+    task = (currentPlanData.tasks || []).find(t => t.id === taskId);
+    if (task) source = 'plan';
+  }
+  // Also check proposals
+  if (!task) {
+    task = queueCards.find(q => q.id === taskId);
+    if (task) source = 'proposal';
+  }
+
+  if (!task) {
+    titleEl.textContent = '📋 Task';
+    bodyEl.innerHTML = '<div style="color:var(--text-muted);padding:20px 0">Task not found</div>';
+    footerEl.innerHTML = '';
+    return;
+  }
+
+  const agent = ga(task.agent) || { emoji: '⬜', name: task.agent || 'Unassigned', color: '#6c7086' };
+  const title = task.title || task.question || 'Untitled';
+  titleEl.innerHTML = `📋 ${title}`;
+
+  const description = task.description || task.context || '';
+  const priority = task.priority || task._priority || 'P3';
+  const tags = task.tags || task.labels || [];
+
+  bodyEl.innerHTML = `
+    <div class="ctx-section">
+      <div class="ctx-status-row">
+        <span class="priority-badge ${priority.toLowerCase()}">${priority}</span>
+        <span style="font-size:16px">${agent.emoji}</span>
+        <span style="color:${agent.color || 'var(--text-dim)'};font-weight:600">${agent.name}</span>
+      </div>
+    </div>
+
+    ${description ? `
+    <div class="ctx-section">
+      <div class="ctx-section-title">Description</div>
+      <div class="ctx-note-preview">${description}</div>
+    </div>` : ''}
+
+    ${tags.length > 0 ? `
+    <div class="ctx-section">
+      <div class="ctx-section-title">Tags</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${tags.map(t => `<span class="board-tag">${t}</span>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${task.progress !== undefined ? `
+    <div class="ctx-section">
+      <div class="ctx-section-title">Progress</div>
+      <div class="progress-bar-outer" style="height:8px"><div class="progress-bar-inner" style="width:${task.progress}%"></div></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${task.progress}% complete</div>
+    </div>` : ''}
+  `;
+
+  footerEl.innerHTML = `
+    ${source === 'proposal' ? `<button class="ctx-action-btn primary" onclick="resolveProposalAction('${taskId}','approve');closeCtxPanel()">✅ Approve</button>` : ''}
+    ${source === 'proposal' ? `<button class="ctx-action-btn" onclick="resolveProposalAction('${taskId}','reject');closeCtxPanel()">❌ Reject</button>` : ''}
+  `;
+}
+
+function renderVaultCtx(noteId, titleEl, bodyEl, footerEl) {
+  const note = VAULT_NOTES.find(n => n.id === noteId);
+  if (!note) {
+    titleEl.textContent = '📚 Vault Note';
+    bodyEl.innerHTML = '<div style="color:var(--text-muted);padding:20px 0">Note not found</div>';
+    footerEl.innerHTML = '';
+    return;
+  }
+
+  const agent = ga(note.agent) || { emoji: '🤖', name: note.agent };
+  const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
+  const cc = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
+
+  titleEl.innerHTML = `📚 ${note.title}`;
+
+  // Related notes
+  const related = VAULT_NOTES.filter(n => n.id !== note.id && n.tags.some(t => note.tags.includes(t))).slice(0, 3);
+
+  bodyEl.innerHTML = `
+    <div class="ctx-section">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="vault-card-type" style="color:${typeColor};border-color:${typeColor}40">${note.type}</span>
+        <span style="font-size:12px;color:var(--text-muted)">${note.date}</span>
+        <span style="font-size:12px;color:${cc}">● ${note.confidence}%</span>
+        <span style="font-size:12px;color:var(--text-muted)">🔗 ${note.backlinks}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim)">By ${agent.emoji} ${agent.name}</div>
+    </div>
+
+    <div class="ctx-section">
+      <div class="ctx-section-title">Preview</div>
+      <div class="ctx-note-preview">${note.summary}</div>
+    </div>
+
+    <div class="ctx-section">
+      <div class="ctx-section-title">Tags</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${note.tags.map(t => `<span class="note-tag">#${t}</span>`).join('')}
+      </div>
+    </div>
+
+    ${related.length > 0 ? `
+    <div class="ctx-section">
+      <div class="ctx-section-title">Related Notes</div>
+      ${related.map(r => `
+        <div class="ctx-timeline-item" style="cursor:pointer" onclick="closeCtxPanel();setTimeout(()=>openCtxPanel('vault','${r.id}'),100)">
+          <span class="ctx-timeline-time">${(ga(r.agent)||{emoji:'🤖'}).emoji}</span>
+          <span class="ctx-timeline-text">${r.title}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
+  `;
+
+  footerEl.innerHTML = `
+    <button class="ctx-action-btn primary" onclick="closeCtxPanel();nav('mind');setMindMode('graph')">🧠 Open in Mind</button>
+    <button class="ctx-action-btn" onclick="closeCtxPanel();openVaultNote(VAULT_NOTES.find(n=>n.id==='${noteId}'))">📖 Full View</button>
+  `;
+}
+
+function renderMissionCtx(missionId, titleEl, bodyEl, footerEl) {
+  const m = (typeof mcMissions !== 'undefined' ? mcMissions : MISSIONS_DATA).find(x => x.id === missionId);
+  if (!m) {
+    titleEl.textContent = '🎯 Mission';
+    bodyEl.innerHTML = '<div style="color:var(--text-muted);padding:20px 0">Mission not found</div>';
+    footerEl.innerHTML = '';
+    return;
+  }
+
+  const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
+  const blocking = (typeof mcBlocking !== 'undefined' ? mcBlocking : []).filter(b => b.mission === missionId);
+
+  titleEl.innerHTML = `${m.icon} ${m.title}`;
+
+  bodyEl.innerHTML = `
+    <div class="ctx-section">
+      <div class="ctx-progress-ring-wrap">
+        ${typeof renderMiniProgressRing === 'function' ? renderMiniProgressRing(m.progress, progressColor, 48) : ''}
+        <div>
+          <div style="font-size:22px;font-weight:800;color:var(--text)">${m.progress}%</div>
+          <div style="font-size:12px;color:var(--text-muted)">${m.status}</div>
+        </div>
+      </div>
+      ${m.goal ? `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Goal: ${m.goal}</div>` : ''}
+      ${m.desc ? `<div style="font-size:13px;color:var(--text-dim);line-height:1.5">${m.desc}</div>` : ''}
+    </div>
+
+    <div class="ctx-section">
+      <div class="ctx-section-title">Stats</div>
+      <div class="ctx-stat-grid">
+        <div class="ctx-stat"><div class="ctx-stat-val">${m.tasks_done}/${m.tasks_total}</div><div class="ctx-stat-label">Tasks</div></div>
+        <div class="ctx-stat"><div class="ctx-stat-val">${m.agents_active}</div><div class="ctx-stat-label">Agents</div></div>
+        <div class="ctx-stat"><div class="ctx-stat-val">${m.velocity.toFixed(1)}/d</div><div class="ctx-stat-label">Velocity</div></div>
+        <div class="ctx-stat"><div class="ctx-stat-val">${m.days_active}d</div><div class="ctx-stat-label">Active</div></div>
+      </div>
+    </div>
+
+    ${blocking.length > 0 ? `
+    <div class="ctx-section">
+      <div class="ctx-section-title">⚡ Needs Your Input</div>
+      ${blocking.map(b => `
+        <div style="padding:6px 0;font-size:13px;color:var(--text);border-bottom:1px solid var(--border)">
+          ${b.type === 'proposal' ? '📋' : '👁️'} ${b.title}
+          <div style="font-size:11px;color:var(--text-muted)">From: ${b.source}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    ${m.milestones && m.milestones.length > 0 ? `
+    <div class="ctx-section">
+      <div class="ctx-section-title">Milestones</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${m.milestones.map(ms => `<span class="milestone-badge${ms.includes('✓')?' earned':''}">${ms}</span>`).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  footerEl.innerHTML = `
+    <button class="ctx-action-btn primary" onclick="closeCtxPanel();nav('missions');setTimeout(()=>selectMCMission('${missionId}'),200)">🎯 Open Mission</button>
+  `;
+}
+
+// ── Event delegation for context triggers ─────────────────
+document.addEventListener('click', e => {
+  const ctxEl = e.target.closest('[data-ctx-type]');
+  if (ctxEl) {
+    e.preventDefault();
+    e.stopPropagation();
+    const type = ctxEl.dataset.ctxType;
+    const id = ctxEl.dataset.ctxId;
+    if (type && id) openCtxPanel(type, id);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// THE BRIEFING (Auto-Generated Summary)
+// ═══════════════════════════════════════════════════════════
+
+function getTimeGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getTimeSinceLastVisit() {
+  const last = parseInt(localStorage.getItem('agentOS-lastVisit') || '0');
+  if (!last) return null;
+  const diffMs = Date.now() - last;
+  const hours = Math.floor(diffMs / 3600000);
+  const mins = Math.floor((diffMs % 3600000) / 60000);
+  if (hours > 24) return `${Math.floor(hours / 24)} day${Math.floor(hours/24) !== 1 ? 's' : ''} ago`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
+}
+
+async function generateBriefing() {
+  const body = $('briefing-body');
+  if (!body) return;
+
+  const greeting = getTimeGreeting();
+  const sinceText = getTimeSinceLastVisit();
+
+  // Gather data from local state + optionally bridge
+  let systemHealth = 'All systems operational';
+  let systemHealthOk = true;
+  let feedData = feedEvents.slice(0, 30);
+  let pendingCount = queueCards.filter(q => !q._status || q._status === 'pending').length;
+  let errorCount = feedData.filter(e => e.type === 'error').length;
+  let autoApproved = queueCards.filter(q => q._triageVerdict === 'auto-execute' || q._status === 'auto-approved').length;
+
+  // Count completions per agent
+  const completions = {};
+  feedData.filter(e => e.type === 'task_completed').forEach(e => {
+    const a = ga(e.agent);
+    const key = a ? `${a.emoji} ${a.name}` : e.agent;
+    completions[key] = (completions[key] || 0) + 1;
+  });
+
+  const vaultWrites = feedData.filter(e => e.type === 'vault_write').length;
+
+  // Try bridge for system health
+  if (Bridge.liveMode) {
+    try {
+      const sys = await Bridge.getSystemOverview().catch(() => null);
+      if (sys) {
+        if (sys.status === 'degraded' || sys.status === 'error') {
+          systemHealth = sys.message || 'Issues detected';
+          systemHealthOk = false;
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Active missions
+  const missions = typeof mcMissions !== 'undefined' ? mcMissions.filter(m => m.status === 'active') : [];
+  const topMission = missions.sort((a, b) => b.velocity - a.velocity)[0];
+
+  // Build HTML
+  let html = `<div class="briefing-greeting">${greeting}, Trajan.</div>`;
+
+  // Since Last Visit
+  if (sinceText) {
+    html += `<div class="briefing-section">
+      <div class="briefing-section-title">📊 Since Last Visit</div>
+      <div class="briefing-item" style="color:var(--text-muted);margin-bottom:6px">Since you were last here ${sinceText}:</div>`;
+
+    if (Object.keys(completions).length > 0) {
+      Object.entries(completions).forEach(([agent, count]) => {
+        html += `<div class="briefing-item">${agent} shipped <strong>${count} task${count !== 1 ? 's' : ''}</strong></div>`;
+      });
+    }
+    if (vaultWrites > 0) {
+      html += `<div class="briefing-item">📚 <strong>${vaultWrites}</strong> vault write${vaultWrites !== 1 ? 's' : ''}</div>`;
+    }
+    if (errorCount > 0) {
+      html += `<div class="briefing-item" style="color:var(--red)">🔴 <strong>${errorCount}</strong> error${errorCount !== 1 ? 's' : ''} detected</div>`;
+    } else {
+      html += `<div class="briefing-item" style="color:var(--green)">✅ No errors.</div>`;
+    }
+    if (autoApproved > 0) {
+      html += `<div class="briefing-item">⚡ ${autoApproved} proposal${autoApproved !== 1 ? 's' : ''} auto-approved</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Needs Attention
+  const attentionItems = [];
+  if (pendingCount > 0) attentionItems.push(`📋 <strong>${pendingCount}</strong> pending proposal${pendingCount !== 1 ? 's' : ''}`);
+  if (errorCount > 0) attentionItems.push(`🔴 <strong>${errorCount}</strong> error${errorCount !== 1 ? 's' : ''} to review`);
+
+  if (attentionItems.length > 0) {
+    html += `<div class="briefing-section">
+      <div class="briefing-attention">
+        <div class="briefing-section-title" style="margin-bottom:6px">⚡ Needs Your Attention</div>
+        ${attentionItems.map(i => `<div class="briefing-item">${i}</div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Today's Plan
+  if (missions.length > 0) {
+    html += `<div class="briefing-section">
+      <div class="briefing-section-title">🎯 Active Missions</div>`;
+    missions.slice(0, 3).forEach(m => {
+      html += `<div class="briefing-item">${m.icon} <strong>${m.title}</strong> — ${m.progress}% · ${m.agents_active} agent${m.agents_active !== 1 ? 's' : ''}</div>`;
+    });
+    if (topMission) {
+      html += `<div class="briefing-highlight">💡 Suggested focus: <strong>${topMission.title}</strong> (highest velocity: ${topMission.velocity.toFixed(1)}/day)</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // System Health
+  html += `<div class="briefing-section">
+    <div class="briefing-section-title">🩺 System Health</div>
+    <div class="briefing-health">
+      <span class="briefing-health-dot" style="background:${systemHealthOk ? 'var(--green)' : 'var(--red)'}"></span>
+      <span>${systemHealth}</span>
+    </div>
+    <div class="briefing-item">${AGENTS.filter(a => a.status === 'active').length}/${AGENTS.length} agents active</div>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+function showBriefing() {
+  generateBriefing();
+  $('briefing-overlay').classList.remove('hidden');
+}
+
+function closeBriefing() {
+  $('briefing-overlay').classList.add('hidden');
+  // Save visit timestamp
+  localStorage.setItem('agentOS-lastVisit', String(Date.now()));
+}
+
+function closeBriefingIfOutside(e) {
+  if (e.target === $('briefing-overlay')) closeBriefing();
+}
+
+function checkBriefingOnLoad() {
+  const last = parseInt(localStorage.getItem('agentOS-lastVisit') || '0');
+  const oneHour = 3600000;
+  if (!last || (Date.now() - last > oneHour)) {
+    // Show briefing after a short delay so the app finishes rendering
+    setTimeout(() => showBriefing(), 1500);
+  }
+  // Always update the timestamp on load
+  localStorage.setItem('agentOS-lastVisit', String(Date.now()));
+}
+
+// ═══════════════════════════════════════════════════════════
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════
 
@@ -977,6 +1456,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Init Agent Chat FAB
   if (typeof initAgentChatFAB === 'function') initAgentChatFAB();
+
+  // Check if briefing should auto-show
+  if (typeof checkBriefingOnLoad === 'function') checkBriefingOnLoad();
 });
 
 // ═══════════════════════════════════════════════════════════

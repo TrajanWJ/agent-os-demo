@@ -210,44 +210,88 @@ function updateXPDisplay() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// FEED PAGE
+// THE STREAM — Unified Action Feed
 // ═══════════════════════════════════════════════════════════
 
+let streamFilter = 'all';
+let streamItems = [];
+let streamFocusIdx = -1;
+let streamSelectedIds = new Set();
+let streamPollTimer = null;
+let streamReadIds = new Set();
+let streamInitialized = false;
+
+// Legacy compat — keep feedEvents for other code that references it
 let feedFilter = 'all';
 let feedEvents = [...FEED_EVENTS];
 
 const TYPE_ICONS = {
-  task_started:   '▶️',
-  task_completed: '✅',
-  file_changed:   '📝',
-  question_asked: '❓',
-  error:          '🔴',
-  insight:        '💡',
-  vault_write:    '📚',
+  task_started: '▶️', task_completed: '✅', file_changed: '📝',
+  question_asked: '❓', error: '🔴', insight: '💡', vault_write: '📚',
+  activity: '⚡', proposal: '📋', completion: '✅', question: '❓',
+  system: '⚙️', vault: '📚',
 };
 
 const TYPE_LABELS = {
-  task_started:   'started',
-  task_completed: 'completed',
-  file_changed:   'file',
-  question_asked: 'question',
-  error:          'error',
-  insight:        'insight',
-  vault_write:    'vault',
+  task_started: 'started', task_completed: 'completed', file_changed: 'file',
+  question_asked: 'question', error: 'error', insight: 'insight', vault_write: 'vault',
+  activity: 'activity', proposal: 'decision', completion: 'done', question: 'question',
+  system: 'system', vault: 'vault',
 };
 
-function renderFeedSkeletons(count = 4) {
-  const list = $('feed-list');
+const STREAM_TYPE_COLORS = {
+  activity: 'var(--accent2)', proposal: 'var(--yellow)', error: 'var(--red)',
+  completion: 'var(--green)', vault: 'var(--accent)', question: 'var(--orange)',
+  system: 'var(--text-muted)',
+};
+
+const STREAM_TYPE_BG = {
+  activity: 'rgba(137,180,250,0.15)', proposal: 'rgba(249,226,175,0.15)',
+  error: 'rgba(243,139,168,0.15)', completion: 'rgba(166,227,161,0.15)',
+  vault: 'rgba(203,166,247,0.15)', question: 'rgba(250,179,135,0.15)',
+  system: 'rgba(108,112,134,0.15)',
+};
+
+// Convert old FEED_EVENTS to stream items for fallback
+function feedEventsToStreamItems(events) {
+  return events.map(e => {
+    const typeMap = {
+      task_started: 'activity', task_completed: 'completion', file_changed: 'activity',
+      question_asked: 'question', error: 'error', insight: 'activity', vault_write: 'vault',
+    };
+    return {
+      id: e.id,
+      type: typeMap[e.type] || 'activity',
+      streamType: e.type,
+      agent: e.agent,
+      title: e.content,
+      detail: '',
+      time: new Date().toISOString(),
+      displayTime: e.time,
+      severity: e.type === 'error' ? 'error' : 'info',
+      source: 'local',
+      read: false,
+      pinned: e.pinned || false,
+      urgent: e.urgent || false,
+    };
+  });
+}
+
+function renderFeedSkeletons(count = 5) {
+  const list = $('stream-list');
+  if (!list) return;
   list.innerHTML = '';
   for (let i = 0; i < count; i++) {
     const skel = document.createElement('div');
-    skel.className = 'skeleton-card';
+    skel.className = 'stream-item';
+    skel.style.padding = '14px';
     skel.innerHTML = `
-      <div class="skeleton skeleton-avatar"></div>
-      <div class="skeleton-body">
-        <div class="skeleton skeleton-line short"></div>
-        <div class="skeleton skeleton-line long"></div>
-        <div class="skeleton skeleton-line medium"></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="skeleton skeleton-avatar" style="width:30px;height:30px"></div>
+        <div class="skeleton-body" style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <div class="skeleton skeleton-line short"></div>
+          <div class="skeleton skeleton-line long"></div>
+        </div>
       </div>
     `;
     list.appendChild(skel);
@@ -255,88 +299,504 @@ function renderFeedSkeletons(count = 4) {
 }
 
 function renderFeed() {
-  const list = $('feed-list');
-  // Show skeletons briefly on first render
-  if (list.children.length === 0) {
+  const list = $('stream-list');
+  if (!list) return;
+
+  if (!streamInitialized) {
     renderFeedSkeletons();
-    setTimeout(() => {
-      list.innerHTML = '';
-      const filtered = feedFilter === 'all' ? feedEvents : feedEvents.filter(e => e.type === feedFilter);
-      filtered.forEach(event => list.appendChild(makeFeedCard(event)));
-    }, 400);
+    streamInitialized = true;
+    // Try fetching from bridge first, fall back to local data
+    fetchStreamFromBridge().then(items => {
+      if (items && items.length > 0) {
+        streamItems = items;
+      } else {
+        streamItems = feedEventsToStreamItems(feedEvents);
+        // Also add proposals from queueCards
+        queueCards.forEach(q => {
+          streamItems.push({
+            id: q.id,
+            type: q.type === 'approval' ? 'proposal' : 'question',
+            streamType: q.type,
+            agent: q.agent,
+            title: q.question || 'Queue item',
+            detail: q.context || '',
+            time: q._createdAt || new Date().toISOString(),
+            displayTime: '',
+            severity: q.priority === 'urgent' ? 'action' : 'info',
+            confidence: q._confidence || 0,
+            priority: q._priority || (q.priority === 'urgent' ? 'P0' : 'P2'),
+            choices: q.options || null,
+            source: 'queue',
+            read: false,
+          });
+        });
+      }
+      renderStreamItems();
+    });
+    // Start polling
+    if (!streamPollTimer) {
+      streamPollTimer = setInterval(pollStream, 5000);
+    }
     return;
   }
+
+  renderStreamItems();
+}
+
+async function fetchStreamFromBridge() {
+  try {
+    const r = await fetch('/api/stream?limit=50&filter=' + streamFilter);
+    if (r.ok) return await r.json();
+  } catch { /* bridge may be down */ }
+  return null;
+}
+
+async function pollStream() {
+  if (currentPage !== 'feed') return;
+  const items = await fetchStreamFromBridge();
+  if (!items || items.length === 0) return;
+
+  // Find truly new items
+  const existingIds = new Set(streamItems.map(i => i.id));
+  const newItems = items.filter(i => !existingIds.has(i.id));
+
+  if (newItems.length > 0) {
+    newItems.forEach(item => {
+      item._isNew = true;
+      streamItems.unshift(item);
+    });
+    renderStreamItems();
+    // Update badge
+    const badge = $('feed-badge');
+    if (badge) {
+      const actionCount = streamItems.filter(i => !i.read && ['proposal', 'question', 'error'].includes(i.type)).length;
+      badge.textContent = actionCount || '';
+      badge.style.display = actionCount > 0 ? '' : 'none';
+    }
+  }
+}
+
+function renderStreamItems() {
+  const list = $('stream-list');
+  if (!list) return;
   list.innerHTML = '';
-  const filtered = feedFilter === 'all' ? feedEvents : feedEvents.filter(e => e.type === feedFilter);
-  filtered.forEach(event => {
-    list.appendChild(makeFeedCard(event));
+
+  // Apply filter
+  let filtered = streamItems;
+  if (streamFilter === 'action') filtered = streamItems.filter(i => ['proposal', 'question', 'error'].includes(i.type));
+  else if (streamFilter === 'completed') filtered = streamItems.filter(i => i.type === 'completion');
+  else if (streamFilter === 'conversations') filtered = streamItems.filter(i => i.type === 'activity' || i.type === 'question');
+  else if (streamFilter === 'errors') filtered = streamItems.filter(i => i.severity === 'error' || i.severity === 'warn' || i.type === 'error');
+
+  // Priority sort: action items first
+  filtered.sort((a, b) => {
+    const aAction = ['proposal', 'question'].includes(a.type) && !a.read ? 1 : 0;
+    const bAction = ['proposal', 'question'].includes(b.type) && !b.read ? 1 : 0;
+    if (aAction !== bAction) return bAction - aAction;
+    return new Date(b.time) - new Date(a.time);
   });
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="stream-empty">
+      <div class="stream-empty-icon">🌊</div>
+      <div class="stream-empty-title">The Stream is quiet</div>
+      <div class="stream-empty-desc">Events from agents, proposals, and system will appear here</div>
+    </div>`;
+    return;
+  }
+
+  filtered.forEach((item, idx) => list.appendChild(makeStreamItem(item, idx)));
+
+  // Show batch bar if there are actionable items
+  const batchBar = $('stream-batch-bar');
+  if (batchBar) {
+    const hasActionable = filtered.some(i => ['proposal', 'question'].includes(i.type));
+    batchBar.style.display = hasActionable ? 'flex' : 'none';
+  }
 }
 
-function makeFeedCard(event, isNew = false) {
-  const agent = ga(event.agent) || { emoji: '🤖', name: event.agent, color: '#cba6f7' };
-  const card = document.createElement('div');
-  card.className = `feed-card type-${event.type}${event.pinned ? ' pinned' : ''}${event.urgent ? ' urgent' : ''}${isNew ? ' new' : ''}`;
-  card.dataset.id = event.id;
-  card.dataset.type = event.type;
-  card.style.borderLeftColor = agent.color;
-  card.style.setProperty('--agent-color', agent.color);
+function makeStreamItem(item, idx) {
+  const agent = ga(item.agent) || { emoji: '🤖', name: item.agent || 'System', color: '#cba6f7' };
+  const typeColor = STREAM_TYPE_COLORS[item.type] || 'var(--text-dim)';
+  const typeBg = STREAM_TYPE_BG[item.type] || 'var(--bg-raised)';
+  const typeIcon = TYPE_ICONS[item.type] || TYPE_ICONS[item.streamType] || '📋';
+  const typeLabel = TYPE_LABELS[item.type] || TYPE_LABELS[item.streamType] || item.type;
+  const timeStr = item.displayTime || formatStreamTime(item.time);
+  const isUnread = !item.read && !streamReadIds.has(item.id);
+  const isActionable = ['proposal', 'question'].includes(item.type);
 
-  // Format content (basic inline code support)
-  const formattedContent = event.content
-    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  const el = document.createElement('div');
+  el.className = `stream-item${isUnread ? ' unread' : ''}${item._isNew ? ' new-item' : ''}${isActionable ? ' selectable' : ''}`;
+  el.dataset.type = item.type;
+  el.dataset.id = item.id;
+  el.dataset.idx = idx;
+  if (item._isNew) setTimeout(() => { item._isNew = false; el.classList.remove('new-item'); }, 1500);
 
-  card.innerHTML = `
-    <div class="feed-card-avatar" style="background:${agent.color}20;border-color:${agent.color}">
-      ${agent.emoji}
+  // Build action buttons based on type
+  let actionsHTML = '';
+  switch (item.type) {
+    case 'activity':
+      actionsHTML = `
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','ack')">👍</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','pin')">📌</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','reply')">💬</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','retry')">🔄</button>`;
+      break;
+    case 'proposal':
+      actionsHTML = `
+        <button class="stream-action-btn approve" onclick="event.stopPropagation();streamAction('${item.id}','approve')">✅</button>
+        <button class="stream-action-btn reject" onclick="event.stopPropagation();streamAction('${item.id}','reject')">❌</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','defer')">⏸️</button>`;
+      break;
+    case 'error':
+      actionsHTML = `
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','fix')">🔧</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','mute')">🔇</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','task')">📋</button>`;
+      break;
+    case 'question':
+      actionsHTML = `
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','reply')">💬</button>`;
+      break;
+    case 'completion':
+      actionsHTML = `
+        <button class="stream-action-btn approve" onclick="event.stopPropagation();streamAction('${item.id}','accept')">✅</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','redo')">🔄</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','reply')">💬</button>`;
+      break;
+    case 'vault':
+      actionsHTML = `
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','preview')">👁️</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','link')">🔗</button>`;
+      break;
+    case 'system':
+      actionsHTML = `
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','investigate')">🔧</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','mute')">🔇</button>`;
+      break;
+  }
+
+  // Expanded detail content
+  let detailHTML = '';
+  if (item.detail) {
+    detailHTML = `<div class="stream-item-detail-text">${item.detail.replace(/`([^`]+)`/g, '<code>$1</code>')}</div>`;
+  }
+  if (item.type === 'proposal') {
+    const confPct = Math.round((item.confidence || 0) * 100);
+    const confColor = confPct > 80 ? '#a6e3a1' : confPct > 60 ? '#f9e2af' : '#f38ba8';
+    detailHTML += `
+      <div class="stream-confidence-bar" style="width:${confPct}%;background:${confColor}"></div>
+      ${item.linkedMission ? `<div class="stream-linked-mission">🔗 ${item.linkedMission}</div>` : ''}
+      <div class="stream-proposal-actions">
+        <button class="stream-proposal-btn approve" onclick="streamAction('${item.id}','approve')">✅ Approve</button>
+        <button class="stream-proposal-btn edit" onclick="streamAction('${item.id}','edit')">📝 Edit</button>
+        <button class="stream-proposal-btn reject" onclick="streamAction('${item.id}','reject')">❌ Reject</button>
+        <button class="stream-proposal-btn defer" onclick="streamAction('${item.id}','defer')">⏸️ Defer</button>
+      </div>`;
+  }
+  if (item.type === 'question' && item.choices) {
+    const choices = Array.isArray(item.choices) ? item.choices : [];
+    detailHTML += `<div class="stream-quick-replies">
+      ${choices.map(c => `<button class="stream-quick-reply-btn" onclick="streamReply('${item.id}','${c.replace(/'/g, "\\'")}')">${c}</button>`).join('')}
+    </div>`;
+  }
+  // Inline reply box (for all types)
+  detailHTML += `<div class="stream-reply-box" id="reply-${item.id}">
+    <input class="stream-reply-input" placeholder="Reply to ${agent.name}..." onkeydown="if(event.key==='Enter'){streamSendReply('${item.id}',this.value);event.preventDefault();}">
+    <button class="stream-reply-send" onclick="streamSendReply('${item.id}',this.previousElementSibling.value)">Send</button>
+  </div>`;
+
+  el.innerHTML = `
+    <div class="stream-item-header" onclick="toggleStreamExpand('${item.id}')">
+      <input type="checkbox" class="stream-item-checkbox" onclick="event.stopPropagation();toggleStreamSelect('${item.id}',this.checked)" ${streamSelectedIds.has(item.id) ? 'checked' : ''}>
+      <div class="stream-item-icon" style="background:${agent.color}20;border-color:${agent.color}">${agent.emoji}</div>
+      <span class="stream-item-agent" style="color:${agent.color};cursor:pointer" data-ctx-type="agent" data-ctx-id="${item.agent}">${agent.name}</span>
+      <span class="stream-item-type-badge" style="background:${typeBg};color:${typeColor}">${typeIcon} ${typeLabel}</span>
+      <span class="stream-item-title">${(item.title || '').replace(/`([^`]+)`/g, '<code>$1</code>')}</span>
+      <span class="stream-item-time">${timeStr}</span>
+      <div class="stream-item-actions">${actionsHTML}</div>
     </div>
-    <div class="feed-card-body">
-      <div class="feed-card-header">
-        <span class="feed-agent-name" style="color:${agent.color}">${agent.name}</span>
-        <span class="feed-type-badge">${TYPE_ICONS[event.type] || ''} ${TYPE_LABELS[event.type] || event.type}</span>
-        ${event.pinned ? '<span class="feed-pinned-icon">📌</span>' : ''}
-        <span class="feed-time">${event.time}</span>
-      </div>
-      <div class="feed-content">${formattedContent}</div>
-      <div class="feed-actions">
-        <button class="feed-action-btn" onclick="feedAction('approve','${event.id}')">👍</button>
-        <button class="feed-action-btn" onclick="feedAction('reject','${event.id}')">👎</button>
-        <button class="feed-action-btn" onclick="feedAction('reply','${event.id}')">💬</button>
-        <button class="feed-action-btn" onclick="feedAction('pin','${event.id}')">📌</button>
-        <button class="feed-action-btn" onclick="feedAction('retry','${event.id}')">🔄</button>
-        <button class="feed-action-btn" onclick="feedAction('dismiss','${event.id}')">⏩</button>
-      </div>
-    </div>
+    <div class="stream-item-detail">${detailHTML}</div>
   `;
-  return card;
+  return el;
 }
 
+function formatStreamTime(isoStr) {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 60) return 'now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch { return ''; }
+}
+
+function toggleStreamExpand(itemId) {
+  const el = document.querySelector(`.stream-item[data-id="${itemId}"]`);
+  if (!el) return;
+  const wasExpanded = el.classList.contains('expanded');
+  // Collapse all others
+  $$('.stream-item.expanded').forEach(e => e.classList.remove('expanded'));
+  if (!wasExpanded) {
+    el.classList.add('expanded');
+    // Mark as read
+    streamReadIds.add(itemId);
+    el.classList.remove('unread');
+    const item = streamItems.find(i => i.id === itemId);
+    if (item) item.read = true;
+  }
+}
+
+function filterStream2(type) {
+  streamFilter = type;
+  $$('.stream-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === type));
+  renderStreamItems();
+}
+
+// Legacy compat
 function filterFeed(type) {
-  feedFilter = type;
-  $$('.chip').forEach(c => c.classList.toggle('active', c.dataset.filter === type));
-  renderFeed();
+  // Map old filter types to stream types
+  const map = { all: 'all', error: 'errors', question_asked: 'action', task_completed: 'completed', vault_write: 'all', insight: 'all' };
+  filterStream2(map[type] || 'all');
 }
 
-function feedAction(action, eventId) {
-  const event = feedEvents.find(e => e.id === eventId);
-  if (!event) return;
-  const agent = ga(event.agent);
-  const agentName = agent ? agent.name : event.agent;
-  switch(action) {
-    case 'approve': toast(`👍 Approved ${agentName}'s work`, 'success'); addXP(10, 'feedback'); break;
-    case 'reject':  toast(`👎 Rejected — feedback sent to ${agentName}`, 'error'); break;
-    case 'reply':   openTalkWithAgent(event.agent); break;
+function streamAction(itemId, action) {
+  const item = streamItems.find(i => i.id === itemId);
+  if (!item) return;
+  const agent = ga(item.agent) || { name: item.agent || 'Agent' };
+
+  // POST to bridge
+  fetch('/api/stream/' + itemId + '/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, value: null }),
+  }).catch(() => {});
+
+  switch (action) {
+    case 'approve':
+    case 'accept':
+      toast(`✅ Approved ${agent.name}'s work`, 'success');
+      addXP(10, 'approved');
+      removeStreamItem(itemId);
+      break;
+    case 'reject':
+      toast(`❌ Rejected — feedback sent to ${agent.name}`, 'error');
+      removeStreamItem(itemId);
+      break;
+    case 'defer':
+      toast('⏸️ Deferred', 'info');
+      removeStreamItem(itemId);
+      break;
+    case 'ack':
+      toast('👍 Acknowledged', 'success');
+      addXP(5, 'ack');
+      markStreamRead(itemId);
+      break;
     case 'pin':
-      event.pinned = !event.pinned;
-      toast(event.pinned ? '📌 Pinned to vault' : '📌 Unpinned', 'info');
-      renderFeed();
+      toast('📌 Pinned to vault', 'success');
       break;
-    case 'retry':   toast(`🔄 Retrying task...`, 'info'); break;
-    case 'dismiss':
-      feedEvents = feedEvents.filter(e => e.id !== eventId);
-      const card = document.querySelector(`[data-id="${eventId}"]`);
-      if (card) card.remove();
+    case 'reply':
+      // Toggle inline reply box
+      const replyBox = document.getElementById('reply-' + itemId);
+      if (replyBox) {
+        replyBox.classList.toggle('visible');
+        if (replyBox.classList.contains('visible')) {
+          const input = replyBox.querySelector('.stream-reply-input');
+          if (input) input.focus();
+          // Auto-expand the item
+          const el = document.querySelector(`.stream-item[data-id="${itemId}"]`);
+          if (el && !el.classList.contains('expanded')) el.classList.add('expanded');
+        }
+      }
       break;
+    case 'retry':
+      toast('🔄 Retrying...', 'info');
+      break;
+    case 'fix':
+      toast('🔧 Dispatching fix to agent...', 'info');
+      addXP(5, 'fix dispatch');
+      break;
+    case 'mute':
+      toast('🔇 Category muted', 'info');
+      removeStreamItem(itemId);
+      break;
+    case 'task':
+      toast('📋 Task created from error', 'success');
+      addXP(5, 'task created');
+      break;
+    case 'redo':
+      toast('🔄 Sent back for rework', 'info');
+      break;
+    case 'preview':
+      toast('👁️ Opening vault preview...', 'info');
+      nav('mind');
+      break;
+    case 'edit':
+      toast('📝 Edit mode — not yet implemented', 'info');
+      break;
+    case 'link':
+      toast('🔗 Link to mission — select mission...', 'info');
+      break;
+    case 'investigate':
+      toast('🔧 Investigating system event...', 'info');
+      nav('pulse');
+      break;
+  }
+}
+
+function streamReply(itemId, text) {
+  if (!text) return;
+  streamSendReply(itemId, text);
+}
+
+function streamSendReply(itemId, text) {
+  if (!text || !text.trim()) return;
+  const item = streamItems.find(i => i.id === itemId);
+  if (!item) return;
+  const agent = ga(item.agent) || { name: item.agent || 'Agent' };
+
+  // Post to agent message endpoint
+  fetch('/api/agent/message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: text.trim(), agent: item.agent, context: 'stream-reply', streamItemId: itemId }),
+  }).catch(() => {});
+
+  // Also post as stream action
+  fetch('/api/stream/' + itemId + '/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reply', value: text.trim() }),
+  }).catch(() => {});
+
+  toast(`💬 Reply sent to ${agent.name}`, 'success');
+  addXP(5, 'replied');
+  markStreamRead(itemId);
+
+  // Clear input
+  const replyBox = document.getElementById('reply-' + itemId);
+  if (replyBox) {
+    const input = replyBox.querySelector('.stream-reply-input');
+    if (input) input.value = '';
+    replyBox.classList.remove('visible');
+  }
+}
+
+function removeStreamItem(itemId) {
+  streamItems = streamItems.filter(i => i.id !== itemId);
+  const el = document.querySelector(`.stream-item[data-id="${itemId}"]`);
+  if (el) {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(100%)';
+    el.style.transition = 'all 0.3s ease';
+    setTimeout(() => el.remove(), 300);
+  }
+}
+
+function markStreamRead(itemId) {
+  streamReadIds.add(itemId);
+  const item = streamItems.find(i => i.id === itemId);
+  if (item) item.read = true;
+  const el = document.querySelector(`.stream-item[data-id="${itemId}"]`);
+  if (el) el.classList.remove('unread');
+}
+
+// Batch actions
+function toggleStreamSelect(itemId, checked) {
+  if (checked) streamSelectedIds.add(itemId);
+  else streamSelectedIds.delete(itemId);
+  updateStreamBatchCount();
+}
+
+function toggleSelectAllStream(checked) {
+  const checkboxes = $$('.stream-item-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = checked;
+    const id = cb.closest('.stream-item')?.dataset.id;
+    if (id) {
+      if (checked) streamSelectedIds.add(id);
+      else streamSelectedIds.delete(id);
+    }
+  });
+  updateStreamBatchCount();
+}
+
+function updateStreamBatchCount() {
+  const el = $('stream-batch-count');
+  if (el) el.textContent = streamSelectedIds.size + ' selected';
+}
+
+function batchStreamAction(action) {
+  if (streamSelectedIds.size === 0) { toast('No items selected', 'info'); return; }
+  const count = streamSelectedIds.size;
+  streamSelectedIds.forEach(id => streamAction(id, action));
+  streamSelectedIds.clear();
+  updateStreamBatchCount();
+  toast(`Batch ${action}: ${count} items`, 'success');
+}
+
+// Keyboard shortcuts for The Stream
+document.addEventListener('keydown', e => {
+  if (currentPage !== 'feed') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (paletteOpen) return;
+
+  const items = $$('.stream-item');
+  if (items.length === 0) return;
+
+  switch (e.key) {
+    case 'j': // Next item
+      e.preventDefault();
+      streamFocusIdx = Math.min(streamFocusIdx + 1, items.length - 1);
+      updateStreamFocus(items);
+      break;
+    case 'k': // Previous item
+      e.preventDefault();
+      streamFocusIdx = Math.max(streamFocusIdx - 1, 0);
+      updateStreamFocus(items);
+      break;
+    case 'Enter': // Expand focused
+      e.preventDefault();
+      if (streamFocusIdx >= 0 && items[streamFocusIdx]) {
+        const id = items[streamFocusIdx].dataset.id;
+        if (id) toggleStreamExpand(id);
+      }
+      break;
+    case 'a': // Approve focused
+      e.preventDefault();
+      if (streamFocusIdx >= 0 && items[streamFocusIdx]) {
+        const id = items[streamFocusIdx].dataset.id;
+        if (id) streamAction(id, 'approve');
+      }
+      break;
+    case 'r': // Reject focused
+      e.preventDefault();
+      if (streamFocusIdx >= 0 && items[streamFocusIdx]) {
+        const id = items[streamFocusIdx].dataset.id;
+        if (id) streamAction(id, 'reject');
+      }
+      break;
+    case 'd': // Defer focused
+      e.preventDefault();
+      if (streamFocusIdx >= 0 && items[streamFocusIdx]) {
+        const id = items[streamFocusIdx].dataset.id;
+        if (id) streamAction(id, 'defer');
+      }
+      break;
+    case '/': // Focus omnibus / command palette
+      e.preventDefault();
+      openCommandPalette();
+      break;
+  }
+});
+
+function updateStreamFocus(items) {
+  items.forEach((el, i) => el.classList.toggle('focused', i === streamFocusIdx));
+  if (streamFocusIdx >= 0 && items[streamFocusIdx]) {
+    items[streamFocusIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 }
 
@@ -345,15 +805,44 @@ function openTalkWithAgent(agentId) {
   setTimeout(() => selectDM(agentId), 200);
 }
 
-// Live feed updates (called from simulation)
+// Live feed updates (called from simulation) — now adds to stream
 function prependFeedCard(event) {
   feedEvents.unshift(event);
-  if (feedFilter === 'all' || feedFilter === event.type) {
-    const list = $('feed-list');
-    const card = makeFeedCard(event, true);
-    list.insertBefore(card, list.firstChild);
+  // Add to stream
+  const typeMap = {
+    task_started: 'activity', task_completed: 'completion', file_changed: 'activity',
+    question_asked: 'question', error: 'error', insight: 'activity', vault_write: 'vault',
+  };
+  const newItem = {
+    id: event.id,
+    type: typeMap[event.type] || 'activity',
+    streamType: event.type,
+    agent: event.agent,
+    title: event.content,
+    detail: '',
+    time: new Date().toISOString(),
+    displayTime: event.time,
+    severity: event.type === 'error' ? 'error' : 'info',
+    source: 'local',
+    read: false,
+    _isNew: true,
+  };
+  // Avoid duplicates
+  if (!streamItems.find(i => i.id === event.id)) {
+    streamItems.unshift(newItem);
+    if (currentPage === 'feed') {
+      const list = $('stream-list');
+      if (list && list.firstChild && !list.querySelector('.stream-empty')) {
+        const el = makeStreamItem(newItem, 0);
+        list.insertBefore(el, list.firstChild);
+      }
+    }
   }
-  addNotification(`${(ga(event.agent) || {}).name || event.agent}: ${TYPE_LABELS[event.type] || event.type}`, event.content.substring(0, 80), TYPE_ICONS[event.type] || '🔔');
+  addNotification(
+    `${(ga(event.agent) || {}).name || event.agent}: ${TYPE_LABELS[event.type] || event.type}`,
+    (event.content || '').substring(0, 80),
+    TYPE_ICONS[event.type] || '🔔'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -545,12 +1034,12 @@ function makeProposalCard(q) {
   return `
     <div class="proposal-card" id="qcard-${q.id}" style="--priority-color:${priorityColor}">
       <div class="proposal-card-top">
-        <div class="proposal-card-title">${q.question || q.title || 'Untitled'}</div>
+        <div class="proposal-card-title" style="cursor:pointer" data-ctx-type="task" data-ctx-id="${q.id}">${q.question || q.title || 'Untitled'}</div>
         <span class="proposal-priority-pill" style="background:${priorityColor}20;color:${priorityColor}">${priority}</span>
       </div>
       <div class="proposal-confidence-bar" style="width:${confWidth}%;background:${confColor}"></div>
       <div class="proposal-card-meta">
-        <span class="proposal-source-badge" style="background:${source.color}18;color:${source.color}">${source.emoji} ${source.name}</span>
+        <span class="proposal-source-badge" style="background:${source.color}18;color:${source.color};cursor:pointer" data-ctx-type="agent" data-ctx-id="${q._source || q.agent}">${source.emoji} ${source.name}</span>
         <span class="proposal-type-badge">${typeEmojis[proposalType] || '📝'} ${proposalType}</span>
         ${created ? `<span class="proposal-time">${created}</span>` : ''}
         ${linkedMission ? `<span class="proposal-linked">🔗 ${linkedMission}</span>` : ''}
@@ -1336,7 +1825,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
 
   const headerSection = !collapsed ? `
     <div class="msg-header">
-      <span class="msg-author" style="color:${agent.color}" onclick="openMemberProfile('${msg.agent}')">${agent.name}</span>
+      <span class="msg-author" style="color:${agent.color}" data-ctx-type="agent" data-ctx-id="${msg.agent}">${agent.name}</span>
       <span class="msg-timestamp">${msg.time}</span>
       ${isUser ? '<span class="msg-sync-check">✓ synced</span>' : ''}
     </div>
@@ -2125,7 +2614,7 @@ function renderDashboard() {
   if (!agentBar) return;
   agentBar.innerHTML = AGENTS.map(a => {
     const statusDot = a.status === 'active' ? 'active' : 'idle';
-    return `<div class="dash-agent ${statusDot}" title="${a.name}: ${a.status === 'active' ? a.task || 'Working' : 'Idle'}">
+    return `<div class="dash-agent ${statusDot}" title="${a.name}: ${a.status === 'active' ? a.task || 'Working' : 'Idle'}" style="cursor:pointer" data-ctx-type="agent" data-ctx-id="${a.id}">
       <span class="dash-agent-emoji">${a.emoji}</span>
       <span class="dash-agent-name">${a.name}</span>
       <span class="dash-agent-dot ${statusDot}"></span>
@@ -2167,3 +2656,465 @@ renderFeed = function() {
   _origRenderFeed();
   renderDashboard();
 };
+
+// Update page title for Home/Stream
+PAGE_TITLES.feed = 'The Stream';
+
+// ═══════════════════════════════════════════════════════════
+// AGENT DRAWER — Live Activity Windows
+// ═══════════════════════════════════════════════════════════
+
+let agentDrawerOpen = false;
+let agentDrawerCurrentId = null;
+
+function openAgentDrawer(agentId) {
+  const agent = ga(agentId);
+  if (!agent) return;
+  agentDrawerCurrentId = agentId;
+  agentDrawerOpen = true;
+
+  const drawer = $('agent-drawer');
+  const overlay = $('agent-drawer-overlay');
+  drawer.classList.add('open');
+  overlay.classList.remove('hidden');
+
+  renderAgentDrawerContent(agent);
+
+  // Fetch live activity from bridge
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agents/${agentId}/activity`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data && data.events) {
+        renderDrawerActivity(data.events);
+      }
+    })
+    .catch(() => {/* use mock data already rendered */});
+}
+
+function closeAgentDrawer() {
+  agentDrawerOpen = false;
+  agentDrawerCurrentId = null;
+  $('agent-drawer').classList.remove('open');
+  $('agent-drawer-overlay').classList.add('hidden');
+}
+
+function renderAgentDrawerContent(agent) {
+  const statusClass = agent.status === 'active' ? 'active' : agent.status === 'error' ? 'error' : 'idle';
+  const statusLabel = agent.status === 'active' ? `🟢 Active` : agent.status === 'error' ? '🔴 Error' : '⚫ Idle';
+  const uptimeMin = Math.floor(Math.random() * 480 + 60);
+  const uptimeStr = uptimeMin >= 60 ? `${Math.floor(uptimeMin/60)}h ${uptimeMin%60}m` : `${uptimeMin}m`;
+  const tokensToday = agent.tokens || 0;
+  const tasksDone = agent.tasks || 0;
+  const tasksWeek = tasksDone + Math.floor(Math.random() * 20);
+  const successRate = Math.floor(agent.fitness * 100);
+
+  // Header
+  $('agent-drawer-header').innerHTML = `
+    <div class="drawer-header-top">
+      <div class="drawer-avatar" style="background:${agent.color}20;border-color:${agent.color}">${agent.emoji}</div>
+      <div class="drawer-agent-info">
+        <div class="drawer-agent-name" style="color:${agent.color}">${agent.name}</div>
+        <div class="drawer-agent-role">${agent.role}</div>
+      </div>
+      <button class="drawer-close-btn" onclick="closeAgentDrawer()">✕</button>
+    </div>
+    <div class="drawer-status-row">
+      <span class="drawer-status-dot ${statusClass}"></span>
+      <span>${statusLabel}${agent.task ? ' — ' + agent.task.substring(0, 40) : ''}</span>
+    </div>
+    <div class="drawer-stats-row">
+      <div class="drawer-stat"><span class="drawer-stat-val">${uptimeStr}</span><span class="drawer-stat-label">Uptime</span></div>
+      <div class="drawer-stat"><span class="drawer-stat-val">${(tokensToday/1000).toFixed(1)}K</span><span class="drawer-stat-label">Tokens</span></div>
+      <div class="drawer-stat"><span class="drawer-stat-val">${successRate}%</span><span class="drawer-stat-label">Success</span></div>
+      <div class="drawer-stat"><span class="drawer-stat-val">${Math.round(agent.fitness*100)}</span><span class="drawer-stat-label">Fitness</span></div>
+    </div>
+  `;
+
+  // Body
+  const recentActions = feedEvents
+    .filter(e => e.agent === agent.id)
+    .slice(0, 5)
+    .map(e => {
+      const icon = TYPE_ICONS[e.type] || '📝';
+      return `<div class="drawer-action-item">
+        <span class="drawer-action-dot"></span>
+        <span>${icon} ${e.content.substring(0, 60)}${e.content.length > 60 ? '…' : ''}</span>
+        <span class="drawer-action-time">${e.time}</span>
+      </div>`;
+    }).join('');
+
+  // Mock conversation
+  const dmMsgs = (typeof DM_MESSAGES !== 'undefined' && DM_MESSAGES[agent.id]) ? DM_MESSAGES[agent.id].slice(-10) : [];
+  const msgsHTML = dmMsgs.map(m => {
+    const isUser = m.agent === 'user';
+    return `<div class="drawer-msg ${isUser ? 'from-user' : 'from-agent'}">
+      ${!isUser ? `<span class="drawer-msg-sender" style="color:${agent.color}">${agent.emoji} ${agent.name}</span>` : ''}
+      ${m.text.substring(0, 150)}
+    </div>`;
+  }).join('');
+
+  // Sparkline data (mock token usage)
+  const sparkBars = Array.from({length: 12}, () => Math.floor(Math.random() * 24 + 4));
+  const maxSpark = Math.max(...sparkBars);
+  const sparkHTML = sparkBars.map(v =>
+    `<div class="drawer-spark-bar" style="height:${Math.round(v/maxSpark*100)}%;background:${agent.color}"></div>`
+  ).join('');
+
+  $('agent-drawer-body').innerHTML = `
+    ${agent.status === 'active' && agent.task ? `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Currently Working On</div>
+        <div class="drawer-current-task">
+          <span class="drawer-task-pulse"></span>
+          <span>${agent.task}</span>
+        </div>
+      </div>
+    ` : ''}
+    <div class="drawer-section">
+      <div class="drawer-section-title">Recent Actions</div>
+      ${recentActions || '<div style="font-size:12px;color:var(--text-muted)">No recent activity</div>'}
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-title">Conversation</div>
+      <div class="drawer-messages">${msgsHTML || '<div style="font-size:12px;color:var(--text-muted)">No messages yet</div>'}</div>
+      <div class="drawer-msg-input-area">
+        <input type="text" class="drawer-msg-input" id="drawer-msg-input"
+          placeholder="Message ${agent.name}..."
+          onkeydown="if(event.key==='Enter'){event.preventDefault();sendDrawerMessage('${agent.id}');}">
+        <button class="drawer-msg-send" onclick="sendDrawerMessage('${agent.id}')">▶</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-title">Stats</div>
+      <div style="display:flex;gap:16px;margin-bottom:10px;">
+        <div><span style="font-size:18px;font-weight:700;color:var(--text)">${tasksDone}</span><span style="font-size:11px;color:var(--text-muted)"> today</span></div>
+        <div><span style="font-size:18px;font-weight:700;color:var(--text)">${tasksWeek}</span><span style="font-size:11px;color:var(--text-muted)"> this week</span></div>
+      </div>
+      <div class="drawer-section-title" style="margin-top:8px">Token Usage (24h)</div>
+      <div class="drawer-sparkline">${sparkHTML}</div>
+    </div>
+  `;
+
+  // Footer
+  $('agent-drawer-footer').innerHTML = `
+    <button class="drawer-action-btn" onclick="drawerAssignTask('${agent.id}')">📋 Assign Task</button>
+    <button class="drawer-action-btn" onclick="drawerPauseAgent('${agent.id}')">⏸️ Pause</button>
+    <button class="drawer-action-btn" onclick="drawerConfigAgent('${agent.id}')">🔧 Config</button>
+  `;
+}
+
+function renderDrawerActivity(events) {
+  const section = $('agent-drawer-body')?.querySelector('.drawer-section');
+  if (!section) return;
+  // Merge live events into the recent actions display
+  const actionsContainer = section.querySelector('.drawer-section-title + div') || section;
+  if (events.length > 0) {
+    const html = events.slice(0, 5).map(e => `
+      <div class="drawer-action-item">
+        <span class="drawer-action-dot"></span>
+        <span>${e.content || e.text || ''}</span>
+        <span class="drawer-action-time">${e.time || ''}</span>
+      </div>
+    `).join('');
+    // Find the recent actions section by title and replace
+    const allSections = $('agent-drawer-body').querySelectorAll('.drawer-section');
+    if (allSections[1]) { // second section = recent actions (or first if no current task)
+      const titleEl = allSections[0].querySelector('.drawer-section-title');
+      if (titleEl && titleEl.textContent.includes('Recent')) {
+        allSections[0].innerHTML = `<div class="drawer-section-title">Recent Actions</div>${html}`;
+      }
+    }
+  }
+}
+
+function sendDrawerMessage(agentId) {
+  const input = $('drawer-msg-input');
+  if (!input || !input.value.trim()) return;
+  const text = input.value.trim();
+  input.value = '';
+
+  // Add to UI
+  const container = $('agent-drawer-body')?.querySelector('.drawer-messages');
+  if (container) {
+    const bubble = document.createElement('div');
+    bubble.className = 'drawer-msg from-user';
+    bubble.textContent = text;
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // POST to bridge
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agent/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId, message: text }),
+  }).catch(() => {});
+
+  toast(`📨 Sent to ${(ga(agentId) || {}).emoji || ''} ${(ga(agentId) || {}).name || agentId}`, 'success', 2000);
+}
+
+function drawerAssignTask(agentId) {
+  closeAgentDrawer();
+  // Pre-fill task creation
+  const agent = ga(agentId);
+  const title = prompt(`Assign task to ${agent?.emoji || ''} ${agent?.name || agentId}:`);
+  if (!title) return;
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, agent: agentId, priority: 'P2', description: '' }),
+  }).catch(() => {});
+
+  toast(`📋 Task assigned to ${agent?.emoji || ''} ${agent?.name || agentId}`, 'success');
+}
+
+function drawerPauseAgent(agentId) {
+  const agent = ga(agentId);
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agents/${agentId}/pause`, { method: 'POST' }).catch(() => {});
+  if (agent) { agent.status = 'idle'; agent.task = ''; }
+  toast(`⏸️ ${agent?.emoji || ''} ${agent?.name || agentId} paused`, 'info');
+  closeAgentDrawer();
+  if (typeof updateActiveAgents === 'function') updateActiveAgents();
+}
+
+function drawerConfigAgent(agentId) {
+  closeAgentDrawer();
+  nav('config');
+  toast(`🔧 Showing config for ${(ga(agentId) || {}).name || agentId}`, 'info');
+}
+
+// Escape key closes drawer
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && agentDrawerOpen) {
+    closeAgentDrawer();
+  }
+});
+
+// Event delegation: make all agent emojis/names clickable
+document.addEventListener('click', e => {
+  // Check for agent name elements (feed cards, dashboard, etc.)
+  const agentName = e.target.closest('.feed-agent-name, .dash-agent, .health-agent, .member-item');
+
+  if (e.target.classList.contains('feed-agent-name')) {
+    const card = e.target.closest('.feed-card');
+    if (card) {
+      const event = feedEvents.find(ev => ev.id === card.dataset.id);
+      if (event) { openAgentDrawer(event.agent); return; }
+    }
+  }
+
+  if (e.target.closest('.dash-agent')) {
+    const dashAgent = e.target.closest('.dash-agent');
+    const agentObj = AGENTS.find(a => dashAgent.textContent.includes(a.name));
+    if (agentObj) { openAgentDrawer(agentObj.id); return; }
+  }
+
+  if (e.target.closest('.health-agent')) {
+    const healthRow = e.target.closest('.health-row');
+    if (healthRow) {
+      const agentObj = AGENTS.find(a => healthRow.textContent.includes(a.name));
+      if (agentObj) { openAgentDrawer(agentObj.id); return; }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// OMNIBUS INPUT — Universal command bar
+// ═══════════════════════════════════════════════════════════
+
+const OMNIBUS_ROUTES = [
+  { id: 'coder',      emoji: '💻', name: 'Coder',         keywords: ['code','build','fix','implement','deploy','script','debug','refactor','test','compile','npm','git'] },
+  { id: 'researcher', emoji: '🔬', name: 'Researcher',    keywords: ['research','find','compare','analyze','study','investigate','look up','search for','what is','who is'] },
+  { id: 'ops',        emoji: '⚙️', name: 'Ops',           keywords: ['system','service','restart','health','disk','memory','cpu','uptime','status','server','deploy','cron'] },
+  { id: 'task',       emoji: '📋', name: 'New Task',      keywords: ['task','todo','create','assign','schedule','plan','add'] },
+  { id: 'search',     emoji: '🔍', name: 'Search Vault',  keywords: [] }, // triggered by ? prefix or 'search'/'find' prefix
+  { id: 'navigate',   emoji: '🧭', name: 'Navigate',      keywords: [] }, // triggered by page name match
+  { id: 'righthand',  emoji: '🤝', name: 'Right Hand',    keywords: [] }, // default fallback
+];
+
+const NAV_PAGES = {
+  'home': 'feed', 'feed': 'feed', 'dashboard': 'feed',
+  'talk': 'talk', 'chat': 'talk', 'messages': 'talk',
+  'queue': 'queue', 'proposals': 'queue',
+  'mind': 'mind', 'vault': 'mind', 'knowledge': 'mind',
+  'pulse': 'pulse', 'system': 'pulse',
+  'board': 'board', 'tasks': 'board',
+  'plans': 'plans', 'kanban': 'plans',
+  'schedule': 'schedule', 'calendar': 'schedule',
+  'missions': 'missions', 'goals': 'missions',
+  'explore': 'explore',
+  'config': 'config', 'settings': 'config',
+  'stream': 'stream', 'logs': 'stream',
+};
+
+function detectOmnibusRoute(text) {
+  const lower = text.toLowerCase().trim();
+  if (!lower) return { id: 'righthand', emoji: '🤝', name: 'Right Hand', label: 'default' };
+
+  // Check navigation first
+  for (const [keyword, page] of Object.entries(NAV_PAGES)) {
+    if (lower === keyword || lower === `go to ${keyword}` || lower === `open ${keyword}`) {
+      return { id: 'navigate', emoji: '🧭', name: 'Navigate', label: `→ ${PAGE_TITLES[page] || page}`, page };
+    }
+  }
+
+  // Search vault
+  if (lower.startsWith('?') || lower.startsWith('search ') || lower.startsWith('find ')) {
+    return { id: 'search', emoji: '🔍', name: 'Search Vault', label: 'search vault' };
+  }
+
+  // Keyword matching
+  for (const route of OMNIBUS_ROUTES) {
+    if (route.keywords.length === 0) continue;
+    if (route.keywords.some(kw => lower.includes(kw))) {
+      return { ...route, label: route.name };
+    }
+  }
+
+  return { id: 'righthand', emoji: '🤝', name: 'Right Hand', label: 'default' };
+}
+
+function focusOmnibus() {
+  $('omnibus-input').focus();
+}
+
+function onOmnibusFocus() {
+  const val = $('omnibus-input').value;
+  if (val.trim()) {
+    $('omnibus-route-preview').classList.remove('hidden');
+  }
+}
+
+function onOmnibusBlur() {
+  // Delay to allow click on preview
+  setTimeout(() => {
+    $('omnibus-route-preview').classList.add('hidden');
+  }, 200);
+}
+
+function onOmnibusInput(val) {
+  const preview = $('omnibus-route-preview');
+  if (!val.trim()) {
+    preview.classList.add('hidden');
+    return;
+  }
+
+  const route = detectOmnibusRoute(val);
+  preview.classList.remove('hidden');
+
+  const routeColors = {
+    coder: '#a6e3a1', researcher: '#89b4fa', ops: '#fab387',
+    task: '#f9e2af', search: '#94e2d5', navigate: '#cba6f7', righthand: '#E8A838'
+  };
+  const color = routeColors[route.id] || '#E8A838';
+
+  preview.innerHTML = `
+    <div class="omnibus-route-badge">
+      <span class="omnibus-route-icon">${route.emoji}</span>
+      <span style="color:${color}">${route.name}</span>
+      ${route.label && route.label !== route.name ? `<span class="omnibus-route-label">${route.label}</span>` : ''}
+    </div>
+  `;
+}
+
+function handleOmnibusKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitOmnibus();
+  }
+  if (e.key === 'Escape') {
+    $('omnibus-input').blur();
+    $('omnibus-input').value = '';
+    $('omnibus-route-preview').classList.add('hidden');
+  }
+}
+
+function submitOmnibus() {
+  const input = $('omnibus-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const route = detectOmnibusRoute(text);
+  input.value = '';
+  $('omnibus-route-preview').classList.add('hidden');
+  input.blur();
+
+  switch (route.id) {
+    case 'navigate':
+      nav(route.page);
+      toast(`🧭 Navigating to ${PAGE_TITLES[route.page] || route.page}`, 'info', 2000);
+      break;
+
+    case 'search': {
+      const query = text.replace(/^\??\s*(search|find)\s*/i, '');
+      nav('mind');
+      setTimeout(() => {
+        const searchInput = $('mind-search');
+        if (searchInput) {
+          searchInput.value = query;
+          searchMind(query);
+        }
+      }, 200);
+      toast(`🔍 Searching vault: "${query}"`, 'info', 2000);
+      break;
+    }
+
+    case 'task': {
+      const title = text.replace(/^(task|todo|create|assign|add)\s*/i, '').trim() || text;
+      const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+      fetch(`${bridgeUrl}/api/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, priority: 'P2', description: '' }),
+      }).catch(() => {});
+      toast(`📋 Created task: "${title}"`, 'success', 2500);
+      break;
+    }
+
+    case 'coder':
+    case 'researcher':
+    case 'ops':
+    case 'righthand': {
+      const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+      fetch(`${bridgeUrl}/api/agent/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: route.id === 'righthand' ? 'righthand' : route.id, message: text }),
+      }).catch(() => {});
+      toast(`${route.emoji} Sent to ${route.name}`, 'success', 2500);
+      break;
+    }
+
+    default:
+      toast(`${route.emoji} ${route.name}: "${text}"`, 'info', 2500);
+  }
+
+  addXP(5, 'omnibus command');
+}
+
+// Keyboard shortcut: Cmd+K or / focuses omnibus
+document.addEventListener('keydown', e => {
+  // Cmd+K — open omnibus (override existing palette only if omnibus exists)
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    const omnibus = $('omnibus-input');
+    if (omnibus) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      omnibus.focus();
+      return;
+    }
+  }
+  // / focuses omnibus from anywhere (if not in input)
+  if (e.key === '/' && !paletteOpen && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+    const omnibus = $('omnibus-input');
+    if (omnibus) {
+      e.preventDefault();
+      omnibus.focus();
+    }
+  }
+});

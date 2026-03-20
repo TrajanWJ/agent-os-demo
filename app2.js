@@ -109,6 +109,9 @@ function setMindMode(mode) {
 
 // ── Force-Directed Graph ──────────────────────────────────
 let _graphResizeHandler = null;
+let graphLocked = false;
+let graphAlpha = 1.0; // simulation "temperature" — decays over time
+
 function initGraph() {
   graphCanvas = $('graph-canvas');
   if (!graphCanvas) return;
@@ -148,13 +151,14 @@ function initGraph() {
 
   // Touch support for mobile
   graphCanvas.addEventListener('touchstart', e => {
+    if (graphLocked) return;
     const touch = e.touches[0];
     const rect = graphCanvas.getBoundingClientRect();
     const n = hitTestNode(touch.clientX - rect.left, touch.clientY - rect.top);
     if (n) { draggingNode = n; e.preventDefault(); }
   }, { passive: false });
   graphCanvas.addEventListener('touchmove', e => {
-    if (!draggingNode) return;
+    if (!draggingNode || graphLocked) return;
     e.preventDefault();
     const touch = e.touches[0];
     const rect = graphCanvas.getBoundingClientRect();
@@ -164,8 +168,8 @@ function initGraph() {
     if (graphSettled) drawGraph();
   }, { passive: false });
   graphCanvas.addEventListener('touchend', e => {
-    if (draggingNode && graphSettled) {
-      graphSettled = false; graphSimTick = 0; runGraphSim();
+    if (draggingNode && graphSettled && !graphLocked) {
+      graphSettled = false; graphSimTick = 0; graphAlpha = 0.5; runGraphSim();
     }
     // Tap to select
     if (draggingNode) {
@@ -175,32 +179,68 @@ function initGraph() {
     draggingNode = null;
   });
 
+  // Init lock button state
+  const lockBtn = $('graph-lock-btn');
+  if (lockBtn) {
+    lockBtn.textContent = graphLocked ? '🔓 Unlock' : '🔒 Lock';
+    lockBtn.classList.toggle('active', graphLocked);
+  }
+
   if (graphAnimId) cancelAnimationFrame(graphAnimId);
   graphSimTick = 0;
   graphSettled = false;
+  graphAlpha = 1.0;
   runGraphSim();
+}
+
+function toggleGraphLock() {
+  graphLocked = !graphLocked;
+  const btn = $('graph-lock-btn');
+  if (btn) {
+    btn.textContent = graphLocked ? '🔓 Unlock' : '🔒 Lock';
+    btn.classList.toggle('active', graphLocked);
+  }
+  if (graphLocked) {
+    // Freeze: zero all velocities, stop sim
+    graphNodes.forEach(n => { n.vx = 0; n.vy = 0; });
+    graphSettled = true;
+    if (graphAnimId) { cancelAnimationFrame(graphAnimId); graphAnimId = null; }
+    drawGraph();
+  }
 }
 
 let graphSimTick = 0;
 let graphSettled = false;
 
 function runGraphSim() {
-  if (mindMode !== 'graph' || !graphCtx) return;
+  if (mindMode !== 'graph' || !graphCtx || graphLocked) return;
 
   const W = graphCanvas.width;
   const H = graphCanvas.height;
   const k = Math.sqrt((W * H) / Math.max(graphNodes.length, 1));
 
+  // Alpha decay — simulation loses energy each frame (5% decay)
+  graphAlpha *= 0.95;
+
   // Reset forces
   graphNodes.forEach(n => { n.fx = 0; n.fy = 0; });
 
-  // Repulsion between all nodes
+  // Repulsion between all nodes (includes collision prevention)
   for (let i = 0; i < graphNodes.length; i++) {
     for (let j = i + 1; j < graphNodes.length; j++) {
       const a = graphNodes[i], b = graphNodes[j];
       let dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = (k * k) / d * 0.3;
+      const minDist = (a.r + b.r) + 20; // collision buffer
+
+      // Standard repulsion scaled by alpha
+      let force = (k * k) / d * 0.3 * graphAlpha;
+
+      // Extra collision repulsion when nodes overlap
+      if (d < minDist) {
+        force += (minDist - d) * 2.0;
+      }
+
       const fx = (dx / d) * force;
       const fy = (dy / d) * force;
       a.fx -= fx; a.fy -= fy;
@@ -208,31 +248,38 @@ function runGraphSim() {
     }
   }
 
-  // Attraction along edges
+  // Attraction along edges (scaled by alpha)
   graphEdges.forEach(({ source, target }) => {
     const a = graphNodes[source], b = graphNodes[target];
     if (!a || !b) return;
     const dx = b.x - a.x, dy = b.y - a.y;
     const d = Math.sqrt(dx * dx + dy * dy) || 1;
-    const force = (d * d) / k * 0.08;
+    const force = (d * d) / k * 0.08 * graphAlpha;
     const fx = (dx / d) * force;
     const fy = (dy / d) * force;
     a.fx += fx; a.fy += fy;
     b.fx -= fx; b.fy -= fy;
   });
 
-  // Center gravity — strong pull to keep nodes clustered
+  // Center gravity (scaled by alpha)
   graphNodes.forEach(n => {
-    n.fx += (W / 2 - n.x) * 0.12;
-    n.fy += (H / 2 - n.y) * 0.12;
+    n.fx += (W / 2 - n.x) * 0.08 * graphAlpha;
+    n.fy += (H / 2 - n.y) * 0.08 * graphAlpha;
   });
 
-  // Integrate + measure total kinetic energy
+  // Integrate with velocity decay (friction = 0.85) + measure kinetic energy
+  const velocityDecay = 0.85;
   let totalEnergy = 0;
   graphNodes.forEach(n => {
     if (n === draggingNode) return;
-    n.vx = (n.vx + n.fx) * 0.85;
-    n.vy = (n.vy + n.fy) * 0.85;
+    n.vx = (n.vx + n.fx) * velocityDecay;
+    n.vy = (n.vy + n.fy) * velocityDecay;
+
+    // Clamp velocity to prevent explosions
+    const maxV = 8;
+    const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+    if (speed > maxV) { n.vx = (n.vx / speed) * maxV; n.vy = (n.vy / speed) * maxV; }
+
     n.x += n.vx;
     n.y += n.vy;
     const pad = 60;
@@ -244,10 +291,13 @@ function runGraphSim() {
   graphSimTick++;
   drawGraph();
 
-  // Stop animating once settled (energy near zero or max 300 ticks)
-  if ((totalEnergy < 0.01 && graphSimTick > 50) || graphSimTick > 300) {
+  // Stop when all velocities are tiny (energy < 0.1) or alpha exhausted or max ticks
+  if ((totalEnergy < 0.1 && graphSimTick > 30) || graphAlpha < 0.01 || graphSimTick > 200) {
     graphSettled = true;
+    // Zero out residual velocities for clean stop
+    graphNodes.forEach(n => { n.vx = 0; n.vy = 0; });
     drawGraph(); // final frame
+    graphAnimId = null;
     return; // stop the loop
   }
 
@@ -338,20 +388,22 @@ function graphMouseMove(e) {
 }
 
 function graphMouseDown(e) {
+  if (graphLocked) return;
   const rect = graphCanvas.getBoundingClientRect();
   const n = hitTestNode(e.clientX - rect.left, e.clientY - rect.top);
   if (n) { draggingNode = n; graphCanvas.style.cursor = 'grabbing'; }
 }
 
 function graphMouseUp() {
-  if (draggingNode && graphSettled) {
-    // Restart sim to re-settle after drag
+  if (draggingNode && graphSettled && !graphLocked) {
+    // Restart sim briefly to re-settle after drag (low alpha = quick settle)
     graphSettled = false;
     graphSimTick = 0;
+    graphAlpha = 0.3; // brief re-settle, not full sim
     runGraphSim();
   }
   draggingNode = null;
-  graphCanvas.style.cursor = 'grab';
+  graphCanvas.style.cursor = graphLocked ? 'default' : 'grab';
 }
 
 function graphClick(e) {

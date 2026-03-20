@@ -25,14 +25,24 @@
       </div>
       <div class="sidebar-nav">
         <button class="nav-item active" data-page="feed" onclick="nav('feed')">
-          <i data-lucide="layout-dashboard" class="nav-icon-svg"></i>
-          <span class="nav-label">Home</span>
+          <i data-lucide="zap" class="nav-icon-svg"></i>
+          <span class="nav-label">Stream</span>
           <span class="nav-badge" id="feed-badge"></span>
+        </button>
+        <button class="nav-item" data-page="inbox" onclick="nav('inbox')">
+          <i data-lucide="inbox" class="nav-icon-svg"></i>
+          <span class="nav-label">Inbox</span>
+          <span class="nav-badge" id="inbox-badge"></span>
         </button>
         <button class="nav-item" data-page="talk" onclick="nav('talk')">
           <i data-lucide="message-circle" class="nav-icon-svg"></i>
           <span class="nav-label">Talk</span>
           <span class="nav-badge" id="talk-badge">7</span>
+        </button>
+        <button class="nav-item" data-page="rooms" onclick="nav('rooms')">
+          <i data-lucide="users" class="nav-icon-svg"></i>
+          <span class="nav-label">Rooms</span>
+          <span class="nav-badge" id="rooms-badge"></span>
         </button>
         <button class="nav-item" data-page="queue" onclick="nav('queue')">
           <i data-lucide="inbox" class="nav-icon-svg"></i>
@@ -49,6 +59,11 @@
           <span class="nav-label">System</span>
           <span class="nav-badge" id="pulse-badge">1</span>
         </button>
+        <button class="nav-item" data-page="briefing" onclick="nav('briefing')">
+          <i data-lucide="file-text" class="nav-icon-svg"></i>
+          <span class="nav-label">Briefing</span>
+          <span class="nav-badge" id="briefing-badge"></span>
+        </button>
         <button class="nav-item" data-page="plans" onclick="nav('plans')">
           <i data-lucide="kanban" class="nav-icon-svg"></i>
           <span class="nav-label">Plans</span>
@@ -64,6 +79,21 @@
           <i data-lucide="trophy" class="nav-icon-svg"></i>
           <span class="nav-label">Missions</span>
           <span class="nav-badge" id="missions-badge">3</span>
+        </button>
+        <button class="nav-item" data-page="records" onclick="nav('records')">
+          <i data-lucide="database" class="nav-icon-svg"></i>
+          <span class="nav-label">Records</span>
+          <span class="nav-badge" id="records-badge"></span>
+        </button>
+        <button class="nav-item" data-page="pipelines" onclick="nav('pipelines')">
+          <i data-lucide="git-branch" class="nav-icon-svg"></i>
+          <span class="nav-label">Pipelines</span>
+          <span class="nav-badge" id="pipelines-badge"></span>
+        </button>
+        <button class="nav-item" data-page="roles" onclick="nav('roles')">
+          <i data-lucide="shield" class="nav-icon-svg"></i>
+          <span class="nav-label">Roles</span>
+          <span class="nav-badge" id="roles-badge"></span>
         </button>
         <button class="nav-item" data-page="explore" onclick="nav('explore')">
           <i data-lucide="search" class="nav-icon-svg"></i>
@@ -96,6 +126,21 @@
             <span></span><span></span><span></span>
           </button>
           <h1 class="page-title" id="page-title">Feed</h1>
+        </div>
+        <div class="topbar-center">
+          <div class="omnibus-container" id="omnibus-container">
+            <div class="omnibus-pill" id="omnibus-pill" onclick="focusOmnibus()">
+              <span class="omnibus-icon">⌘</span>
+              <input type="text" class="omnibus-input" id="omnibus-input"
+                placeholder="Ask anything..."
+                oninput="onOmnibusInput(this.value)"
+                onkeydown="handleOmnibusKey(event)"
+                onfocus="onOmnibusFocus()"
+                onblur="onOmnibusBlur()">
+              <span class="omnibus-shortcut">⌘K</span>
+            </div>
+            <div class="omnibus-route-preview hidden" id="omnibus-route-preview"></div>
+          </div>
         </div>
         <div class="topbar-right">
           <div class="topbar-agents" id="topbar-agents">
@@ -142,21 +187,28 @@
               <button class="dash-action-btn dash-urgent" id="dash-errors-btn" onclick="filterFeed('error')" style="display:none">🔴 <span id="dash-error-count">0</span> Errors</button>
               <button class="dash-action-btn" onclick="nav('missions')">🎯 Missions</button>
               <button class="dash-action-btn" onclick="nav('mind')">🧠 Vault</button>
+              <button class="dash-action-btn" onclick="showBriefing()">📋 Briefing</button>
             </div>
           </div>
 
-          <!-- Feed Below Dashboard -->
-          <div class="feed-toolbar">
-            <div class="filter-chips" id="feed-filters">
-              <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>
-              <button class="chip" data-filter="error" onclick="filterFeed('error')">🔴 Errors</button>
-              <button class="chip" data-filter="question_asked" onclick="filterFeed('question_asked')">❓ Questions</button>
-              <button class="chip" data-filter="task_completed" onclick="filterFeed('task_completed')">✅ Completed</button>
-              <button class="chip" data-filter="vault_write" onclick="filterFeed('vault_write')">📚 Vault</button>
-              <button class="chip" data-filter="insight" onclick="filterFeed('insight')">💡 Insights</button>
+          <!-- The Stream -->
+          <div class="stream-filter-bar" id="stream-filter-bar">
+            <div class="stream-filter-chips">
+              <button class="stream-chip active" data-filter="all" onclick="filterStream2('all')">All</button>
+              <button class="stream-chip" data-filter="action" onclick="filterStream2('action')">🔴 Needs Action</button>
+              <button class="stream-chip" data-filter="completed" onclick="filterStream2('completed')">✅ Completed</button>
+              <button class="stream-chip" data-filter="conversations" onclick="filterStream2('conversations')">💬 Conversations</button>
+              <button class="stream-chip" data-filter="errors" onclick="filterStream2('errors')">⚠️ Errors</button>
+            </div>
+            <div class="stream-batch-bar" id="stream-batch-bar" style="display:none">
+              <label class="stream-select-all"><input type="checkbox" id="stream-select-all" onchange="toggleSelectAllStream(this.checked)"> Select All</label>
+              <button class="stream-batch-btn approve" onclick="batchStreamAction('approve')">✅ Approve</button>
+              <button class="stream-batch-btn dismiss" onclick="batchStreamAction('dismiss')">⏩ Dismiss</button>
+              <button class="stream-batch-btn defer" onclick="batchStreamAction('defer')">⏸️ Defer</button>
+              <span class="stream-batch-count" id="stream-batch-count">0 selected</span>
             </div>
           </div>
-          <div id="feed-list" class="feed-list"></div>
+          <div id="stream-list" class="stream-list"></div>
         </div>
 
         <!-- QUEUE VIEW -->
@@ -350,6 +402,7 @@
 
           <!-- Graph Mode -->
           <div id="mind-graph" class="mind-panel active">
+            <button id="graph-lock-btn" class="graph-lock-btn" onclick="toggleGraphLock()">🔒 Lock</button>
             <canvas id="graph-canvas"></canvas>
             <div class="graph-detail-panel hidden" id="graph-detail"></div>
             <div class="graph-tooltip hidden" id="graph-tooltip"></div>
@@ -567,10 +620,82 @@
           </div>
         </div>
 
+        <!-- Records View -->
+        <div id="view-records" class="view hidden">
+          <div class="view-header"><h2>🗄️ Records</h2><span class="view-subtitle">Universal record browser — everything is a record</span></div>
+          <div class="records-content" id="records-content"></div>
+        </div>
+
+        <!-- Pipelines View -->
+        <div id="view-pipelines" class="view hidden">
+          <div class="view-header"><h2>🔀 Pipelines</h2><span class="view-subtitle">Visual workflow pipelines — watch work flow through stages</span></div>
+          <div class="pipelines-content" id="pipelines-content"></div>
+        </div>
+
+        <!-- Roles View -->
+        <div id="view-roles" class="view hidden">
+          <div class="view-header"><h2>🛡️ Roles</h2><span class="view-subtitle">Agent capabilities, autonomy levels & escalation rules</span></div>
+          <div class="roles-content" id="roles-content"></div>
+        </div>
+
         <!-- Explore View -->
         <div id="view-explore" class="view hidden">
           <div class="view-header"><h2>🔍 Explore</h2><span class="view-subtitle">Search everything</span></div>
           <div class="explore-content" id="explore-content"></div>
+        </div>
+
+        <!-- Inbox View -->
+        <div id="view-inbox" class="view hidden inbox-layout">
+          <div id="inbox-list-panel" class="inbox-list-panel"></div>
+          <div id="inbox-detail-panel" class="inbox-detail-panel"></div>
+        </div>
+
+        <!-- Rooms View -->
+        <div id="view-rooms" class="view hidden rooms-layout">
+          <div id="rooms-list-panel" class="rooms-list-panel"></div>
+          <div id="rooms-view-panel" class="rooms-view-panel"></div>
+        </div>
+
+        <!-- New Room Modal -->
+        <div id="rooms-modal-overlay" class="rooms-modal-overlay hidden" onclick="if(event.target===this)closeNewRoomModal()">
+          <div class="rooms-modal">
+            <div class="rooms-modal-header">
+              <h3>Create New Room</h3>
+              <button class="rooms-modal-close" onclick="closeNewRoomModal()">✕</button>
+            </div>
+            <div class="rooms-modal-body">
+              <label class="rooms-modal-label">Room Name</label>
+              <input type="text" id="new-room-name" class="rooms-modal-input" placeholder="e.g., 🚀 Sprint Planning">
+              <label class="rooms-modal-label">Agents</label>
+              <div class="rooms-modal-agents" id="new-room-agents">
+                <label class="rooms-agent-checkbox"><input type="checkbox" class="new-room-agent-cb" value="righthand"> 🤝 Right Hand</label>
+                <label class="rooms-agent-checkbox"><input type="checkbox" class="new-room-agent-cb" value="researcher"> 🔬 Researcher</label>
+                <label class="rooms-agent-checkbox"><input type="checkbox" class="new-room-agent-cb" value="coder"> 💻 Coder</label>
+                <label class="rooms-agent-checkbox"><input type="checkbox" class="new-room-agent-cb" value="ops"> ⚙️ Ops</label>
+                <label class="rooms-agent-checkbox"><input type="checkbox" class="new-room-agent-cb" value="devil"> 😈 Devil's Advocate</label>
+                <label class="rooms-agent-checkbox"><input type="checkbox" class="new-room-agent-cb" value="utility"> 🔧 Utility</label>
+              </div>
+              <label class="rooms-modal-label">Purpose</label>
+              <textarea id="new-room-purpose" class="rooms-modal-textarea" placeholder="What is this room for?"></textarea>
+            </div>
+            <div class="rooms-modal-footer">
+              <button class="rooms-modal-cancel" onclick="closeNewRoomModal()">Cancel</button>
+              <button class="rooms-modal-create" onclick="createRoom()">Create Room</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Briefing View -->
+        <div id="view-briefing" class="view hidden briefing-view-layout">
+          <div class="briefing-view-toolbar">
+            <h2 class="briefing-view-title">📋 Daily Briefing</h2>
+            <button class="briefing-refresh-btn" onclick="refreshBriefing()">🔄 Refresh Briefing</button>
+          </div>
+          <div class="briefing-document-wrap">
+            <div class="briefing-document" id="briefing-document">
+              <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">Loading briefing...</div>
+            </div>
+          </div>
         </div>
 
       </div><!-- /views -->
@@ -588,8 +713,8 @@
       <span class="mobile-label">More</span>
     </button>
     <button class="mobile-nav-item active" data-page="feed" onclick="nav('feed')">
-      <i data-lucide="layout-dashboard" class="mobile-icon-svg"></i>
-      <span class="mobile-label">Home</span>
+      <i data-lucide="zap" class="mobile-icon-svg"></i>
+      <span class="mobile-label">Stream</span>
     </button>
     <button class="mobile-nav-item" data-page="talk" onclick="nav('talk')">
       <i data-lucide="message-circle" class="mobile-icon-svg"></i>
@@ -625,6 +750,9 @@
       <button class="mobile-menu-item" onclick="nav('schedule');toggleMobileMenu()"><i data-lucide="calendar" class="menu-item-icon"></i> Schedule</button>
       <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()"><i data-lucide="trophy" class="menu-item-icon"></i> Missions</button>
       <button class="mobile-menu-item" onclick="nav('explore');toggleMobileMenu()"><i data-lucide="search" class="menu-item-icon"></i> Explore</button>
+      <button class="mobile-menu-item" onclick="nav('records');toggleMobileMenu()"><i data-lucide="database" class="menu-item-icon"></i> Records</button>
+      <button class="mobile-menu-item" onclick="nav('pipelines');toggleMobileMenu()"><i data-lucide="git-branch" class="menu-item-icon"></i> Pipelines</button>
+      <button class="mobile-menu-item" onclick="nav('roles');toggleMobileMenu()"><i data-lucide="shield" class="menu-item-icon"></i> Roles</button>
       <div class="mobile-menu-divider"></div>
       <button class="mobile-menu-item" onclick="nav('stream');toggleMobileMenu()"><i data-lucide="terminal" class="menu-item-icon"></i> Stream</button>
       <button class="mobile-menu-item" onclick="nav('command');toggleMobileMenu()"><i data-lucide="command" class="menu-item-icon"></i> Command</button>
@@ -662,6 +790,40 @@
     <div class="emoji-grid" id="emoji-grid"></div>
   </div>
 
+  <!-- Agent Drawer -->
+  <div class="agent-drawer-overlay hidden" id="agent-drawer-overlay" onclick="closeAgentDrawer()"></div>
+  <div class="agent-drawer" id="agent-drawer">
+    <div class="agent-drawer-header" id="agent-drawer-header"></div>
+    <div class="agent-drawer-body" id="agent-drawer-body"></div>
+    <div class="agent-drawer-footer" id="agent-drawer-footer"></div>
+  </div>
+
+  <!-- Context Panel -->
+  <div id="ctx-panel-overlay" class="ctx-panel-overlay hidden" onclick="closeCtxPanel()"></div>
+  <div id="context-panel" class="ctx-panel hidden">
+    <div class="ctx-panel-header">
+      <span id="ctx-title"></span>
+      <button class="ctx-panel-close" onclick="closeCtxPanel()">✕</button>
+    </div>
+    <div id="ctx-body" class="ctx-panel-body"></div>
+    <div id="ctx-footer" class="ctx-panel-footer"></div>
+  </div>
+
+  <!-- Briefing Modal -->
+  <div id="briefing-overlay" class="briefing-overlay hidden" onclick="closeBriefingIfOutside(event)">
+    <div class="briefing-modal" id="briefing-modal">
+      <div class="briefing-header">
+        <span class="briefing-header-icon">📋</span>
+        <span class="briefing-header-title">Daily Briefing</span>
+        <button class="briefing-close" onclick="closeBriefing()">✕</button>
+      </div>
+      <div class="briefing-body" id="briefing-body"></div>
+      <div class="briefing-footer">
+        <button class="briefing-dismiss-btn" onclick="closeBriefing()">Got it</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -684,6 +846,8 @@
   <script src="app.js?v=1773993468"></script>
   <script src="app2.js?v=1773993468"></script>
   <script src="app3.js?v=1773993468"></script>
+  <script src="app4.js?v=1773993468"></script>
+  <script src="app5.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
 </body>
 </html>
