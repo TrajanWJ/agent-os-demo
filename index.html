@@ -486,10 +486,10 @@
           <!-- Reader Panel -->
           <div id="mind-panel-reader" class="mind-tab-panel hidden">
             <div id="mind-reader-content" class="mind-reader-content">
-              <div class="mind-reader-empty">
-                <div style="font-size:48px;margin-bottom:12px">📖</div>
-                <div style="font-size:16px;font-weight:600;color:var(--text-dim)">No note selected</div>
-                <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Click a note from Search, Browse, or Graph to view it here</div>
+              <div class="mind-reader-empty empty-state">
+                <div class="empty-state-icon">📖</div>
+                <div class="empty-state-title">No note selected</div>
+                <div class="empty-state-subtitle">Click a note from Search, Browse, or Graph to view it here</div>
               </div>
             </div>
           </div>
@@ -663,14 +663,14 @@
 
         <!-- Plans View -->
         <div id="view-plans" class="view hidden">
-          <div class="view-header" style="display:flex;align-items:center;justify-content:space-between">
+          <div class="view-header">
             <div>
               <h2>📋 Plans</h2>
               <span class="view-subtitle">Agent-managed Kanban boards</span>
             </div>
-            <div id="plans-selector" style="display:flex;gap:8px;align-items:center"></div>
+            <div id="plans-selector" class="plans-selector-row"></div>
           </div>
-          <div id="plans-kanban-container" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
+          <div id="plans-kanban-container" class="plans-kanban-container"></div>
         </div>
 
         <!-- Plan Chat Overlay -->
@@ -706,7 +706,7 @@
 
         <!-- Records View -->
         <div id="view-records" class="view hidden">
-          <div class="view-header"><h2>🗄️ Records</h2><span class="view-subtitle">Universal record browser — everything is a record</span></div>
+          <div class="view-header"><h2>🗄️ Records</h2><span class="view-subtitle">Universal entity browser — agents, tasks, proposals, missions, notes, services</span></div>
           <div class="records-content" id="records-content"></div>
         </div>
 
@@ -720,10 +720,10 @@
             </div>
             <!-- Center: Task Detail -->
             <div class="tasks-detail-panel" id="tasks-detail-panel">
-              <div class="tasks-detail-empty">
-                <div style="font-size:48px;margin-bottom:12px">📋</div>
-                <div style="font-size:16px;font-weight:600;color:var(--text-dim)">No task selected</div>
-                <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Select a task from the list to view details</div>
+              <div class="tasks-detail-empty empty-state">
+                <div class="empty-state-icon">📋</div>
+                <div class="empty-state-title">No task selected</div>
+                <div class="empty-state-subtitle">Select a task from the list to view details</div>
               </div>
             </div>
             <!-- Right: Actions + Meta -->
@@ -748,7 +748,7 @@
 
         <!-- Roles View -->
         <div id="view-roles" class="view hidden">
-          <div class="view-header"><h2>🛡️ Roles</h2><span class="view-subtitle">Agent capabilities, autonomy levels & escalation rules</span></div>
+          <div class="view-header"><h2>🛡️ Agent Configuration</h2><span class="view-subtitle">Manage agent capabilities, autonomy levels & behavior rules</span></div>
           <div class="roles-content" id="roles-content"></div>
         </div>
 
@@ -875,7 +875,7 @@
           </div>
           <div class="briefing-document-wrap">
             <div class="briefing-document" id="briefing-document">
-              <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">Loading briefing...</div>
+              <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-subtitle">Loading briefing...</div></div>
             </div>
           </div>
         </div>
@@ -918,12 +918,12 @@
   <div class="mobile-menu-drawer hidden" id="mobile-menu-drawer">
     <div class="mobile-menu-header">
       <div class="mobile-menu-title-row">
-        <i data-lucide="bot" style="width:22px;height:22px;color:var(--accent)"></i>
+        <i data-lucide="bot" class="logo-icon-svg"></i>
         <span class="mobile-menu-title">Agent OS</span>
         <span class="mobile-menu-version">v7</span>
       </div>
       <button class="mobile-menu-close" onclick="toggleMobileMenu()">
-        <i data-lucide="x" style="width:18px;height:18px"></i>
+        <i data-lucide="x" class="mobile-icon-svg"></i>
       </button>
     </div>
     <div class="mobile-menu-items">
@@ -1044,6 +1044,7 @@
   <script src="app2.js?v=1773993468"></script>
   <script src="app3.js?v=1773993468"></script>
   <script src="app4.js?v=1773993468"></script>
+  <script src="records.js?v=1773993468"></script>
   <script src="app5.js?v=1773993468"></script>
   <script src="app6.js?v=1773993468"></script>
   <script src="tasks.js?v=1773993468"></script>

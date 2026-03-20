@@ -297,9 +297,7 @@ const PIPELINE_TYPES = [
 
 const TASK_PIPELINE_STAGES = [
   { id: 'inbox',      label: '📥 Inbox',       color: '#6c7086' },
-  { id: 'specced',    label: "📋 Spec'd",      color: '#89b4fa' },
   { id: 'inprogress', label: '🔨 In Progress', color: '#f9e2af' },
-  { id: 'review',     label: '👀 Review',      color: '#fab387' },
   { id: 'done',       label: '✅ Done',        color: '#a6e3a1' },
 ];
 
@@ -394,18 +392,16 @@ function stopPipelinesRefresh() {
 }
 
 function renderTaskPipeline(body) {
-  // Use real dispatch data if available, else fall back to BOARD_CARDS
   const liveQueue = _pipelineLiveData.queue;
   const liveActive = _pipelineLiveData.active;
   const liveDone = _pipelineLiveData.done;
   const liveFailed = _pipelineLiveData.failed;
-  const hasLive = liveQueue || liveActive || liveDone;
+  const isLoading = !liveQueue && !liveActive && !liveDone && (typeof Bridge !== 'undefined' && Bridge.liveMode);
 
   const stageCards = {};
   TASK_PIPELINE_STAGES.forEach(s => stageCards[s.id] = []);
 
-  if (hasLive) {
-    // Map real dispatch data to pipeline stages
+  if (liveQueue || liveActive || liveDone) {
     (liveQueue || []).forEach(t => {
       stageCards.inbox.push({
         id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
@@ -420,55 +416,72 @@ function renderTaskPipeline(body) {
         _timeInStage: timeAgoShort(t.started_at || t.created_at || t.created),
       });
     });
-    (liveDone || []).forEach(t => {
+    (liveDone || []).slice(0, 10).forEach(t => {
       stageCards.done.push({
         id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
         priority: t.priority || 'P3', tags: [], _raw: t,
         _timeInStage: timeAgoShort(t.completed_at || t.created_at),
       });
     });
-  } else {
+  } else if (!isLoading) {
     // Fallback to static BOARD_CARDS
-    const stageMap = { inbox: 'inbox', queued: 'specced', active: 'inprogress', review: 'review', done: 'done' };
-    Object.entries(BOARD_CARDS).forEach(([col, cards]) => {
-      const stageId = stageMap[col] || 'inbox';
-      cards.forEach(c => stageCards[stageId].push(c));
-    });
+    const stageMap = { inbox: 'inbox', queued: 'inbox', active: 'inprogress', review: 'inprogress', done: 'done' };
+    if (typeof BOARD_CARDS !== 'undefined') {
+      Object.entries(BOARD_CARDS).forEach(([col, cards]) => {
+        const stageId = stageMap[col] || 'inbox';
+        cards.forEach(c => stageCards[stageId].push(c));
+      });
+    }
   }
-  
-  // Add failed tasks section if any
+
   const failedCards = (liveFailed || []).map(t => ({
     id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
-    priority: t.priority || 'P3', tags: [], _raw: t,
+    priority: t.priority || 'P3', tags: [], _raw: t, _failed: true,
     _timeInStage: timeAgoShort(t.failed_at || t.created_at),
   }));
 
+  const skeletonCards = `
+    <div class="skeleton-card" style="padding:10px 12px;margin-bottom:6px">
+      <div class="skeleton skeleton-line long" style="height:14px;margin-bottom:8px"></div>
+      <div class="skeleton skeleton-line short" style="height:10px"></div>
+    </div>`.repeat(3);
+
+  const emptyMsg = `<div style="padding:20px 12px;text-align:center;color:var(--text-muted);font-size:12px">No items</div>`;
+
   body.innerHTML = `
     <div class="pipeline-stages">
-      ${TASK_PIPELINE_STAGES.map(stage => `
+      ${TASK_PIPELINE_STAGES.map(stage => {
+        const cards = stageCards[stage.id] || [];
+        return `
         <div class="pipeline-stage-col" data-stage="${stage.id}"
           ondragover="event.preventDefault();this.classList.add('drag-over')"
           ondragleave="this.classList.remove('drag-over')"
           ondrop="pipelineDrop(event,'${stage.id}','tasks')">
           <div class="pipeline-stage-header" style="border-top: 3px solid ${stage.color}">
             <span>${stage.label}</span>
-            <span class="pipeline-stage-count">${(stageCards[stage.id] || []).length}</span>
+            <span class="pipeline-stage-count">${isLoading ? '…' : cards.length}</span>
           </div>
           <div class="pipeline-cards">
-            ${(stageCards[stage.id] || []).map(c => renderPipelineCard(c, 'tasks')).join('')}
+            ${isLoading ? skeletonCards : (cards.length === 0 ? emptyMsg : cards.map(c => renderPipelineCard(c, 'tasks')).join(''))}
           </div>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>
     ${failedCards.length > 0 ? `
       <div style="margin-top:16px">
-        <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:8px">❌ Failed (${failedCards.length})</div>
-        <div class="pipeline-stages" style="grid-template-columns:1fr">
-          <div class="pipeline-stage-col" style="border-top:3px solid var(--red)">
-            <div class="pipeline-cards">
-              ${failedCards.map(c => renderPipelineCard(c, 'tasks')).join('')}
+        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px;padding:0 4px">❌ Failed (${failedCards.length})</div>
+        <div class="pipeline-stages" style="display:flex;flex-wrap:wrap;gap:8px">
+          ${failedCards.map(c => `
+            <div class="pipeline-card pipeline-card-failed" style="border-left:3px solid var(--red);background:rgba(243,139,168,0.06);flex:0 0 calc(50% - 4px);cursor:grab"
+              onclick="togglePipelineCardDetail(this)" data-ctx-type="task" data-ctx-id="${c.id || ''}">
+              <div class="pipeline-card-title" style="color:var(--red)">${c.title}</div>
+              <div class="pipeline-card-meta">
+                ${(() => { const ag = ga(c.agent) || { emoji: '⬜', color: '#6c7086', name: c.agent || 'unknown' }; return `<span class="pipeline-card-agent" style="border-color:${ag.color}">${ag.emoji}</span><span style="font-size:11px;color:var(--text-dim)">${ag.name || c.agent}</span>`; })()}
+                <span class="pipeline-card-priority ${(c.priority || 'P3').toLowerCase()}">${c.priority || 'P3'}</span>
+                ${c._timeInStage ? `<span style="font-size:10px;color:var(--text-muted);margin-left:auto">${c._timeInStage}</span>` : ''}
+              </div>
             </div>
-          </div>
+          `).join('')}
         </div>
       </div>
     ` : ''}
@@ -489,11 +502,11 @@ function renderProposalPipeline2(body) {
   const stageCards = {};
   PROPOSAL_PIPELINE_STAGES.forEach(s => stageCards[s.id] = []);
   
-  // Use live proposals if available, else fall back to queueCards
-  const proposals = _pipelineLiveData.proposals || queueCards;
+  const liveProposals = _pipelineLiveData.proposals;
+  const isLoading = !liveProposals && (typeof Bridge !== 'undefined' && Bridge.liveMode);
+  const proposals = liveProposals || (typeof queueCards !== 'undefined' ? queueCards : []);
   
   proposals.forEach(q => {
-    // Handle both raw proposal format and converted queueCards format
     const status = q.status || q._status || 'pending';
     const verdict = q.triage_verdict || q._triageVerdict || '';
     
@@ -510,16 +523,26 @@ function renderProposalPipeline2(body) {
     }
   });
 
+  const skeletonCards = `
+    <div class="skeleton-card" style="padding:10px 12px;margin-bottom:6px">
+      <div class="skeleton skeleton-line long" style="height:14px;margin-bottom:8px"></div>
+      <div class="skeleton skeleton-line short" style="height:10px"></div>
+    </div>`.repeat(2);
+
+  const emptyMsg = `<div style="padding:20px 12px;text-align:center;color:var(--text-muted);font-size:12px">No items</div>`;
+
   body.innerHTML = `
     <div class="pipeline-stages">
-      ${PROPOSAL_PIPELINE_STAGES.map(stage => `
+      ${PROPOSAL_PIPELINE_STAGES.map(stage => {
+        const cards = stageCards[stage.id] || [];
+        return `
         <div class="pipeline-stage-col" data-stage="${stage.id}">
           <div class="pipeline-stage-header" style="border-top: 3px solid ${stage.color}">
             <span>${stage.label}</span>
-            <span class="pipeline-stage-count">${(stageCards[stage.id] || []).length}</span>
+            <span class="pipeline-stage-count">${isLoading ? '…' : cards.length}</span>
           </div>
           <div class="pipeline-cards">
-            ${(stageCards[stage.id] || []).map(q => {
+            ${isLoading ? skeletonCards : (cards.length === 0 ? emptyMsg : cards.map(q => {
               const srcId = q.source || q._source || q.agent || 'righthand';
               const src = typeof getSourceAgent === 'function' ? getSourceAgent(srcId) : { emoji: '🤖', name: srcId };
               return `
@@ -527,15 +550,16 @@ function renderProposalPipeline2(body) {
                   <div class="pipeline-card-title">${(q.title || q.question || 'Untitled').substring(0, 50)}</div>
                   <div class="pipeline-card-meta">
                     <span class="pipeline-card-agent">${src.emoji}</span>
+                    <span style="font-size:11px;color:var(--text-dim)">${src.name || srcId}</span>
                     <span class="pipeline-card-priority">${q.priority || q._priority || 'P3'}</span>
-                    ${q.triage_verdict || q._triageVerdict ? `<span style="font-size:10px;color:var(--text-muted)">${q.triage_verdict || q._triageVerdict}</span>` : ''}
+                    ${q.triage_verdict || q._triageVerdict ? `<span style="font-size:10px;color:var(--text-muted);margin-left:auto">${q.triage_verdict || q._triageVerdict}</span>` : ''}
                   </div>
                 </div>
               `;
-            }).join('')}
+            }).join(''))}
           </div>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>
   `;
 }
@@ -698,7 +722,8 @@ function renderCapacityPipeline(body) {
 }
 
 function renderPipelineCard(card, type) {
-  const ag = ga(card.agent) || { emoji: '⬜', color: '#6c7086' };
+  const ag = ga(card.agent) || { emoji: '⬜', color: '#6c7086', name: card.agent || '' };
+  const agName = ag.name || card.agent || '';
   const timeInStage = card._timeInStage || '';
   return `
     <div class="pipeline-card" draggable="true"
@@ -708,6 +733,7 @@ function renderPipelineCard(card, type) {
       <div class="pipeline-card-title">${card.title || 'Untitled'}</div>
       <div class="pipeline-card-meta">
         <span class="pipeline-card-agent" style="border-color:${ag.color}">${ag.emoji}</span>
+        <span style="font-size:11px;color:var(--text-dim)">${agName}</span>
         <span class="pipeline-card-priority ${(card.priority || 'P3').toLowerCase()}">${card.priority || 'P3'}</span>
         ${timeInStage ? `<span style="font-size:10px;color:var(--text-muted);margin-left:auto">${timeInStage}</span>` : ''}
       </div>
@@ -736,307 +762,553 @@ function togglePipelineCardDetail(el) {
 
 
 // ═══════════════════════════════════════════════════════════
-// ROLES PAGE — Agent Role Editor (RBAC)
+// ROLES PAGE — Agent Configuration Center
 // ═══════════════════════════════════════════════════════════
 
-const DEFAULT_CAPABILITIES = [
-  'code.write', 'code.review', 'web.search', 'vault.read', 'vault.write',
-  'system.exec', 'dispatch.create', 'decision.auto', 'file.delete', 'external.api',
+const AGENT_CAP_MATRIX = {
+  code:   { label: 'Code',   icon: '💻', perms: ['read', 'write', 'execute'] },
+  vault:  { label: 'Vault',  icon: '📚', perms: ['read', 'write'] },
+  web:    { label: 'Web',    icon: '🌐', perms: ['search', 'fetch', 'browse'] },
+  system: { label: 'System', icon: '⚙️', perms: ['exec', 'services', 'cron'] },
+  comms:  { label: 'Comms',  icon: '💬', perms: ['discord', 'telegram'] },
+};
+
+const AUTONOMY_LEVELS = [
+  { value: 0, label: 'Observer',  desc: 'Watch only — no actions taken. Agent observes and logs but never acts.', color: '#6c7086' },
+  { value: 1, label: 'Suggest',   desc: 'Propose actions for human review. Agent drafts plans but waits for approval.', color: '#89b4fa' },
+  { value: 2, label: 'Confirm',   desc: 'Execute after confirmation. Agent asks before each action, then proceeds.', color: '#f9e2af' },
+  { value: 3, label: 'Auto',      desc: 'Act independently on safe tasks. Escalate risky or expensive operations.', color: '#fab387' },
+  { value: 4, label: 'Autopilot', desc: 'Full autonomy. Agent handles everything, reports results after the fact.', color: '#a6e3a1' },
 ];
 
-const AUTONOMY_ZONES = [
-  { min: 0, max: 20, label: 'Observer', desc: 'Watch only', color: '#6c7086' },
-  { min: 20, max: 40, label: 'Advisor', desc: 'Suggest, wait for approval', color: '#89b4fa' },
-  { min: 40, max: 60, label: 'Partner', desc: 'Auto-execute safe, ask for risky', color: '#f9e2af' },
-  { min: 60, max: 80, label: 'Delegate', desc: 'Act independently, report after', color: '#fab387' },
-  { min: 80, max: 100, label: 'Autopilot', desc: 'Full autonomy', color: '#a6e3a1' },
+const DEFAULT_OVERRIDES = [
+  'Deleting files or data',
+  'Spending > 10K tokens on a single task',
+  'Modifying system configurations',
+  'Sending external communications',
+  'Deploying to production',
 ];
 
-const DEFAULT_ROLES = [
-  {
-    id: 'orchestrator', name: 'Orchestrator', description: 'Coordinates all agents, dispatches work, manages priorities',
-    capabilities: { 'code.write': false, 'code.review': true, 'web.search': true, 'vault.read': true, 'vault.write': true, 'system.exec': false, 'dispatch.create': true, 'decision.auto': true, 'file.delete': false, 'external.api': true },
-    autonomy: 70, domains: ['orchestration', 'dispatch', 'vault'],
-    escalationRules: ['Escalate if task involves deletion', 'Escalate if cost > 50K tokens', 'Escalate if confidence < 0.4'],
-    agents: ['righthand'],
-  },
-  {
-    id: 'developer', name: 'Developer', description: 'Writes, reviews, and deploys code',
-    capabilities: { 'code.write': true, 'code.review': true, 'web.search': true, 'vault.read': true, 'vault.write': false, 'system.exec': true, 'dispatch.create': false, 'decision.auto': false, 'file.delete': false, 'external.api': false },
-    autonomy: 55, domains: ['frontend', 'backend', 'infrastructure'],
-    escalationRules: ['Escalate if task involves production deployment', 'Escalate if modifying security configs'],
-    agents: ['coder'],
-  },
-  {
-    id: 'researcher', name: 'Researcher', description: 'Deep research, source evaluation, competitive analysis',
-    capabilities: { 'code.write': false, 'code.review': false, 'web.search': true, 'vault.read': true, 'vault.write': true, 'system.exec': false, 'dispatch.create': false, 'decision.auto': false, 'file.delete': false, 'external.api': true },
-    autonomy: 35, domains: ['research', 'competitive', 'vault'],
-    escalationRules: ['Escalate if confidence < 0.5', 'Escalate if source tier < T2'],
-    agents: ['researcher'],
-  },
-  {
-    id: 'security', name: 'Security', description: 'Infrastructure audits, hardening, vulnerability scanning',
-    capabilities: { 'code.write': false, 'code.review': true, 'web.search': true, 'vault.read': true, 'vault.write': false, 'system.exec': true, 'dispatch.create': false, 'decision.auto': false, 'file.delete': false, 'external.api': false },
-    autonomy: 25, domains: ['security', 'infrastructure'],
-    escalationRules: ['Always escalate critical findings', 'Escalate if remediation requires restart'],
-    agents: ['ops'],
-  },
-  {
-    id: 'redteam', name: 'Red Team', description: 'Adversarial review, critique, pre-mortem analysis',
-    capabilities: { 'code.write': false, 'code.review': true, 'web.search': false, 'vault.read': true, 'vault.write': false, 'system.exec': false, 'dispatch.create': false, 'decision.auto': false, 'file.delete': false, 'external.api': false },
-    autonomy: 15, domains: ['security', 'architecture', 'review'],
-    escalationRules: ['Escalate if risk score > 7/10', 'Escalate when critical assumptions are flawed'],
-    agents: ['devil'],
-  },
-  {
-    id: 'utility', name: 'Utility', description: 'General purpose tasks, vault cleanup, knowledge organization',
-    capabilities: { 'code.write': false, 'code.review': false, 'web.search': true, 'vault.read': true, 'vault.write': true, 'system.exec': false, 'dispatch.create': false, 'decision.auto': false, 'file.delete': false, 'external.api': false },
-    autonomy: 45, domains: ['vault', 'knowledge', 'scraping'],
-    escalationRules: ['Escalate if task involves source code', 'Escalate if confidence < 0.5'],
-    agents: ['utility'],
-  },
+const DEFAULT_ESCALATION_TRIGGERS = [
+  'Confidence drops below 40%',
+  'Task exceeds budget by 2x',
+  'Error rate > 3 consecutive failures',
+  'Security-sensitive operations detected',
+  'Cross-agent dependency conflict',
 ];
 
-let rolesData = JSON.parse(localStorage.getItem('agent-os-roles') || 'null') || DEFAULT_ROLES;
-let selectedRoleId = rolesData[0]?.id || null;
+// Per-agent config (persisted to localStorage)
+let agentConfigs = JSON.parse(localStorage.getItem('agent-os-agent-configs') || 'null') || {};
+let selectedAgentId = AGENTS[0]?.id || null;
+let activeAgentTab = 'overview';
+
+// Generate simulated history for agents
+const AGENT_HISTORY = {};
+AGENTS.forEach(a => {
+  const tasks = [];
+  const proposals = [];
+  const errors = [];
+  const taskNames = [
+    'Code review for dispatch engine', 'Vault indexing batch', 'Security scan results',
+    'API endpoint audit', 'Competitive analysis report', 'Prompt template optimization',
+    'Infrastructure health check', 'Knowledge graph update', 'Red team analysis v5.1',
+    'Morning coordination batch', 'Token budget rebalance', 'Backlinker deployment',
+  ];
+  const proposalNames = [
+    'Increase parallel dispatch limit to 5', 'Rotate API keys quarterly',
+    'Add circuit breaker to dispatch', 'Refactor session watchdog to multi-thread',
+    'Switch to streaming progress UI', 'Implement memory compaction v2',
+  ];
+  const errorTypes = [
+    'Connection timeout on port 8484', 'Rate limit exceeded (429)',
+    'Token budget overflow', 'Session heartbeat missed', 'Vault sync conflict',
+  ];
+  for (let i = 0; i < 5 + Math.floor(Math.random() * 6); i++) {
+    tasks.push({
+      name: taskNames[Math.floor(Math.random() * taskNames.length)],
+      time: `${7 + Math.floor(Math.random() * 3)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')} AM`,
+      status: Math.random() > 0.2 ? 'completed' : 'failed',
+      tokens: Math.floor(500 + Math.random() * 5000),
+    });
+  }
+  for (let i = 0; i < Math.floor(Math.random() * 4); i++) {
+    proposals.push({
+      name: proposalNames[Math.floor(Math.random() * proposalNames.length)],
+      time: `${8 + Math.floor(Math.random() * 2)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')} AM`,
+      status: ['pending', 'approved', 'rejected'][Math.floor(Math.random() * 3)],
+    });
+  }
+  for (let i = 0; i < Math.floor(Math.random() * 3); i++) {
+    errors.push({
+      message: errorTypes[Math.floor(Math.random() * errorTypes.length)],
+      time: `${6 + Math.floor(Math.random() * 4)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')} AM`,
+      severity: Math.random() > 0.5 ? 'error' : 'warn',
+    });
+  }
+  AGENT_HISTORY[a.id] = { tasks, proposals, errors };
+});
+
+// Sparkline data per agent (last 7 days task count)
+const AGENT_SPARKLINES = {};
+AGENTS.forEach(a => {
+  AGENT_SPARKLINES[a.id] = Array.from({ length: 7 }, () => Math.floor(Math.random() * 8) + 1);
+});
+
+function getAgentConfig(agentId) {
+  if (!agentConfigs[agentId]) {
+    // Generate defaults based on agent
+    const caps = {};
+    Object.keys(AGENT_CAP_MATRIX).forEach(cat => {
+      caps[cat] = {};
+      AGENT_CAP_MATRIX[cat].perms.forEach(p => {
+        caps[cat][p] = false;
+      });
+    });
+    // Set sensible defaults per agent
+    if (agentId === 'righthand') {
+      caps.vault.read = true; caps.vault.write = true;
+      caps.web.search = true; caps.web.fetch = true;
+      caps.comms.discord = true; caps.comms.telegram = true;
+    } else if (agentId === 'coder') {
+      caps.code.read = true; caps.code.write = true; caps.code.execute = true;
+      caps.vault.read = true; caps.system.exec = true;
+    } else if (agentId === 'researcher') {
+      caps.web.search = true; caps.web.fetch = true; caps.web.browse = true;
+      caps.vault.read = true; caps.vault.write = true;
+    } else if (agentId === 'ops') {
+      caps.system.exec = true; caps.system.services = true; caps.system.cron = true;
+      caps.vault.read = true;
+    } else if (agentId === 'devil') {
+      caps.code.read = true; caps.vault.read = true;
+    } else if (agentId === 'utility') {
+      caps.vault.read = true; caps.vault.write = true;
+      caps.web.search = true; caps.web.fetch = true;
+    }
+    agentConfigs[agentId] = {
+      capabilities: caps,
+      autonomy: agentId === 'righthand' ? 3 : agentId === 'coder' ? 2 : agentId === 'devil' ? 0 : 1,
+      overrides: DEFAULT_OVERRIDES.slice(0, 3).map((text, i) => ({ text, enabled: i < 2 })),
+      escalationTriggers: DEFAULT_ESCALATION_TRIGGERS.slice(0, 3).map((text, i) => ({ text, enabled: i < 2 })),
+    };
+  }
+  return agentConfigs[agentId];
+}
+
+function saveAgentConfigs() {
+  localStorage.setItem('agent-os-agent-configs', JSON.stringify(agentConfigs));
+}
 
 function renderRoles() {
   const el = $('roles-content');
   if (!el) return;
 
   el.innerHTML = `
-    <div class="roles-layout">
-      <div class="roles-sidebar" id="roles-sidebar">
-        <div class="roles-sidebar-header">Roles</div>
-        <div class="roles-sidebar-list" id="roles-sidebar-list"></div>
-        <button class="roles-create-btn" onclick="createNewRole()">+ Create New Role</button>
-      </div>
-      <div class="roles-editor" id="roles-editor"></div>
+    <div class="acenter-layout">
+      <div class="acenter-list" id="acenter-list"></div>
+      <div class="acenter-detail" id="acenter-detail"></div>
     </div>
   `;
 
-  renderRolesSidebar();
-  if (selectedRoleId) renderRoleEditor(selectedRoleId);
+  renderAgentList();
+  if (selectedAgentId) renderAgentDetail(selectedAgentId);
 }
 
-function renderRolesSidebar() {
-  const list = $('roles-sidebar-list');
+function renderAgentList() {
+  const list = $('acenter-list');
   if (!list) return;
-  list.innerHTML = rolesData.map(r => `
-    <div class="roles-sidebar-item${selectedRoleId === r.id ? ' active' : ''}" onclick="selectRole('${r.id}')">
-      <div class="roles-sidebar-item-name">${r.name}</div>
-      <div class="roles-sidebar-item-agents">${(r.agents || []).map(a => (ga(a) || {}).emoji || '🤖').join(' ')}</div>
+
+  const activeTasks = FEED_EVENTS.filter(e => e.type === 'task_started');
+
+  list.innerHTML = `
+    <div class="acenter-list-header">
+      <span class="acenter-list-title">Agents</span>
+      <span class="acenter-list-count">${AGENTS.length}</span>
     </div>
-  `).join('');
+    <div class="acenter-list-items" id="acenter-list-items">
+      ${AGENTS.map(a => {
+        const isSelected = selectedAgentId === a.id;
+        const taskCount = (AGENT_HISTORY[a.id]?.tasks || []).length;
+        const statusClass = a.status === 'active' ? 'status-active' : 'status-idle';
+        return `
+          <div class="acenter-agent-card${isSelected ? ' selected' : ''}" onclick="selectAgent('${a.id}')" style="${isSelected ? `border-color:${a.color}` : ''}">
+            <div class="acenter-agent-card-left">
+              <span class="acenter-agent-emoji">${a.emoji}</span>
+              <div class="acenter-agent-info">
+                <div class="acenter-agent-name">${a.name}</div>
+                <div class="acenter-agent-role">${a.role}</div>
+              </div>
+            </div>
+            <div class="acenter-agent-card-right">
+              <span class="acenter-agent-tasks">${taskCount}</span>
+              <span class="acenter-status-dot ${statusClass}"></span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <button class="acenter-add-btn" onclick="showToast('Agent creation coming soon','info')">+ Add Agent</button>
+  `;
 }
 
-function selectRole(id) {
-  selectedRoleId = id;
-  renderRolesSidebar();
-  renderRoleEditor(id);
+function selectAgent(agentId) {
+  selectedAgentId = agentId;
+  activeAgentTab = 'overview';
+  renderAgentList();
+  renderAgentDetail(agentId);
 }
 
-function renderRoleEditor(roleId) {
-  const editor = $('roles-editor');
-  if (!editor) return;
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) { editor.innerHTML = '<div class="roles-empty">Select a role</div>'; return; }
+function setAgentTab(tab) {
+  activeAgentTab = tab;
+  renderAgentDetail(selectedAgentId);
+}
 
-  const autonomyZone = AUTONOMY_ZONES.find(z => role.autonomy >= z.min && role.autonomy < z.max) || AUTONOMY_ZONES[2];
+function renderAgentDetail(agentId) {
+  const panel = $('acenter-detail');
+  if (!panel) return;
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent) { panel.innerHTML = '<div class="acenter-empty">Select an agent</div>'; return; }
 
-  editor.innerHTML = `
-    <div class="role-editor-section">
-      <div class="role-name-row">
-        <input type="text" class="role-name-input" value="${role.name}" onchange="updateRole('${roleId}','name',this.value)">
-        <button class="role-delete-btn" onclick="deleteRole('${roleId}')">🗑️ Delete</button>
-      </div>
-      <textarea class="role-desc-input" rows="2" onchange="updateRole('${roleId}','description',this.value)">${role.description}</textarea>
+  const config = getAgentConfig(agentId);
+  const tabs = ['overview', 'capabilities', 'autonomy', 'history'];
+
+  panel.innerHTML = `
+    <div class="acenter-tabs">
+      ${tabs.map(t => `
+        <button class="acenter-tab${activeAgentTab === t ? ' active' : ''}" onclick="setAgentTab('${t}')">${
+          t === 'overview' ? '📊 Overview' :
+          t === 'capabilities' ? '🔑 Capabilities' :
+          t === 'autonomy' ? '🎚️ Autonomy' : '📜 History'
+        }</button>
+      `).join('')}
     </div>
+    <div class="acenter-tab-content" id="acenter-tab-content"></div>
+  `;
 
-    <div class="role-editor-section">
-      <div class="role-section-title">Capabilities</div>
-      <div class="role-capabilities-grid">
-        ${DEFAULT_CAPABILITIES.map(cap => {
-          const granted = role.capabilities[cap] || false;
-          return `
-            <div class="role-cap-row">
-              <span class="role-cap-name">${cap}</span>
-              <label class="role-toggle">
-                <input type="checkbox" ${granted ? 'checked' : ''} onchange="toggleCapability('${roleId}','${cap}',this.checked)">
-                <span class="role-toggle-track"><span class="role-toggle-thumb"></span></span>
-              </label>
-            </div>
-          `;
-        }).join('')}
+  const content = $('acenter-tab-content');
+  if (activeAgentTab === 'overview') renderOverviewTab(content, agent, config);
+  else if (activeAgentTab === 'capabilities') renderCapabilitiesTab(content, agent, config);
+  else if (activeAgentTab === 'autonomy') renderAutonomyTab(content, agent, config);
+  else if (activeAgentTab === 'history') renderHistoryTab(content, agent);
+}
+
+function renderOverviewTab(el, agent, config) {
+  const sparkData = AGENT_SPARKLINES[agent.id] || [0,0,0,0,0,0,0];
+  const maxSpark = Math.max(...sparkData, 1);
+  const sparkSvg = renderSparklineSvg(sparkData, maxSpark, agent.color);
+  const autonomyLevel = AUTONOMY_LEVELS[config.autonomy] || AUTONOMY_LEVELS[1];
+  const uptime = agent.status === 'active' ? `${Math.floor(Math.random() * 6) + 1}h ${Math.floor(Math.random() * 59)}m` : 'Idle';
+
+  el.innerHTML = `
+    <div class="acenter-overview">
+      <div class="acenter-overview-header">
+        <div class="acenter-avatar" style="background:${agent.color}20;border-color:${agent.color}">
+          <span class="acenter-avatar-emoji">${agent.emoji}</span>
+        </div>
+        <div class="acenter-overview-info">
+          <h2 class="acenter-overview-name">${agent.name}</h2>
+          <div class="acenter-overview-role">${agent.role}</div>
+          <div class="acenter-overview-status">
+            <span class="acenter-status-dot ${agent.status === 'active' ? 'status-active' : 'status-idle'}"></span>
+            <span>${agent.status === 'active' ? 'Active' : 'Idle'}</span>
+            ${agent.task ? `<span class="acenter-current-task">· ${agent.task}</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="acenter-stats-grid">
+        <div class="acenter-stat-card">
+          <div class="acenter-stat-value">${agent.tasks}</div>
+          <div class="acenter-stat-label">Tasks Done</div>
+        </div>
+        <div class="acenter-stat-card">
+          <div class="acenter-stat-value">${(agent.tokens / 1000).toFixed(1)}K</div>
+          <div class="acenter-stat-label">Tokens Used</div>
+        </div>
+        <div class="acenter-stat-card">
+          <div class="acenter-stat-value" style="color:${agent.fitness >= 0.9 ? 'var(--green)' : agent.fitness >= 0.8 ? 'var(--yellow)' : 'var(--red)'}">${Math.round(agent.fitness * 100)}%</div>
+          <div class="acenter-stat-label">Fitness</div>
+        </div>
+        <div class="acenter-stat-card">
+          <div class="acenter-stat-value">${uptime}</div>
+          <div class="acenter-stat-label">Uptime</div>
+        </div>
+      </div>
+
+      <div class="acenter-sparkline-section">
+        <div class="acenter-section-title">Performance — Last 7 Days</div>
+        <div class="acenter-sparkline-wrap">
+          ${sparkSvg}
+          <div class="acenter-sparkline-labels">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Today</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="acenter-overview-meta">
+        <div class="acenter-meta-row">
+          <span class="acenter-meta-label">Autonomy</span>
+          <span class="acenter-meta-value" style="color:${autonomyLevel.color}">${autonomyLevel.label}</span>
+        </div>
+        <div class="acenter-meta-row">
+          <span class="acenter-meta-label">Active Capabilities</span>
+          <span class="acenter-meta-value">${countActiveCaps(config)} enabled</span>
+        </div>
+        <div class="acenter-meta-row">
+          <span class="acenter-meta-label">Files Modified</span>
+          <span class="acenter-meta-value">${agent.files}</span>
+        </div>
       </div>
     </div>
+  `;
+}
 
-    <div class="role-editor-section">
-      <div class="role-section-title">Autonomy Level</div>
-      <div class="role-autonomy-wrap">
-        <input type="range" class="role-autonomy-slider" min="0" max="100" value="${role.autonomy}"
-          oninput="updateAutonomyPreview(this.value)" onchange="updateRole('${roleId}','autonomy',parseInt(this.value))">
-        <div class="role-autonomy-zones">
-          ${AUTONOMY_ZONES.map(z => `
-            <div class="role-autonomy-zone" style="left:${z.min}%;width:${z.max - z.min}%;background:${z.color}20;border-bottom:2px solid ${z.color}">
-              <span class="role-zone-label">${z.label}</span>
-            </div>
+function renderSparklineSvg(data, max, color) {
+  const w = 280, h = 48, pad = 4;
+  const points = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${x},${y}`;
+  });
+  const linePoints = points.join(' ');
+  const areaPoints = `${pad},${h - pad} ${linePoints} ${w - pad},${h - pad}`;
+  return `
+    <svg class="acenter-sparkline-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <polygon points="${areaPoints}" fill="${color}15" />
+      <polyline points="${linePoints}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      ${data.map((v, i) => {
+        const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+        const y = h - pad - (v / max) * (h - pad * 2);
+        return `<circle cx="${x}" cy="${y}" r="3" fill="${color}" />`;
+      }).join('')}
+    </svg>
+  `;
+}
+
+function countActiveCaps(config) {
+  let count = 0;
+  Object.values(config.capabilities).forEach(cat => {
+    Object.values(cat).forEach(v => { if (v) count++; });
+  });
+  return count;
+}
+
+function renderCapabilitiesTab(el, agent, config) {
+  el.innerHTML = `
+    <div class="acenter-capabilities">
+      ${Object.entries(AGENT_CAP_MATRIX).map(([catKey, cat]) => `
+        <div class="acenter-cap-category">
+          <div class="acenter-cap-cat-header">
+            <span class="acenter-cap-cat-icon">${cat.icon}</span>
+            <span class="acenter-cap-cat-label">${cat.label}</span>
+          </div>
+          <div class="acenter-cap-perms">
+            ${cat.perms.map(perm => {
+              const enabled = config.capabilities[catKey]?.[perm] || false;
+              return `
+                <div class="acenter-cap-perm-row">
+                  <span class="acenter-cap-perm-name">${perm}</span>
+                  <label class="acenter-switch">
+                    <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleAgentCap('${agent.id}','${catKey}','${perm}',this.checked)">
+                    <span class="acenter-switch-track"><span class="acenter-switch-thumb"></span></span>
+                  </label>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function toggleAgentCap(agentId, category, perm, checked) {
+  const config = getAgentConfig(agentId);
+  if (!config.capabilities[category]) config.capabilities[category] = {};
+  config.capabilities[category][perm] = checked;
+  saveAgentConfigs();
+}
+
+function renderAutonomyTab(el, agent, config) {
+  const currentLevel = AUTONOMY_LEVELS[config.autonomy] || AUTONOMY_LEVELS[1];
+
+  el.innerHTML = `
+    <div class="acenter-autonomy">
+      <div class="acenter-section-title">Autonomy Level</div>
+      <div class="acenter-autonomy-slider-wrap">
+        <input type="range" class="acenter-autonomy-range" min="0" max="4" step="1" value="${config.autonomy}"
+          oninput="previewAutonomy(this.value)" onchange="setAgentAutonomy('${agent.id}', parseInt(this.value))">
+        <div class="acenter-autonomy-labels">
+          ${AUTONOMY_LEVELS.map(l => `
+            <span class="acenter-autonomy-label${config.autonomy === l.value ? ' active' : ''}" style="${config.autonomy === l.value ? `color:${l.color}` : ''}">${l.label}</span>
           `).join('')}
         </div>
-        <div class="role-autonomy-current" id="role-autonomy-current">
-          <span class="role-autonomy-value" style="color:${autonomyZone.color}">${role.autonomy}%</span>
-          <span class="role-autonomy-zone-name">${autonomyZone.label}</span>
-          <span class="role-autonomy-zone-desc">${autonomyZone.desc}</span>
+      </div>
+      <div class="acenter-autonomy-detail" id="acenter-autonomy-detail">
+        <div class="acenter-autonomy-badge" style="background:${currentLevel.color}20;color:${currentLevel.color};border-color:${currentLevel.color}40">
+          ${currentLevel.label}
+        </div>
+        <p class="acenter-autonomy-desc">${currentLevel.desc}</p>
+      </div>
+
+      <div class="acenter-rules-section">
+        <div class="acenter-section-title">Always Ask Before…</div>
+        <div class="acenter-rules-list" id="acenter-overrides-list">
+          ${(config.overrides || []).map((rule, i) => `
+            <label class="acenter-rule-item">
+              <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleOverride('${agent.id}',${i},this.checked)">
+              <span class="acenter-rule-check"></span>
+              <span class="acenter-rule-text">${rule.text}</span>
+              <button class="acenter-rule-remove" onclick="removeOverride('${agent.id}',${i})">×</button>
+            </label>
+          `).join('')}
+          <button class="acenter-add-rule-btn" onclick="addOverride('${agent.id}')">+ Add rule</button>
         </div>
       </div>
-    </div>
 
-    <div class="role-editor-section">
-      <div class="role-section-title">Domain Restrictions</div>
-      <div class="role-domains" id="role-domains-${roleId}">
-        ${(role.domains || []).map(d => `
-          <span class="role-domain-tag">${d} <button class="role-domain-remove" onclick="removeDomain('${roleId}','${d}')">×</button></span>
-        `).join('')}
-        <input type="text" class="role-domain-input" placeholder="Add domain..." onkeydown="if(event.key==='Enter'){addDomain('${roleId}',this.value);this.value='';}">
-      </div>
-    </div>
-
-    <div class="role-editor-section">
-      <div class="role-section-title">Escalation Rules</div>
-      <div class="role-escalation-rules" id="role-esc-${roleId}">
-        ${(role.escalationRules || []).map((rule, i) => `
-          <div class="role-esc-rule">
-            <span class="role-esc-icon">⚠️</span>
-            <input type="text" class="role-esc-input" value="${rule}" onchange="updateEscalationRule('${roleId}',${i},this.value)">
-            <button class="role-esc-remove" onclick="removeEscalationRule('${roleId}',${i})">×</button>
-          </div>
-        `).join('')}
-        <button class="role-add-esc-btn" onclick="addEscalationRule('${roleId}')">+ Add Rule</button>
-      </div>
-    </div>
-
-    <div class="role-editor-section">
-      <div class="role-section-title">Assigned Agents</div>
-      <div class="role-assigned-agents">
-        ${AGENTS.map(a => {
-          const assigned = (role.agents || []).includes(a.id);
-          return `
-            <div class="role-agent-chip${assigned ? ' assigned' : ''}" onclick="toggleAgentRole('${roleId}','${a.id}')">
-              <span>${a.emoji}</span>
-              <span>${a.name}</span>
-              ${assigned ? '<span class="role-agent-check">✓</span>' : ''}
-            </div>
-          `;
-        }).join('')}
+      <div class="acenter-rules-section">
+        <div class="acenter-section-title">Escalate When…</div>
+        <div class="acenter-rules-list" id="acenter-escalation-list">
+          ${(config.escalationTriggers || []).map((rule, i) => `
+            <label class="acenter-rule-item">
+              <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleEscalation('${agent.id}',${i},this.checked)">
+              <span class="acenter-rule-check"></span>
+              <span class="acenter-rule-text">${rule.text}</span>
+              <button class="acenter-rule-remove" onclick="removeEscalation('${agent.id}',${i})">×</button>
+            </label>
+          `).join('')}
+          <button class="acenter-add-rule-btn" onclick="addEscalation('${agent.id}')">+ Add trigger</button>
+        </div>
       </div>
     </div>
   `;
 }
 
-function updateRole(roleId, field, value) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) return;
-  role[field] = value;
-  saveRoles();
-  if (field === 'name') renderRolesSidebar();
-}
-
-function toggleCapability(roleId, cap, checked) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) return;
-  role.capabilities[cap] = checked;
-  saveRoles();
-}
-
-function updateAutonomyPreview(val) {
-  const zone = AUTONOMY_ZONES.find(z => val >= z.min && val < z.max) || AUTONOMY_ZONES[4];
-  const el = $('role-autonomy-current');
-  if (el) {
-    el.innerHTML = `
-      <span class="role-autonomy-value" style="color:${zone.color}">${val}%</span>
-      <span class="role-autonomy-zone-name">${zone.label}</span>
-      <span class="role-autonomy-zone-desc">${zone.desc}</span>
+function previewAutonomy(val) {
+  const level = AUTONOMY_LEVELS[parseInt(val)] || AUTONOMY_LEVELS[1];
+  const detail = $('acenter-autonomy-detail');
+  if (detail) {
+    detail.innerHTML = `
+      <div class="acenter-autonomy-badge" style="background:${level.color}20;color:${level.color};border-color:${level.color}40">
+        ${level.label}
+      </div>
+      <p class="acenter-autonomy-desc">${level.desc}</p>
     `;
   }
-}
-
-function addDomain(roleId, domain) {
-  if (!domain.trim()) return;
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) return;
-  if (!role.domains) role.domains = [];
-  if (!role.domains.includes(domain.trim())) {
-    role.domains.push(domain.trim());
-    saveRoles();
-    renderRoleEditor(roleId);
-  }
-}
-
-function removeDomain(roleId, domain) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) return;
-  role.domains = (role.domains || []).filter(d => d !== domain);
-  saveRoles();
-  renderRoleEditor(roleId);
-}
-
-function addEscalationRule(roleId) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) return;
-  if (!role.escalationRules) role.escalationRules = [];
-  role.escalationRules.push('Escalate if ...');
-  saveRoles();
-  renderRoleEditor(roleId);
-}
-
-function updateEscalationRule(roleId, index, value) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role || !role.escalationRules) return;
-  role.escalationRules[index] = value;
-  saveRoles();
-}
-
-function removeEscalationRule(roleId, index) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role || !role.escalationRules) return;
-  role.escalationRules.splice(index, 1);
-  saveRoles();
-  renderRoleEditor(roleId);
-}
-
-function toggleAgentRole(roleId, agentId) {
-  const role = rolesData.find(r => r.id === roleId);
-  if (!role) return;
-  if (!role.agents) role.agents = [];
-  const idx = role.agents.indexOf(agentId);
-  if (idx >= 0) role.agents.splice(idx, 1);
-  else role.agents.push(agentId);
-  saveRoles();
-  renderRoleEditor(roleId);
-  renderRolesSidebar();
-}
-
-function createNewRole() {
-  const id = 'role-' + Date.now();
-  rolesData.push({
-    id, name: 'New Role', description: 'Describe this role...',
-    capabilities: Object.fromEntries(DEFAULT_CAPABILITIES.map(c => [c, false])),
-    autonomy: 40, domains: [], escalationRules: [], agents: [],
+  // Update label highlights
+  document.querySelectorAll('.acenter-autonomy-label').forEach((lbl, i) => {
+    if (i === parseInt(val)) {
+      lbl.classList.add('active');
+      lbl.style.color = AUTONOMY_LEVELS[i].color;
+    } else {
+      lbl.classList.remove('active');
+      lbl.style.color = '';
+    }
   });
-  saveRoles();
-  selectedRoleId = id;
-  renderRoles();
 }
 
-function deleteRole(roleId) {
-  rolesData = rolesData.filter(r => r.id !== roleId);
-  saveRoles();
-  selectedRoleId = rolesData[0]?.id || null;
-  renderRoles();
+function setAgentAutonomy(agentId, value) {
+  const config = getAgentConfig(agentId);
+  config.autonomy = value;
+  saveAgentConfigs();
 }
 
-function saveRoles() {
-  localStorage.setItem('agent-os-roles', JSON.stringify(rolesData));
+function toggleOverride(agentId, index, checked) {
+  const config = getAgentConfig(agentId);
+  if (config.overrides[index]) config.overrides[index].enabled = checked;
+  saveAgentConfigs();
+}
+
+function removeOverride(agentId, index) {
+  const config = getAgentConfig(agentId);
+  config.overrides.splice(index, 1);
+  saveAgentConfigs();
+  renderAgentDetail(agentId);
+}
+
+function addOverride(agentId) {
+  const config = getAgentConfig(agentId);
+  config.overrides.push({ text: 'New override rule...', enabled: true });
+  saveAgentConfigs();
+  renderAgentDetail(agentId);
+}
+
+function toggleEscalation(agentId, index, checked) {
+  const config = getAgentConfig(agentId);
+  if (config.escalationTriggers[index]) config.escalationTriggers[index].enabled = checked;
+  saveAgentConfigs();
+}
+
+function removeEscalation(agentId, index) {
+  const config = getAgentConfig(agentId);
+  config.escalationTriggers.splice(index, 1);
+  saveAgentConfigs();
+  renderAgentDetail(agentId);
+}
+
+function addEscalation(agentId) {
+  const config = getAgentConfig(agentId);
+  config.escalationTriggers.push({ text: 'New escalation trigger...', enabled: true });
+  saveAgentConfigs();
+  renderAgentDetail(agentId);
+}
+
+function renderHistoryTab(el, agent) {
+  const history = AGENT_HISTORY[agent.id] || { tasks: [], proposals: [], errors: [] };
+
+  el.innerHTML = `
+    <div class="acenter-history">
+      <div class="acenter-history-section">
+        <div class="acenter-section-title">Recent Tasks</div>
+        <div class="acenter-history-list">
+          ${history.tasks.length === 0 ? '<div class="acenter-history-empty">No tasks yet</div>' :
+            history.tasks.map(t => `
+              <div class="acenter-history-item">
+                <span class="acenter-history-icon">${t.status === 'completed' ? '✅' : '❌'}</span>
+                <div class="acenter-history-item-info">
+                  <span class="acenter-history-item-name">${t.name}</span>
+                  <span class="acenter-history-item-meta">${t.time} · ${(t.tokens / 1000).toFixed(1)}K tokens</span>
+                </div>
+                <span class="acenter-history-status ${t.status}">${t.status}</span>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+
+      <div class="acenter-history-section">
+        <div class="acenter-section-title">Recent Proposals</div>
+        <div class="acenter-history-list">
+          ${history.proposals.length === 0 ? '<div class="acenter-history-empty">No proposals</div>' :
+            history.proposals.map(p => `
+              <div class="acenter-history-item">
+                <span class="acenter-history-icon">${p.status === 'approved' ? '✅' : p.status === 'rejected' ? '❌' : '⏳'}</span>
+                <div class="acenter-history-item-info">
+                  <span class="acenter-history-item-name">${p.name}</span>
+                  <span class="acenter-history-item-meta">${p.time}</span>
+                </div>
+                <span class="acenter-history-status ${p.status}">${p.status}</span>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+
+      <div class="acenter-history-section">
+        <div class="acenter-section-title">Error Log</div>
+        <div class="acenter-history-list">
+          ${history.errors.length === 0 ? '<div class="acenter-history-empty">No errors 🎉</div>' :
+            history.errors.map(e => `
+              <div class="acenter-history-item error-item">
+                <span class="acenter-history-icon">${e.severity === 'error' ? '🔴' : '🟡'}</span>
+                <div class="acenter-history-item-info">
+                  <span class="acenter-history-item-name">${e.message}</span>
+                  <span class="acenter-history-item-meta">${e.time}</span>
+                </div>
+                <span class="acenter-history-severity ${e.severity}">${e.severity}</span>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // ═══════════════════════════════════════════════════════════
