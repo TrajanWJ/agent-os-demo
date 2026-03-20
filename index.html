@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f0f12">
   <title>Agent OS v7</title>
-  <link rel="stylesheet" href="styles.css?v=55">
+  <link rel="stylesheet" href="styles.css?v=60">
   <!-- Lucide Icons (modern SVG icon set) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
@@ -37,6 +37,11 @@
           <i data-lucide="inbox" class="nav-icon-svg"></i>
           <span class="nav-label">Proposals</span>
           <span class="nav-badge" id="queue-badge">8</span>
+        </button>
+        <button class="nav-item" data-page="plans" onclick="nav('plans')">
+          <i data-lucide="kanban" class="nav-icon-svg"></i>
+          <span class="nav-label">Plans</span>
+          <span class="nav-badge" id="plans-badge"></span>
         </button>
         <button class="nav-item" data-page="mind" onclick="nav('mind')">
           <i data-lucide="brain" class="nav-icon-svg"></i>
@@ -398,6 +403,9 @@
           </div>
         </div>
 
+        <!-- PLANS VIEW -->
+        <div id="view-plans" class="view"></div>
+
         <!-- BOARD VIEW -->
         <div id="view-board" class="view">
           <div class="board-header">
@@ -540,7 +548,8 @@
     </div>
     <div class="mobile-menu-items">
       <button class="mobile-menu-item" onclick="nav('pulse');toggleMobileMenu()"><i data-lucide="activity" class="menu-item-icon"></i> System</button>
-      <button class="mobile-menu-item" onclick="nav('board');toggleMobileMenu()"><i data-lucide="kanban" class="menu-item-icon"></i> Board</button>
+      <button class="mobile-menu-item" onclick="nav('plans');toggleMobileMenu()"><i data-lucide="kanban" class="menu-item-icon"></i> Plans</button>
+      <button class="mobile-menu-item" onclick="nav('board');toggleMobileMenu()"><i data-lucide="columns" class="menu-item-icon"></i> Board</button>
       <button class="mobile-menu-item" onclick="nav('schedule');toggleMobileMenu()"><i data-lucide="calendar" class="menu-item-icon"></i> Schedule</button>
       <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()"><i data-lucide="trophy" class="menu-item-icon"></i> Missions</button>
       <button class="mobile-menu-item" onclick="nav('explore');toggleMobileMenu()"><i data-lucide="search" class="menu-item-icon"></i> Explore</button>
@@ -599,11 +608,11 @@
     <div class="card-modal" id="card-modal-content"></div>
   </div>
 
-  <script src="data.js?v=59"></script>
-  <script src="app.js?v=59"></script>
-  <script src="app2.js?v=59"></script>
-  <script src="app3.js?v=59"></script>
-  <script src="live.js?v=59"></script>
-  <script src="bridge.js?v=59"></script>
+  <script src="data.js?v=60"></script>
+  <script src="app.js?v=60"></script>
+  <script src="app2.js?v=60"></script>
+  <script src="app3.js?v=60"></script>
+  <script src="live.js?v=60"></script>
+  <script src="bridge.js?v=60"></script>
 </body>
 </html>

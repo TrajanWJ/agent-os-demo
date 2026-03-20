@@ -29,6 +29,14 @@ const Bridge = {
     return resp.json();
   },
 
+  // ── Plans ───────────────────────────────────────────────
+  async getPlans() { return this.apiFetch('/api/plans'); },
+  async getPlan(id) { return this.apiFetch(`/api/plans/${id}`); },
+  async createPlan(data) { return this.apiFetch('/api/plans', { method:'POST', body:JSON.stringify(data) }); },
+  async updateTask(planId, taskId, data) { return this.apiFetch(`/api/plans/${planId}/tasks/${taskId}`, { method:'PUT', body:JSON.stringify(data) }); },
+  async createTask(planId, data) { return this.apiFetch(`/api/plans/${planId}/tasks`, { method:'POST', body:JSON.stringify(data) }); },
+  async deleteTask(planId, taskId) { return this.apiFetch(`/api/plans/${planId}/tasks/${taskId}`, { method:'DELETE' }); },
+
   // ── Channels ────────────────────────────────────────────
   async getChannels()              { return this.apiFetch('/api/channels'); },
   async getMessages(chId, limit=50){ return this.apiFetch(`/api/channels/${chId}/messages?limit=${limit}`); },

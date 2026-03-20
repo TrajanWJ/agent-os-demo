@@ -35,6 +35,73 @@ const FEED_EVENTS = [
 const QUEUE_QUESTIONS = []; // Live proposals loaded from bridge API
 
 // ── DISCORD MESSAGES ──────────────────────────────────────────────────────────
+const DC_CHANNELS = {
+  categories: [
+    {
+      id:'⚡ ACTIVE', name:'⚡ ACTIVE', channels: [
+        {id:'1484410846422765590', name:'🔧-claw-discord-setup', unread:0, type:'text', topic:'Discord v5 config, wiring, repairs.'},
+        {id:'1484411971880226856', name:'ingestor-researcher-dispatcher-propositioner', unread:0, type:'text', topic:'Ingestor, vault-feed, links pipeline wiring.'},
+        {id:'1484411979761324183', name:'🔬-self-improvement-loop', unread:0, type:'text', topic:'Self-improvement hook live in 3 scripts.'},
+        {id:'1484411982487490701', name:'🤖-agent-os-frontend', unread:0, type:'text', topic:'Native frontend to replace Discord.'},
+        {id:'1484432021727084644', name:'📚-links-reads-to-implement', unread:0, type:'text', topic:'Drop links for agents to assess.'},
+        {id:'1484435106365046844', name:'🤝-agent-orchestration', unread:0, type:'text', topic:'Multi-agent coordination patterns.'},
+      ]
+    },
+    {
+      id:'🛎️ BRIDGE', name:'🛎️ BRIDGE', channels: [
+        {id:'1482997518362214422', name:'concierge', unread:0, type:'text', topic:'Talk to Right Hand.'},
+        {id:'1484014822642286654', name:'📋-dispatch', unread:0, type:'text', topic:'Issue commands, get results.'},
+      ]
+    },
+    {
+      id:'🧠 COMMAND', name:'🧠 COMMAND', channels: [
+        {id:'1482996866428964904', name:'🗂️-desk', unread:0, type:'forum', topic:'Task board. One thread per task.'},
+        {id:'1482939106223853740', name:'⚖️-decisions', unread:0, type:'forum', topic:'Decision log.'},
+        {id:'1484014825670574180', name:'🧠-prompt-lab', unread:0, type:'forum', topic:'Prompt engineering workshop.'},
+        {id:'1484031225709723818', name:'📢-daily-brief', unread:0, type:'text', topic:'Morning synthesis.'},
+        {id:'1484267485476946112', name:'❓-queue', unread:0, type:'text', topic:'Agent decision queue.'},
+      ]
+    },
+    {
+      id:'📡 SIGNALS', name:'📡 SIGNALS', channels: [
+        {id:'1482256987700990066', name:'🔗-links', unread:0, type:'text', topic:'Drop links for analysis.'},
+        {id:'1482940161808625826', name:'🐙-github-interesting', unread:0, type:'text', topic:'GitHub repo feed.'},
+        {id:'1483016902044291186', name:'🤖-agent-feed', unread:0, type:'text', topic:'Agent activity firehose.'},
+      ]
+    },
+    {
+      id:'🔧 SYSTEM', name:'🔧 SYSTEM', channels: [
+        {id:'1482879662115073166', name:'📊-system-logs', unread:0, type:'text', topic:'System monitoring.'},
+        {id:'1484014828434595920', name:'🔒-security', unread:0, type:'text', topic:'Security audit trail.'},
+      ]
+    },
+    {
+      id:'🤖 AGENT WORK', name:'🤖 AGENT WORK', channels: [
+        {id:'1484014830770716824', name:'🔬-research', unread:0, type:'text', topic:'Research outputs.'},
+        {id:'1484014833140244642', name:'💻-code-output', unread:0, type:'text', topic:'Build artifacts.'},
+        {id:'1484014835417939990', name:'📚-vault-ops', unread:0, type:'text', topic:'Knowledge management.'},
+      ]
+    },
+    {
+      id:'🚀 PROJECTS', name:'🚀 PROJECTS', channels: [
+        {id:'1484014838169497660', name:'🚀-project-alpha', unread:0, type:'text', topic:'Active project workspace.'},
+      ]
+    },
+  ],
+  text: [
+    {id:'1482997518362214422', name:'concierge', unread:0, topic:'Talk to Right Hand.'},
+    {id:'1484014822642286654', name:'📋-dispatch', unread:0, topic:'Issue commands.'},
+    {id:'1484411982487490701', name:'🤖-agent-os-frontend', unread:0, topic:'Agent OS frontend.'},
+    {id:'1483016902044291186', name:'🤖-agent-feed', unread:0, topic:'Agent activity.'},
+  ],
+  voice: [],
+  forums: [
+    {id:'1482996866428964904', name:'🗂️-desk', icon:'📋', count:0},
+    {id:'1482939106223853740', name:'⚖️-decisions', icon:'⚖️', count:0},
+    {id:'1484014825670574180', name:'🧠-prompt-lab', icon:'🧠', count:0},
+  ],
+};
+
 const DC_MESSAGES = {}; // Real messages loaded from bridge API
 
 const DM_MESSAGES = {}; // Real DMs loaded from bridge API

@@ -14,7 +14,7 @@ let notifications = [];
 
 // Page titles
 const PAGE_TITLES = {
-  feed: 'Home', queue: 'Proposals', talk: 'Talk',
+  feed: 'Home', queue: 'Proposals', plans: 'Plans', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
   schedule: 'Schedule', missions: 'Missions', explore: 'Explore'
@@ -47,6 +47,7 @@ function nav(page) {
   if (page === 'feed')     renderDashboard();
   if (page === 'mind')     initMind();
   if (page === 'pulse')    renderPulse();
+  if (page === 'plans')    renderPlans();
   if (page === 'board')    renderBoard();
   if (page === 'stream')   renderStream();
   if (page === 'config')   renderConfig();
