@@ -204,6 +204,42 @@ let plansData = [];
 let currentPlanId = null;
 let currentPlanData = null;
 let planChatContext = null; // { plan, task? }
+let planDetailExpanded = null; // ID of expanded plan detail
+
+// Seed plans data for offline
+const SEED_PLANS = [
+  { id:'plan-agent-os-frontend', name:'Agent OS Frontend', description:'Native frontend to replace Discord as the primary interface.', status:'active', mission_id:'m2',
+    owner:'💻 Coder', created:'2026-03-10', updated:'2026-03-20',
+    steps:[
+      { id:'s1', title:'Design system & component library', desc:'Establish color tokens, spacing, typography, and base components.', status:'done', agent:'coder', notes:'Using Catppuccin Mocha' },
+      { id:'s2', title:'Core navigation & routing', desc:'Sidebar, bottom bar, page switching, deep linking.', status:'done', agent:'coder', notes:'Completed with mobile support' },
+      { id:'s3', title:'Dashboard & feed view', desc:'Main landing page with activity feed and metrics.', status:'done', agent:'coder', notes:'' },
+      { id:'s4', title:'Plans page — Kanban board', desc:'Agent-managed Kanban with multiple plans and action buttons.', status:'active', agent:'coder', notes:'In progress' },
+      { id:'s5', title:'Missions page redesign', desc:'Hill chart, mission cards, expanded detail.', status:'active', agent:'coder', notes:'Premium pass underway' },
+      { id:'s6', title:'Mobile optimization pass', desc:'Responsive nav, touch-friendly cards, gesture support.', status:'todo', agent:null, notes:'' },
+      { id:'s7', title:'Browser notifications', desc:'Push notifications for task completions and alerts.', status:'todo', agent:null, notes:'' },
+    ]
+  },
+  { id:'plan-competitor-research', name:'Competitor Research', description:'Comprehensive analysis of 60+ products across 4 categories.', status:'active', mission_id:'m1',
+    owner:'🔬 Researcher', created:'2026-03-05', updated:'2026-03-20',
+    steps:[
+      { id:'s1', title:'Surface scan all 60+ products', desc:'Quick profiles with category, pricing, key features.', status:'done', agent:'researcher', notes:'Completed — 63 products' },
+      { id:'s2', title:'Deep dive: top 5 competitors', desc:'Full teardown of Cursor, Devin, LangSmith, Dify, Copilot Workspace.', status:'active', agent:'researcher', notes:'3/5 done' },
+      { id:'s3', title:'UX comparison matrix', desc:'Feature-by-feature comparison across all categories.', status:'todo', agent:'researcher', notes:'' },
+      { id:'s4', title:'Threat assessment & positioning', desc:'SWOT analysis, positioning recommendations.', status:'todo', agent:'devil', notes:'' },
+      { id:'s5', title:'Final report & vault publish', desc:'Comprehensive report with actionable insights.', status:'todo', agent:'researcher', notes:'' },
+    ]
+  },
+  { id:'plan-wilson-phase0', name:'Wilson Phase 0', description:'Feasibility study for Wilson Premier AI agent platform.', status:'draft', mission_id:'m3',
+    owner:'🔬 Researcher', created:'2026-03-15', updated:'2026-03-19',
+    steps:[
+      { id:'s1', title:'Industry research', desc:'Hospitality + real estate AI landscape.', status:'done', agent:'researcher', notes:'Doc v1 drafted' },
+      { id:'s2', title:'Architecture proposal', desc:'Multi-agent system design for property management.', status:'todo', agent:'coder', notes:'' },
+      { id:'s3', title:'Prototype MVP', desc:'Basic agent interaction demo.', status:'todo', agent:'coder', notes:'' },
+      { id:'s4', title:'Pitch deck', desc:'Investor-ready presentation.', status:'todo', agent:null, notes:'' },
+    ]
+  },
+];
 
 async function renderPlansPage() {
   const selector = $('plans-selector');
@@ -213,46 +249,46 @@ async function renderPlansPage() {
   // Load plans from bridge
   try {
     if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
-      plansData = await Bridge.getPlans();
+      const bridgePlans = await Bridge.getPlans();
+      if (bridgePlans && bridgePlans.length > 0) plansData = bridgePlans;
     }
   } catch (e) {
     console.warn('[Plans] Bridge load failed:', e.message);
   }
 
-  // Fallback seed data if no plans loaded
+  // Fallback seed data
   if (!plansData || plansData.length === 0) {
-    plansData = [
-      { id: 'plan-agent-os-frontend', name: 'Agent OS Frontend', description: 'Native frontend with agent interaction', status: 'active', task_count: 6 },
-      { id: 'plan-system-improvements', name: 'System Improvements', description: 'Infrastructure and reliability', status: 'active', task_count: 4 },
-    ];
+    plansData = SEED_PLANS;
   }
 
-  // Render plan selector tabs
-  selector.innerHTML = plansData.map(p =>
-    `<button class="chip${currentPlanId === p.id ? ' active' : ''}" onclick="selectPlan('${p.id}')">${p.name}</button>`
-  ).join('');
+  // Render selector with new plan button
+  selector.innerHTML = `
+    ${plansData.map(p => `<button class="chip${currentPlanId === p.id ? ' active' : ''}" onclick="selectPlan('${p.id}')">${p.name}</button>`).join('')}
+    <button class="chip plan-new-chip" onclick="showNewPlanModal()">＋ New Plan</button>
+  `;
 
-  // Auto-select first plan if none selected
-  if (!currentPlanId && plansData.length > 0) {
+  if (planDetailExpanded) {
+    renderPlanDetail(planDetailExpanded);
+  } else if (!currentPlanId && plansData.length > 0) {
     selectPlan(plansData[0].id);
   } else if (currentPlanId) {
-    await renderPlanKanban(currentPlanId);
+    await renderPlanView(currentPlanId);
   }
 }
 
 async function selectPlan(planId) {
   currentPlanId = planId;
-  // Update selector active state
+  planDetailExpanded = null;
   const selector = $('plans-selector');
   if (selector) {
-    selector.querySelectorAll('.chip').forEach(c => {
+    selector.querySelectorAll('.chip:not(.plan-new-chip)').forEach(c => {
       c.classList.toggle('active', c.textContent === plansData.find(p => p.id === planId)?.name);
     });
   }
-  await renderPlanKanban(planId);
+  await renderPlanView(planId);
 }
 
-async function renderPlanKanban(planId) {
+async function renderPlanView(planId) {
   const container = $('plans-kanban-container');
   if (!container) return;
 
@@ -265,9 +301,8 @@ async function renderPlanKanban(planId) {
     console.warn('[Plans] Plan load failed:', e.message);
   }
 
-  // Fallback seed data
   if (!plan) {
-    plan = getSeedPlan(planId);
+    plan = getSeedPlan(planId) || plansData.find(p => p.id === planId);
   }
 
   currentPlanData = plan;
@@ -276,6 +311,94 @@ async function renderPlanKanban(planId) {
     return;
   }
 
+  // If plan has steps (new format), render step-based view
+  if (plan.steps) {
+    renderPlanCardView(plan, container);
+  } else {
+    // Legacy kanban view
+    renderPlanKanban(plan, container);
+  }
+}
+
+function renderPlanCardView(plan, container) {
+  const steps = plan.steps || [];
+  const doneCount = steps.filter(s => s.status === 'done').length;
+  const activeCount = steps.filter(s => s.status === 'active').length;
+  const totalSteps = steps.length;
+  const progress = totalSteps > 0 ? Math.round((doneCount / totalSteps) * 100) : 0;
+  const linkedMission = (typeof mcMissions !== 'undefined' ? mcMissions : MISSIONS_DATA).find(m => m.id === plan.mission_id);
+  const statusMap = { active:'Active', draft:'Draft', completed:'Complete' };
+  const statusColor = plan.status === 'completed' ? 'var(--teal)' : plan.status === 'draft' ? 'var(--text-muted)' : 'var(--green)';
+
+  container.innerHTML = `
+    <div class="plan-detail-view">
+      <div class="plan-header-card">
+        <div class="plan-header-top">
+          <div class="plan-header-info">
+            <h3 class="plan-header-title">${plan.name}</h3>
+            <p class="plan-header-desc">${plan.description || ''}</p>
+          </div>
+          <div class="plan-header-meta">
+            <span class="plan-status-badge" style="color:${statusColor};border-color:${statusColor}">${statusMap[plan.status] || plan.status}</span>
+            ${linkedMission ? `<span class="plan-linked-mission" onclick="nav('missions');setTimeout(()=>selectMCMission('${linkedMission.id}'),200)">${linkedMission.icon} ${linkedMission.title}</span>` : ''}
+          </div>
+        </div>
+        <div class="plan-header-stats">
+          <div class="plan-stat"><span class="plan-stat-val">${doneCount}/${totalSteps}</span><span class="plan-stat-label">Steps done</span></div>
+          <div class="plan-stat"><span class="plan-stat-val">${activeCount}</span><span class="plan-stat-label">In progress</span></div>
+          <div class="plan-stat"><span class="plan-stat-val">${plan.owner || '—'}</span><span class="plan-stat-label">Owner</span></div>
+          <div class="plan-stat"><span class="plan-stat-val">${plan.updated || '—'}</span><span class="plan-stat-label">Updated</span></div>
+        </div>
+        <div class="plan-progress-track">
+          <div class="plan-progress-bar">
+            <div class="plan-progress-fill" style="width:${progress}%"></div>
+          </div>
+          <span class="plan-progress-label">${progress}%</span>
+        </div>
+      </div>
+
+      <div class="plan-flow-container">
+        ${steps.map((step, i) => {
+          const isDone = step.status === 'done';
+          const isActive = step.status === 'active';
+          const stepAgent = step.agent ? (typeof ga === 'function' ? ga(step.agent) : null) : null;
+          const stepEmoji = stepAgent ? stepAgent.emoji : (step.agent ? '🤖' : '⬜');
+          const stepStatusIcon = isDone ? '✅' : isActive ? '🔄' : '⬜';
+          const stepClass = isDone ? 'plan-step-done' : isActive ? 'plan-step-active' : 'plan-step-todo';
+          const checked = isDone ? 'checked' : '';
+          const lsKey = `agentOS_plan_step_${plan.id}_${step.id}`;
+          const savedCheck = localStorage.getItem(lsKey);
+          const isChecked = savedCheck === 'true' || isDone;
+
+          return `
+            ${i > 0 ? '<div class="plan-flow-connector"><div class="plan-flow-line' + (isDone || isActive ? ' filled' : '') + '"></div></div>' : ''}
+            <div class="plan-step-card ${stepClass}" data-step-id="${step.id}">
+              <div class="plan-step-header">
+                <input type="checkbox" class="plan-step-check" ${isChecked ? 'checked' : ''} onchange="togglePlanStep('${plan.id}','${step.id}',this.checked)"/>
+                <span class="plan-step-num">${i + 1}</span>
+                <span class="plan-step-title">${step.title}</span>
+                <span class="plan-step-agent">${stepEmoji}</span>
+                <span class="plan-step-status-dot ${stepClass}"></span>
+              </div>
+              ${step.desc ? `<div class="plan-step-desc">${step.desc}</div>` : ''}
+              ${step.notes ? `<div class="plan-step-notes">📝 ${step.notes}</div>` : ''}
+              <div class="plan-step-actions">
+                ${!isDone ? `<button class="plan-step-dispatch-btn" onclick="event.stopPropagation();dispatchPlanStep('${plan.id}','${step.id}')">🚀 Dispatch Step</button>` : ''}
+                <button class="plan-step-ask-btn" onclick="event.stopPropagation();openTaskChat('${step.id}','${plan.id}')">❓ Ask</button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="plan-bottom-toolbar">
+        <button class="plan-toolbar-btn" onclick="openPlanChat()">💬 Discuss Plan</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderPlanKanban(plan, container) {
   const columns = plan.columns || [
     { id: 'backlog', name: 'Backlog', color: '#6c7086' },
     { id: 'active', name: 'In Progress', color: '#f9e2af' },
@@ -306,14 +429,135 @@ async function renderPlanKanban(planId) {
   `;
 }
 
+function togglePlanStep(planId, stepId, checked) {
+  const lsKey = `agentOS_plan_step_${planId}_${stepId}`;
+  localStorage.setItem(lsKey, String(checked));
+  // Update visual state
+  const card = document.querySelector(`.plan-step-card[data-step-id="${stepId}"]`);
+  if (card) {
+    card.classList.toggle('plan-step-done', checked);
+    card.classList.toggle('plan-step-todo', !checked);
+    card.classList.remove('plan-step-active');
+  }
+}
+
+function dispatchPlanStep(planId, stepId) {
+  const plan = currentPlanData || plansData.find(p => p.id === planId);
+  if (!plan) return;
+  const step = (plan.steps || plan.tasks || []).find(s => s.id === stepId);
+  if (!step) return;
+
+  const payload = {
+    action: 'implement',
+    task: step.title,
+    plan: plan.name,
+    description: step.desc || step.description || '',
+  };
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agent/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: JSON.stringify(payload), context: 'plan-action', plan: plan.name, task: step.title }),
+  }).catch(() => {});
+
+  toast(`🚀 Dispatched: ${step.title}`, 'success', 3000);
+  if (typeof addXP === 'function') addXP(10, 'dispatch step');
+}
+
+function showNewPlanModal() {
+  const missions = typeof mcMissions !== 'undefined' ? mcMissions : (typeof MISSIONS_DATA !== 'undefined' ? MISSIONS_DATA : []);
+  const m = document.createElement('div');
+  m.id = 'new-plan-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  m.innerHTML = `
+    <div class="modal-panel" style="background:var(--bg-surface,#252536);border:1px solid var(--border);border-radius:16px;padding:28px;width:90%;max-width:520px;max-height:80vh;overflow-y:auto;">
+      <h3 style="margin:0 0 20px;color:var(--text);font-size:18px;font-weight:700;">📋 New Plan</h3>
+      <label class="modal-label">Plan Name</label>
+      <input id="np2-title" placeholder="e.g. Launch Campaign" class="modal-input" />
+      <label class="modal-label">Linked Mission</label>
+      <select id="np2-mission" class="modal-input" style="appearance:auto;">
+        <option value="">— None —</option>
+        ${missions.map(m => `<option value="${m.id}">${m.icon} ${m.title}</option>`).join('')}
+      </select>
+      <label class="modal-label">Steps</label>
+      <div id="np2-steps-list" class="np2-steps-list"></div>
+      <button onclick="addNewPlanStep()" class="plan-add-step-btn" style="margin-bottom:16px;">＋ Add Step</button>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('new-plan-modal').remove()" class="modal-btn-cancel">Cancel</button>
+        <button onclick="submitNewPlan()" class="modal-btn-primary">Create Plan</button>
+      </div>
+      <div id="np2-status" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
+    </div>
+  `;
+  m.onclick = (e) => { if (e.target === m) m.remove(); };
+  document.body.appendChild(m);
+  addNewPlanStep(); // Start with one step
+  setTimeout(() => document.getElementById('np2-title')?.focus(), 100);
+}
+
+let _npStepCounter = 0;
+function addNewPlanStep() {
+  _npStepCounter++;
+  const list = document.getElementById('np2-steps-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'np2-step-row';
+  row.innerHTML = `
+    <span class="np2-step-num">${_npStepCounter}</span>
+    <input class="np2-step-title modal-input" placeholder="Step title" style="flex:1;margin-bottom:0;" />
+    <input class="np2-step-agent modal-input" placeholder="Agent (optional)" style="width:100px;margin-bottom:0;" />
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;">✕</button>
+  `;
+  list.appendChild(row);
+}
+
+async function submitNewPlan() {
+  const title = document.getElementById('np2-title')?.value.trim();
+  const missionId = document.getElementById('np2-mission')?.value || '';
+  const status = document.getElementById('np2-status');
+  if (!title) { status.textContent = '❌ Title required'; return; }
+
+  const stepRows = document.querySelectorAll('.np2-step-row');
+  const steps = [];
+  stepRows.forEach((row, i) => {
+    const t = row.querySelector('.np2-step-title')?.value.trim();
+    const a = row.querySelector('.np2-step-agent')?.value.trim() || null;
+    if (t) steps.push({ id: `s${i+1}`, title: t, desc: '', status: 'todo', agent: a, notes: '' });
+  });
+
+  status.textContent = '⏳ Creating...';
+  const id = 'plan-' + Date.now();
+  const newPlan = {
+    id, name: title, description: '', status: 'draft', mission_id: missionId,
+    owner: 'You', created: new Date().toISOString().slice(0,10), updated: new Date().toISOString().slice(0,10),
+    steps,
+  };
+
+  try {
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+      await Bridge.createPlan({ name: title, mission_id: missionId, steps });
+    }
+  } catch {}
+
+  plansData.push(newPlan);
+  try { localStorage.setItem('agentOS_plans', JSON.stringify(plansData)); } catch {}
+  
+  status.textContent = '✅ Created!';
+  _npStepCounter = 0;
+  setTimeout(() => {
+    document.getElementById('new-plan-modal')?.remove();
+    selectPlan(id);
+    renderPlansPage();
+  }, 400);
+}
+
 function makePlanTaskCard(task, col, plan) {
   const agentObj = task.agent ? (ga(task.agent) || { emoji: '🤖' }) : { emoji: '⬜' };
   const pCls = (task.priority || 'P3').toLowerCase();
   const isDone = col.id === 'done' || col.id === 'shipped';
 
-  // Determine which agent buttons to show
   let agentBtns = `<button class="task-agent-btn ask-btn" onclick="event.stopPropagation();openTaskChat('${task.id}','${plan.id}')">❓ Ask</button>`;
-
   if (!isDone) {
     agentBtns += `<button class="task-agent-btn" onclick="event.stopPropagation();dispatchImplement('${task.id}','${plan.id}')">🚀 Implement</button>`;
   }

@@ -2170,6 +2170,8 @@ async function submitNewMission() {
   const title = document.getElementById('nm-title').value.trim();
   const desc = document.getElementById('nm-desc').value.trim();
   const deadline = document.getElementById('nm-deadline').value;
+  const project = document.getElementById('nm-project')?.value.trim() || '';
+  const criteria = document.getElementById('nm-criteria')?.value.trim() || '';
   const status = document.getElementById('nm-status');
   
   if (!title) { status.textContent = '❌ Title required'; return; }
@@ -2179,17 +2181,19 @@ async function submitNewMission() {
     if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
       await Bridge.apiFetch('/api/missions', {
         method: 'POST',
-        body: JSON.stringify({ title, description: desc || title, deadline: deadline || null }),
+        body: JSON.stringify({ title, description: desc || title, deadline: deadline || null, project, success_criteria: criteria }),
       });
     } else {
-      // Offline fallback: add to local data
+      // Offline fallback: add to local data + localStorage
       const id = 'local-' + Date.now();
-      mcMissions.unshift({
-        id, icon: '🎯', title, desc: desc || title, goal: '', status: 'planned',
+      const newMission = {
+        id, icon: '🎯', title, desc: desc || title, goal: project || '', status: 'planned',
         progress: 0, tasks_done: 0, tasks_total: 0, agents_active: 0,
         days_active: 0, velocity: 0, milestones: [], blocking_items: 0,
-        target_date: deadline || '', success_criteria: desc || '',
-      });
+        target_date: deadline || '', success_criteria: criteria || desc || '',
+      };
+      mcMissions.unshift(newMission);
+      try { const saved = JSON.parse(localStorage.getItem('agentOS_missions') || '[]'); saved.unshift(newMission); localStorage.setItem('agentOS_missions', JSON.stringify(saved)); } catch {}
     }
     status.textContent = '✅ Created!';
     setTimeout(() => {

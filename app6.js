@@ -253,15 +253,17 @@ function mergeDiscordIntoStream() {
       id: 'discord-' + msg.id,
       type: 'discord',
       streamType: 'discord',
-      agent: msg.authorBot ? 'righthand' : 'user',
-      title: msg.content ? msg.content.substring(0, 120) : '[embed]',
+      agent: msg.authorBot ? (msg.agentId || 'righthand') : 'user',
+      title: msg.content ? msg.content.substring(0, 160) : '[embed]',
       detail: msg.content || '',
       time: msg.timestamp,
       displayTime: formatStreamTime(msg.timestamp),
       source: 'discord',
       read: false,
-      _discordAuthor: msg.author,
+      _discordAuthor: msg.author || 'Unknown',
       _discordFull: msg.content,
+      _discordChannel: msg.channel || msg.channelName || '',
+      _discordIsBot: !!msg.authorBot,
       _isDiscord: true,
     };
 
@@ -307,27 +309,41 @@ if (_origMakeStreamItem) {
 
 function makeDiscordStreamItem(item, idx) {
   const el = document.createElement('div');
-  el.className = 'stream-item discord-mirror-item';
+  const isBot = item._discordIsBot || item.agent !== 'user';
+  el.className = `stream-item discord-mirror-item ${isBot ? 'discord-bot-msg' : 'discord-human-msg'}`;
   el.dataset.type = 'discord';
   el.dataset.id = item.id;
   el.dataset.idx = idx;
 
   const timeStr = item.displayTime || formatStreamTime(item.time);
   const author = item._discordAuthor || 'Unknown';
-  const content = item.title || '';
-  const fullContent = item._discordFull || item.detail || '';
-  const truncated = content.length > 120;
+  const channel = item._discordChannel || '';
+  const fullContent = item._discordFull || item.detail || item.title || '';
+  const maxPreview = 140;
+  const needsTruncation = fullContent.length > maxPreview;
+  const previewContent = needsTruncation ? fullContent.substring(0, maxPreview) : fullContent;
+
+  // Generate avatar — use agent avatar if bot, colored initial circle if human
+  const agentData = isBot ? (typeof ga === 'function' ? ga(item.agent) : null) : null;
+  const avatarEmoji = agentData ? agentData.emoji : author.charAt(0).toUpperCase();
+  const avatarColor = agentData ? agentData.color : '#57d6a0';
+  const botBadge = isBot ? '<span style="font-size:9px;background:rgba(88,101,242,0.2);color:#7c83d4;padding:1px 4px;border-radius:3px;margin-left:4px">BOT</span>' : '';
 
   el.innerHTML = `
     <div class="stream-item-header" onclick="toggleStreamExpand('${item.id}')">
-      <div class="stream-item-icon discord-icon">📡</div>
-      <span class="stream-item-agent discord-author">${author}</span>
+      <div class="discord-avatar-circle" style="background:${avatarColor}20;border:2px solid ${avatarColor};color:${avatarColor}">${avatarEmoji}</div>
+      <span class="stream-item-agent" style="color:${avatarColor}">${author}${botBadge}</span>
+      ${channel ? `<span class="discord-channel-badge">#${channel}</span>` : ''}
       <span class="stream-item-type-badge discord-badge">📡 Discord</span>
-      <span class="stream-item-title">${content}${truncated ? '…' : ''}</span>
+      <span class="stream-item-title discord-msg-container">
+        <span class="discord-msg-truncated">${previewContent.replace(/</g,'&lt;').replace(/>/g,'&gt;')}${needsTruncation ? '…' : ''}</span>
+        ${needsTruncation ? `<span class="discord-msg-full">${fullContent.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>` : ''}
+        ${needsTruncation ? `<span class="discord-show-more" onclick="event.stopPropagation();this.closest('.discord-msg-container').classList.toggle('discord-msg-expanded');this.textContent=this.textContent==='Show more'?'Show less':'Show more'">Show more</span>` : ''}
+      </span>
       <span class="stream-item-time">${timeStr}</span>
     </div>
     <div class="stream-item-detail">
-      ${fullContent ? `<div class="stream-item-detail-text discord-full-content">${fullContent}</div>` : ''}
+      ${fullContent ? `<div class="stream-item-detail-text discord-full-content">${fullContent.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
     </div>
   `;
   return el;

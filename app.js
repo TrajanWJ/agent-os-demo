@@ -406,7 +406,16 @@ async function pollStream() {
       item._isNew = true;
       streamItems.unshift(item);
     });
-    renderStreamItems();
+
+    // Check if user has scrolled down — show banner instead of jarring re-render
+    const list = $('stream-list');
+    const isScrolledDown = list && list.scrollTop > 100;
+    if (isScrolledDown) {
+      showNewItemsBanner(newItems.length);
+    } else {
+      renderStreamItems();
+    }
+
     // Update badge
     const badge = $('feed-badge');
     if (badge) {
@@ -414,6 +423,8 @@ async function pollStream() {
       badge.textContent = actionCount || '';
       badge.style.display = actionCount > 0 ? '' : 'none';
     }
+    // Update chip counts
+    updateFilterChipCounts();
   }
 }
 
@@ -428,6 +439,8 @@ function renderStreamItems() {
   else if (streamFilter === 'completed') filtered = streamItems.filter(i => i.type === 'completion');
   else if (streamFilter === 'conversations') filtered = streamItems.filter(i => i.type === 'activity' || i.type === 'question');
   else if (streamFilter === 'errors') filtered = streamItems.filter(i => i.severity === 'error' || i.severity === 'warn' || i.type === 'error');
+  else if (streamFilter === 'vault') filtered = streamItems.filter(i => i.type === 'vault' || i.streamType === 'vault_write');
+  else if (streamFilter === 'insights') filtered = streamItems.filter(i => i.type === 'activity' && (i.streamType === 'insight' || (i.title && i.title.toLowerCase().includes('insight'))));
 
   // Priority sort: action items first
   filtered.sort((a, b) => {
@@ -467,7 +480,10 @@ function makeStreamItem(item, idx) {
   const isActionable = ['proposal', 'question'].includes(item.type);
 
   const el = document.createElement('div');
-  el.className = `stream-item${isUnread ? ' unread' : ''}${item._isNew ? ' new-item' : ''}${isActionable ? ' selectable' : ''}`;
+  const isError = item.type === 'error';
+  const isUrgentError = isError && (item.urgent || item.severity === 'error');
+  const isCompleted = item.type === 'completion';
+  el.className = `stream-item${isUnread ? ' unread' : ''}${item._isNew ? ' new-item' : ''}${isActionable ? ' selectable' : ''}${isUrgentError ? ' error-urgent' : ''}`;
   el.dataset.type = item.type;
   el.dataset.id = item.id;
   el.dataset.idx = idx;
@@ -2691,43 +2707,166 @@ function loadAgentChatHistory() {
 // DASHBOARD — Home page header with agent status + metrics
 // ═══════════════════════════════════════════════════════════
 function renderDashboard() {
-  // Agent status bar
-  const agentBar = document.getElementById('dash-agents');
-  if (!agentBar) return;
-  agentBar.innerHTML = AGENTS.map(a => {
-    const statusDot = a.status === 'active' ? 'active' : 'idle';
-    return `<div class="dash-agent ${statusDot}" title="${a.name}: ${a.status === 'active' ? a.task || 'Working' : 'Idle'}" style="cursor:pointer" onclick="goToEntity('agent','${a.id}','${a.name}')">
-      <span class="dash-agent-emoji">${a.emoji}</span>
-      <span class="dash-agent-name">${a.name}</span>
-      <span class="dash-agent-dot ${statusDot}"></span>
-      ${a.status === 'active' ? `<span class="dash-agent-task">${(a.task || 'Working').substring(0, 25)}${(a.task||'').length > 25 ? '…' : ''}</span>` : ''}
-    </div>`;
-  }).join('');
+  // ── Agent Status Bar ──
+  renderAgentStatusBar();
 
-  // Metrics from feed events
+  // ── Quick Stats ──
   const tasksDone = feedEvents.filter(e => e.type === 'task_completed').length;
   const vaultWrites = feedEvents.filter(e => e.type === 'vault_write').length;
   const errors = feedEvents.filter(e => e.type === 'error').length;
-  const pendingQ = queueCards.filter(q => !q._status || q._status === 'pending').length;
+  const activeAgents = AGENTS.filter(a => a.status === 'active').length;
+  const pendingQ = (typeof queueCards !== 'undefined') ? queueCards.filter(q => !q._status || q._status === 'pending').length : 0;
 
   const el = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
-  el('dash-tasks-done', tasksDone);
-  el('dash-proposals', queueCards.length);
-  el('dash-vault-writes', vaultWrites);
-  el('dash-pending-count', pendingQ);
-  el('dash-error-count', errors);
-
-  // Show/hide error button
-  const errBtn = document.getElementById('dash-errors-btn');
-  if (errBtn) errBtn.style.display = errors > 0 ? '' : 'none';
+  el('qs-active', activeAgents);
+  el('qs-completed', tasksDone);
+  el('qs-proposals', pendingQ);
+  el('qs-errors', errors);
+  el('qs-vault', vaultWrites);
 
   // System metrics (try bridge)
   fetch('/api/overview').then(r => r.ok ? r.json() : null).then(d => {
     if (!d) return;
-    if (d.uptime) el('dash-uptime', d.uptime.replace(/, \d+ minutes?/, '').replace(/ days?/, 'd').replace(/ hours?/, 'h'));
-    if (d.load) el('dash-load', d.load.avg1.toFixed(1));
-    if (d.memory) el('dash-memory', Math.round(d.memory.used / 1024 * 10) / 10 + '/' + Math.round(d.memory.total / 1024 * 10) / 10 + 'G');
+    if (d.load) el('qs-load', d.load.avg1.toFixed(1));
   }).catch(() => {});
+
+  // ── Typing indicator ──
+  updateTypingIndicator();
+
+  // ── Filter chip counts ──
+  updateFilterChipCounts();
+}
+
+// ── Agent Status Bar ──
+function renderAgentStatusBar() {
+  const bar = document.getElementById('agent-status-bar');
+  if (!bar) return;
+  bar.innerHTML = AGENTS.map(a => {
+    const statusClass = a.status === 'active' ? 'is-active' : (a.status === 'error' ? 'is-error' : '');
+    const dotClass = 'status-' + (a.status || 'idle');
+    const tooltip = a.status === 'active' ? (a.task || 'Working') : (a.status === 'error' ? 'Error' : 'Idle');
+    return `<div class="agent-status-pill ${statusClass}" title="${a.name}: ${tooltip}" onclick="openAgentDrawer('${a.id}')">
+      <span class="agent-pill-emoji">${a.emoji}</span>
+      <span class="agent-pill-name">${a.name}</span>
+      <span class="agent-pill-dot ${dotClass}"></span>
+      ${a.status === 'active' && a.task ? `<span class="agent-pill-task">${a.task.substring(0, 20)}${a.task.length > 20 ? '…' : ''}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Agent Drawer ──
+function openAgentDrawer(agentId) {
+  const a = AGENTS.find(x => x.id === agentId);
+  if (!a) return;
+
+  // Remove existing drawer
+  const existing = document.querySelector('.agent-drawer-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'agent-drawer-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) closeAgentDrawer(); };
+
+  const drawer = document.createElement('div');
+  drawer.className = 'agent-drawer';
+  drawer.innerHTML = `
+    <div class="agent-drawer-header">
+      <div class="agent-drawer-avatar" style="background:${a.color}20;border:2px solid ${a.color}">${a.emoji}</div>
+      <div class="agent-drawer-info">
+        <div class="agent-drawer-name" style="color:${a.color}">${a.name}</div>
+        <div class="agent-drawer-role">${a.role}</div>
+      </div>
+      <button class="agent-drawer-close" onclick="closeAgentDrawer()">✕</button>
+    </div>
+    <div class="agent-drawer-body">
+      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Status</span><span class="agent-drawer-stat-value">${a.status === 'active' ? '🟢 Active' : a.status === 'error' ? '🔴 Error' : '⚪ Idle'}</span></div>
+      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Tasks Completed</span><span class="agent-drawer-stat-value">${a.tasks || 0}</span></div>
+      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Files Modified</span><span class="agent-drawer-stat-value">${a.files || 0}</span></div>
+      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Tokens Used</span><span class="agent-drawer-stat-value">${(a.tokens || 0).toLocaleString()}</span></div>
+      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Fitness</span><span class="agent-drawer-stat-value">${a.fitness ? Math.round(a.fitness * 100) + '%' : '—'}</span></div>
+      ${a.status === 'active' && a.task ? `
+        <div class="agent-drawer-section-title">Current Task</div>
+        <div class="agent-drawer-task-current">${a.task}</div>
+      ` : ''}
+      <div class="agent-drawer-section-title">Recent Activity</div>
+      <div style="font-size:12px;color:var(--text-muted);padding:8px 0">
+        ${streamItems.filter(s => s.agent === agentId).slice(0, 5).map(s =>
+          `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
+            <span style="color:var(--text-dim)">${s.displayTime || formatStreamTime(s.time)}</span> ${(s.title || '').substring(0, 60)}${(s.title || '').length > 60 ? '…' : ''}
+          </div>`
+        ).join('') || '<div>No recent activity</div>'}
+      </div>
+    </div>
+  `;
+
+  overlay.appendChild(drawer);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => {
+    overlay.classList.add('visible');
+    drawer.classList.add('visible');
+  });
+}
+
+function closeAgentDrawer() {
+  const overlay = document.querySelector('.agent-drawer-overlay');
+  const drawer = document.querySelector('.agent-drawer');
+  if (drawer) drawer.classList.remove('visible');
+  if (overlay) {
+    overlay.classList.remove('visible');
+    setTimeout(() => overlay.remove(), 250);
+  }
+}
+
+// ── Typing Indicator ──
+function updateTypingIndicator() {
+  const indicator = document.getElementById('stream-typing-indicator');
+  if (!indicator) return;
+  const activeAgents = AGENTS.filter(a => a.status === 'active');
+  if (activeAgents.length > 0) {
+    const names = activeAgents.map(a => a.emoji + ' ' + a.name).join(', ');
+    const text = document.getElementById('typing-text');
+    if (text) text.textContent = names + (activeAgents.length === 1 ? ' is working...' : ' are working...');
+    indicator.style.display = '';
+  } else {
+    indicator.style.display = 'none';
+  }
+}
+
+// ── Filter Chip Counts ──
+function updateFilterChipCounts() {
+  const counts = {
+    all: streamItems.length,
+    action: streamItems.filter(i => ['proposal', 'question', 'error'].includes(i.type)).length,
+    completed: streamItems.filter(i => i.type === 'completion').length,
+    errors: streamItems.filter(i => i.severity === 'error' || i.severity === 'warn' || i.type === 'error').length,
+    vault: streamItems.filter(i => i.type === 'vault' || i.streamType === 'vault_write').length,
+    insights: streamItems.filter(i => i.type === 'activity' && (i.streamType === 'insight' || (i.title && i.title.toLowerCase().includes('insight')))).length,
+  };
+  Object.keys(counts).forEach(key => {
+    const el = document.getElementById('chip-count-' + key);
+    if (el) el.textContent = counts[key] > 0 ? counts[key] : '';
+  });
+}
+
+// ── New Items Banner ──
+let pendingNewItems = 0;
+
+function showNewItemsBanner(count) {
+  pendingNewItems += count;
+  const banner = document.getElementById('stream-new-banner');
+  const text = document.getElementById('new-banner-text');
+  if (banner && text) {
+    text.textContent = pendingNewItems + ' new item' + (pendingNewItems !== 1 ? 's' : '');
+    banner.style.display = '';
+  }
+}
+
+function scrollStreamToTop() {
+  const list = document.getElementById('stream-list');
+  if (list) list.scrollTop = 0;
+  const banner = document.getElementById('stream-new-banner');
+  if (banner) banner.style.display = 'none';
+  pendingNewItems = 0;
 }
 
 // Run dashboard on feed render

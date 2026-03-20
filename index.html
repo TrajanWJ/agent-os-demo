@@ -502,68 +502,70 @@
 
         <!-- PULSE VIEW -->
         <div id="view-pulse" class="view">
-          <div class="pulse-metrics" id="pulse-metrics">
-            <div class="metric-card">
-              <div class="metric-value" id="metric-cost">$3.10</div>
-              <div class="metric-label">Cost today</div>
-              <div class="metric-sub">↑ $0.40/hr</div>
+          <!-- Dashboard Header — 4 Stat Cards -->
+          <div class="sys-dashboard-header" id="sys-dashboard-header"></div>
+
+          <!-- Service Status Grid -->
+          <div class="sys-section" id="sys-services-section">
+            <div class="sys-section-header">
+              <span class="sys-section-icon">🟢</span>
+              <span class="sys-section-title">Service Status</span>
+              <span class="sys-section-badge" id="sys-services-count"></span>
             </div>
-            <div class="metric-card">
-              <div class="metric-value" id="metric-agents">2</div>
-              <div class="metric-label">Active agents</div>
-              <div class="metric-sub" id="metric-agents-total">6 total</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-value" id="metric-tasks">14</div>
-              <div class="metric-label">Tasks done</div>
-              <div class="metric-sub">today</div>
-            </div>
+            <div class="sys-services-grid" id="sys-services-grid"></div>
           </div>
 
-          <!-- Work Flow Visualization -->
-          <div class="pulse-section pulse-section-wide" style="margin-bottom:16px">
-            <div class="section-title">Work Flow</div>
-            <div id="workflow-viz"></div>
+          <!-- Agent Status Table -->
+          <div class="sys-section" id="sys-agents-section">
+            <div class="sys-section-header">
+              <span class="sys-section-icon">🤖</span>
+              <span class="sys-section-title">Agent Status</span>
+            </div>
+            <div class="sys-agents-table-wrap" id="sys-agents-table"></div>
           </div>
 
-          <div class="pulse-grid">
-            <!-- Agent Health -->
-            <div class="pulse-section">
-              <div class="section-title">Agent Health</div>
-              <div id="agent-health-table"></div>
+          <!-- Workflow Pipeline -->
+          <div class="sys-section" id="sys-workflow-section">
+            <div class="sys-section-header">
+              <span class="sys-section-icon">⚡</span>
+              <span class="sys-section-title">Workflow Pipeline</span>
             </div>
+            <div class="sys-pipeline-wrap" id="sys-pipeline"></div>
+            <div class="sys-pipeline-detail hidden" id="sys-pipeline-detail"></div>
+          </div>
 
-            <!-- Cost Chart -->
-            <div class="pulse-section">
-              <div class="section-title">Cost (7 days)</div>
-              <div class="cost-chart-container">
-                <svg id="cost-chart" class="cost-chart"></svg>
+          <div class="sys-two-col">
+            <!-- Cron Schedule -->
+            <div class="sys-section">
+              <div class="sys-section-header">
+                <span class="sys-section-icon">⏰</span>
+                <span class="sys-section-title">Cron Schedule</span>
               </div>
+              <div id="sys-crons"></div>
             </div>
 
-            <!-- System Load -->
-            <div class="pulse-section">
-              <div class="section-title">System Load</div>
-              <div id="system-load"></div>
+            <!-- Cost Tracking -->
+            <div class="sys-section">
+              <div class="sys-section-header">
+                <span class="sys-section-icon">💰</span>
+                <span class="sys-section-title">Cost Tracking</span>
+                <div class="sys-cost-toggle" id="sys-cost-toggle">
+                  <button class="sys-toggle-btn active" data-range="daily" onclick="toggleCostRange('daily')">Daily</button>
+                  <button class="sys-toggle-btn" data-range="weekly" onclick="toggleCostRange('weekly')">Weekly</button>
+                </div>
+              </div>
+              <div id="sys-cost-chart"></div>
             </div>
+          </div>
 
-            <!-- Cron Status -->
-            <div class="pulse-section">
-              <div class="section-title">Cron Jobs</div>
-              <div id="cron-status"></div>
+          <!-- System Logs -->
+          <div class="sys-section" id="sys-logs-section">
+            <div class="sys-section-header">
+              <span class="sys-section-icon">📜</span>
+              <span class="sys-section-title">System Logs</span>
+              <button class="sys-log-pause-btn" id="sys-log-pause" onclick="toggleLogPause()">⏸ Pause</button>
             </div>
-
-            <!-- Webhook Status -->
-            <div class="pulse-section">
-              <div class="section-title">Webhooks</div>
-              <div id="hook-status"></div>
-            </div>
-
-            <!-- Error Log -->
-            <div class="pulse-section pulse-section-wide">
-              <div class="section-title">Recent Errors</div>
-              <div id="error-log"></div>
-            </div>
+            <div class="sys-logs-container" id="sys-logs"></div>
           </div>
 
           <!-- Quick Actions -->
