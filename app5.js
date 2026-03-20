@@ -344,8 +344,8 @@ async function initInbox() {
   const realItems = await fetchRealInboxItems();
   if (realItems && realItems.length > 0) {
     inboxItems = realItems;
-  } else if (inboxItems.length === 0) {
-    inboxItems = seedInboxItems();
+  } else {
+    inboxItems = [];
   }
 
   // Filter out snoozed items

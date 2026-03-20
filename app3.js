@@ -1800,41 +1800,6 @@ function selectMCMission(id) {
   renderMCDetail(id);
 }
 
-function renderMCHillAndCards() {
-  const detail = $('mc-detail');
-  if (!detail) return;
-
-  const active = mcMissions.filter(m => m.status !== 'completed');
-  // Sort: blocking items first, then by recent activity
-  active.sort((a, b) => (b.blocking_items || 0) - (a.blocking_items || 0) || (b.velocity || 0) - (a.velocity || 0));
-
-  detail.innerHTML = `
-    <div class="mc-overview-grid">
-      ${active.map(m => {
-        const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
-        const blocking = mcBlocking.filter(b => b.mission === m.id);
-        return `
-          <div class="mc-overview-card" onclick="selectMCMission('${m.id}')">
-            <div class="mc-ov-card-header">
-              <span class="mc-ov-card-icon">${m.icon}</span>
-              <span class="mc-ov-card-title entity-link entity-mission">${m.title}</span>
-            </div>
-            <div class="mc-ov-card-progress">
-              ${renderMiniProgressRing(m.progress, progressColor, 36)}
-              <div class="mc-ov-card-stats">
-                <span class="mc-ov-card-pct">${m.progress}%</span>
-                <span class="mc-ov-card-agents">${m.agents_active} agent${m.agents_active !== 1 ? 's' : ''}</span>
-              </div>
-            </div>
-            ${blocking.length > 0 ? `<div class="mc-ov-card-badge">⚠ ${blocking.length} needs input</div>` : ''}
-            <div class="mc-ov-card-desc">${m.desc}</div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
 function renderMiniProgressRing(pct, color, size) {
   const r = (size - 4) / 2;
   const circ = 2 * Math.PI * r;

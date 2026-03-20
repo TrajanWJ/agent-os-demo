@@ -1,187 +1,485 @@
 /* Agent OS v5 — app2.js — Pulse + Plans */
 'use strict';
 
-
 // ═══════════════════════════════════════════════════════════
-// PULSE PAGE
+// PULSE / SYSTEM PAGE — Premium Redesign
 // ═══════════════════════════════════════════════════════════
 
+let _sysLogPaused = false;
+let _sysSortCol = null;
+let _sysSortAsc = true;
+let _sysCostRange = 'daily';
+let _sysExpandedService = null;
+
+// ── Metric history for sparklines ─────────────────────────
+function _pushMetricHistory(key, val) {
+  const k = 'sys_hist_' + key;
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(k) || '[]'); } catch {}
+  arr.push(val);
+  if (arr.length > 10) arr = arr.slice(-10);
+  localStorage.setItem(k, JSON.stringify(arr));
+  return arr;
+}
+function _getMetricHistory(key) {
+  try { return JSON.parse(localStorage.getItem('sys_hist_' + key) || '[]'); } catch { return []; }
+}
+function _miniSparkline(data, w, h, color) {
+  if (!data.length) return '';
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  const step = w / Math.max(data.length - 1, 1);
+  const pts = data.map((v, i) => `${i * step},${h - ((v - min) / range) * h}`).join(' ');
+  return `<svg width="${w}" height="${h}" style="display:block"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+// ── Uptime formatting ─────────────────────────────────────
+function _fmtUptime(seconds) {
+  if (!seconds || seconds < 0) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// ── Main render ───────────────────────────────────────────
 function renderPulse() {
-  if (window.innerWidth <= 768) {
-    renderPulseMobileAccordion();
+  _renderDashboardHeader();
+  _renderServiceStatus();
+  _renderAgentStatusTable();
+  _renderWorkflowPipeline();
+  _renderCronSchedule();
+  _renderCostTracking();
+  _renderSystemLogs();
+}
+
+// ── 1. Dashboard Header — 4 stat cards ────────────────────
+function _renderDashboardHeader() {
+  const el = $('sys-dashboard-header');
+  if (!el) return;
+
+  // Simulate system metrics (would come from /api/overview in live mode)
+  let cpu = 34, mem = 67, disk = 72, uptime = 345600; // 4 days
+  let cpuAvg = { m1: 0.82, m5: 1.14, m15: 0.97 };
+
+  // Try to get live data from Bridge
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    Bridge.getSystemOverview().then(data => {
+      if (data.cpu !== undefined) {
+        cpu = Math.round(data.cpu);
+        cpuAvg = data.loadavg || cpuAvg;
+      }
+      if (data.memory !== undefined) mem = Math.round(data.memory);
+      if (data.disk !== undefined) disk = Math.round(data.disk);
+      if (data.uptime !== undefined) uptime = data.uptime;
+      _pushMetricHistory('cpu', cpu);
+      _pushMetricHistory('mem', mem);
+      _pushMetricHistory('disk', disk);
+      _updateDashCards(cpu, mem, disk, uptime, cpuAvg);
+    }).catch(() => {
+      _pushMetricHistory('cpu', cpu);
+      _pushMetricHistory('mem', mem);
+      _pushMetricHistory('disk', disk);
+      _updateDashCards(cpu, mem, disk, uptime, cpuAvg);
+    });
   } else {
-    renderAgentHealth();
-    renderCostChart();
-    renderSystemLoad();
-    renderCrons();
-    renderHooks();
-    renderErrorLog();
+    _pushMetricHistory('cpu', cpu + Math.round(Math.random() * 6 - 3));
+    _pushMetricHistory('mem', mem + Math.round(Math.random() * 4 - 2));
+    _pushMetricHistory('disk', disk);
+    _updateDashCards(cpu, mem, disk, uptime, cpuAvg);
   }
 }
 
-function renderPulseMobileAccordion() {
-  const grid = document.querySelector('.pulse-grid');
+function _updateDashCards(cpu, mem, disk, uptime, cpuAvg) {
+  const el = $('sys-dashboard-header');
+  if (!el) return;
+
+  const cpuHist = _getMetricHistory('cpu');
+  const memHist = _getMetricHistory('mem');
+  const diskHist = _getMetricHistory('disk');
+
+  const diskClass = disk > 85 ? 'sys-card-danger' : disk > 75 ? 'sys-card-warn' : '';
+  const cpuTrend = cpuHist.length >= 2 ? (cpuHist[cpuHist.length-1] >= cpuHist[cpuHist.length-2] ? '↑' : '↓') : '';
+  const memTrend = memHist.length >= 2 ? (memHist[memHist.length-1] >= memHist[memHist.length-2] ? '↑' : '↓') : '';
+
+  el.innerHTML = `
+    <div class="sys-stat-card">
+      <div class="sys-card-top">
+        <span class="sys-card-label">CPU</span>
+        <span class="sys-card-trend">${cpuTrend}</span>
+      </div>
+      <div class="sys-card-value">${cpu}%</div>
+      <div class="sys-card-sub">${cpuAvg.m1}/${cpuAvg.m5}/${cpuAvg.m15}</div>
+      <div class="sys-card-spark">${_miniSparkline(cpuHist, 80, 24, '#cba6f7')}</div>
+    </div>
+    <div class="sys-stat-card">
+      <div class="sys-card-top">
+        <span class="sys-card-label">Memory</span>
+        <span class="sys-card-trend">${memTrend}</span>
+      </div>
+      <div class="sys-card-value">${mem}%</div>
+      <div class="sys-card-sub">${((mem / 100) * 14).toFixed(1)} / 14 GB</div>
+      <div class="sys-card-spark">${_miniSparkline(memHist, 80, 24, '#89b4fa')}</div>
+    </div>
+    <div class="sys-stat-card ${diskClass}">
+      <div class="sys-card-top">
+        <span class="sys-card-label">Disk</span>
+        <span class="sys-card-trend">${disk > 85 ? '⚠' : ''}</span>
+      </div>
+      <div class="sys-card-value">${disk}%</div>
+      <div class="sys-card-sub">${((disk / 100) * 200).toFixed(0)} / 200 GB</div>
+      <div class="sys-card-spark">${_miniSparkline(diskHist, 80, 24, disk > 85 ? '#f38ba8' : disk > 75 ? '#fab387' : '#a6e3a1')}</div>
+    </div>
+    <div class="sys-stat-card">
+      <div class="sys-card-top">
+        <span class="sys-card-label">Uptime</span>
+        <span class="sys-card-trend">●</span>
+      </div>
+      <div class="sys-card-value">${_fmtUptime(uptime)}</div>
+      <div class="sys-card-sub">since last restart</div>
+      <div class="sys-card-spark" style="opacity:0.5;font-size:11px;color:var(--green)">✓ healthy</div>
+    </div>
+  `;
+}
+
+// ── 2. Service Status Grid ────────────────────────────────
+function _renderServiceStatus() {
+  const grid = $('sys-services-grid');
+  const badge = $('sys-services-count');
   if (!grid) return;
 
-  // Render content into temporary containers
-  renderAgentHealth();
-  renderCostChart();
-  renderSystemLoad();
-  renderCrons();
-  renderHooks();
-  renderErrorLog();
-
-  const sections = [
-    { icon: '\u{1F916}', title: 'Agent Health', contentId: 'agent-health-table' },
-    { icon: '\u{1F4B0}', title: 'Cost (7 days)', contentId: 'cost-chart', isParent: '.cost-chart-container' },
-    { icon: '\u{1F4CA}', title: 'System Load', contentId: 'system-load' },
-    { icon: '\u23F0', title: 'Cron Jobs', contentId: 'cron-status' },
-    { icon: '\u{1F517}', title: 'Webhooks', contentId: 'hook-status' },
-    { icon: '\u{1F6A8}', title: 'Recent Errors', contentId: 'error-log' },
+  const services = [
+    { id: 'openclaw-gateway',  name: 'OpenClaw Gateway',  status: 'running', uptime: 345600, lastRestart: '2026-03-16 08:30' },
+    { id: 'oauth-guardian',    name: 'OAuth Guardian',    status: 'running', uptime: 259200, lastRestart: '2026-03-17 10:15' },
+    { id: 'agent-os-bridge',   name: 'Agent OS Bridge',  status: 'running', uptime: 172800, lastRestart: '2026-03-18 12:00' },
+    { id: 'bridge-sync',       name: 'Bridge Sync',      status: 'running', uptime: 345600, lastRestart: '2026-03-16 08:30' },
+    { id: 'qmd-cron',          name: 'QMD Cron',         status: 'running', uptime: 86400,  lastRestart: '2026-03-19 06:00' },
+    { id: 'ontology-sync',     name: 'Ontology Sync',    status: 'stopped', uptime: 0,      lastRestart: '2026-03-19 03:00' },
   ];
 
-  // Wrap each pulse-section in accordion markup
-  const pulseSections = grid.querySelectorAll('.pulse-section');
-  sections.forEach((sec, i) => {
-    const psEl = pulseSections[i];
-    if (!psEl || psEl.dataset.accordion === 'done') return;
-
-    psEl.dataset.accordion = 'done';
-    const title = psEl.querySelector('.section-title');
-    if (!title) return;
-
-    // Wrap children (except title) in accordion-body
-    const body = document.createElement('div');
-    body.className = 'accordion-body';
-    const children = [...psEl.children].filter(c => c !== title);
-    children.forEach(c => body.appendChild(c));
-
-    // Create accordion header
-    const header = document.createElement('div');
-    header.className = 'accordion-header';
-    header.innerHTML = `<span>${sec.icon} ${sec.title}</span><span class="accordion-arrow">\u25B6</span>`;
-    header.onclick = function() { toggleAccordion(this); };
-
-    psEl.innerHTML = '';
-    psEl.classList.add('accordion-section');
-    if (i === 0) psEl.classList.add('open');
-    psEl.appendChild(header);
-    psEl.appendChild(body);
-  });
+  // Try live data
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    Bridge.getSystemServices().then(data => {
+      if (Array.isArray(data)) {
+        _drawServiceGrid(grid, badge, data);
+      } else {
+        _drawServiceGrid(grid, badge, services);
+      }
+    }).catch(() => _drawServiceGrid(grid, badge, services));
+  } else {
+    _drawServiceGrid(grid, badge, services);
+  }
 }
 
-function toggleAccordion(header) {
-  const section = header.parentElement;
-  section.classList.toggle('open');
-}
+function _drawServiceGrid(grid, badge, services) {
+  const running = services.filter(s => s.status === 'running').length;
+  if (badge) badge.textContent = `${running}/${services.length} running`;
 
-function renderAgentHealth() {
-  const c = $('agent-health-table');
-  c.innerHTML = '';
-  AGENTS.forEach(a => {
-    const statusClr = a.status === 'active' ? 'var(--green)' : 'var(--text-muted)';
-    const fitClr = a.fitness > 0.8 ? 'var(--green)' : a.fitness > 0.6 ? 'var(--yellow)' : 'var(--red)';
-    const row = document.createElement('div');
-    row.className = 'health-row';
-    row.innerHTML = `
-      <div class="health-agent" style="cursor:pointer" onclick="goToEntity('agent','${a.id}','${a.name}')"><span class="health-status-dot" style="background:${statusClr}"></span><span class="entity-link entity-agent">${a.emoji} ${a.name}</span></div>
-      <div class="health-task">${a.task || a.role}</div>
-      <div class="health-bar-outer"><div class="health-bar-inner" style="width:${a.fitness * 100}%;background:${fitClr}"></div></div>
-      <div class="health-tokens">${(a.tokens / 1000).toFixed(1)}K</div>
-    `;
-    c.appendChild(row);
-  });
-}
-
-function renderCostChart() {
-  const svg = $('cost-chart');
-  if (!svg) return;
-  const W = svg.parentElement.clientWidth || 400;
-  const H = 160;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.innerHTML = '';
-  const agents = ['righthand', 'researcher', 'coder', 'utility', 'other'];
-  const colors = { righthand: '#E8A838', researcher: '#2BA89E', coder: '#57A773', utility: '#8E44AD', other: '#6C7A89' };
-  const barW = (W - 60) / COST_DATA.length;
-  const maxT = Math.max(...COST_DATA.map(d => agents.reduce((s, a) => s + (d[a] || 0), 0)));
-
-  COST_DATA.forEach((d, i) => {
-    let y = H - 20;
-    agents.forEach(agent => {
-      const val = d[agent] || 0;
-      const bH = (val / maxT) * (H - 30);
-      y -= bH;
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', 30 + i * barW + 4);
-      rect.setAttribute('y', y);
-      rect.setAttribute('width', barW - 8);
-      rect.setAttribute('height', bH);
-      rect.setAttribute('fill', colors[agent] || '#94e2d5');
-      rect.setAttribute('rx', '2');
-      svg.appendChild(rect);
-    });
-    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    txt.setAttribute('x', 30 + (i + 0.5) * barW);
-    txt.setAttribute('y', H - 4);
-    txt.setAttribute('text-anchor', 'middle');
-    txt.setAttribute('fill', '#6c7086');
-    txt.setAttribute('font-size', '10');
-    txt.textContent = d.day;
-    svg.appendChild(txt);
-  });
-}
-
-function renderSystemLoad() {
-  const loads = [
-    { label: 'CPU', val: 34, color: 'var(--accent)' },
-    { label: 'Mem', val: 67, color: 'var(--accent2)' },
-    { label: 'Disk', val: 94, color: 'var(--red)' },
-    { label: 'Net', val: 12, color: 'var(--green)' },
-  ];
-  $('system-load').innerHTML = loads.map(l => `
-    <div class="load-row">
-      <span class="load-label">${l.label}</span>
-      <div class="load-bar-outer"><div class="load-bar-inner" style="width:${l.val}%;background:${l.color}"></div></div>
-      <span class="load-value">${l.val}%</span>
-    </div>
-  `).join('');
-}
-
-function renderCrons() {
-  $('cron-status').innerHTML = CRONS.map(c => `
-    <div class="cron-row">
-      <span class="status-dot ${c.ok ? 'status-ok' : 'status-fail'}"></span>
-      <span class="cron-name">${c.n}</span>
-      <span class="cron-schedule">${c.s}</span>
-    </div>
-  `).join('');
-}
-
-function renderHooks() {
-  $('hook-status').innerHTML = HOOKS.map(h => `
-    <div class="hook-row">
-      <span class="status-dot ${h.s === 'ok' ? 'status-ok' : h.s === 'warn' ? 'status-warn' : 'status-fail'}"></span>
-      <span class="hook-name">${h.n}</span>
-      <span class="hook-latency">${h.l}</span>
-    </div>
-  `).join('');
-}
-
-function renderErrorLog() {
-  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn' || e.level === 'info').slice(0, 8);
-  $('error-log').innerHTML = errors.map(e => {
-    const agent = ga(e.agent) || { emoji: '❓' };
-    const levelClass = e.level;
-    const borderColor = e.level === 'error' ? 'var(--red)' : e.level === 'warn' ? 'var(--yellow)' : 'var(--green)';
-    const bgColor = e.level === 'error' ? 'rgba(243,139,168,0.05)' : e.level === 'warn' ? 'rgba(249,226,175,0.05)' : 'rgba(166,227,161,0.03)';
+  grid.innerHTML = services.map(s => {
+    const isUp = s.status === 'running';
+    const expanded = _sysExpandedService === s.id;
     return `
-      <div class="error-item error-line ${levelClass}" style="border-left-color:${borderColor};background:${bgColor}">
-        <span class="error-time">${e.time}</span>
-        <span class="error-agent">${agent.emoji}</span>
-        <span class="log-level ${levelClass}" style="min-width:35px;font-size:10px">${e.level.toUpperCase()}</span>
-        <span class="error-text">${e.text}</span>
+      <div class="sys-svc-card ${isUp ? '' : 'sys-svc-down'} ${expanded ? 'sys-svc-expanded' : ''}" onclick="toggleServiceDetail('${s.id}')">
+        <div class="sys-svc-row">
+          <span class="sys-svc-dot ${isUp ? 'sys-svc-dot-up' : 'sys-svc-dot-down'}"></span>
+          <span class="sys-svc-name">${s.name}</span>
+          <span class="sys-svc-uptime">${isUp ? _fmtUptime(s.uptime) : 'stopped'}</span>
+        </div>
+        ${expanded ? `
+          <div class="sys-svc-detail">
+            <div class="sys-svc-detail-row"><span>Last restart:</span><span>${s.lastRestart || '—'}</span></div>
+            <div class="sys-svc-detail-row"><span>Status:</span><span style="color:${isUp ? 'var(--green)' : 'var(--red)'}">${s.status}</span></div>
+            <button class="sys-svc-restart-btn" onclick="event.stopPropagation();restartService('${s.id}')">🔄 Restart</button>
+          </div>` : ''}
       </div>`;
   }).join('');
+}
+
+function toggleServiceDetail(id) {
+  _sysExpandedService = _sysExpandedService === id ? null : id;
+  _renderServiceStatus();
+}
+
+function restartService(id) {
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/system/restart/${id}`, { method: 'POST' })
+    .then(r => { if (r.ok) toast(`🔄 Restarting ${id}...`, 'success'); else throw new Error(r.status); })
+    .catch(() => toast(`⚠ Restart endpoint unavailable for ${id}`, 'error'));
+}
+
+// ── 3. Agent Status Table ─────────────────────────────────
+function _renderAgentStatusTable() {
+  const wrap = $('sys-agents-table');
+  if (!wrap) return;
+
+  const cols = [
+    { key: 'name', label: 'Agent' },
+    { key: 'status', label: 'Status' },
+    { key: 'task', label: 'Current Task' },
+    { key: 'tasks', label: 'Tasks Done' },
+    { key: 'tokens', label: 'Tokens Used' },
+    { key: 'fitness', label: 'Fitness' },
+  ];
+
+  let agents = [...AGENTS];
+  if (_sysSortCol) {
+    agents.sort((a, b) => {
+      let va = a[_sysSortCol], vb = b[_sysSortCol];
+      if (typeof va === 'string') va = va.toLowerCase();
+      if (typeof vb === 'string') vb = vb.toLowerCase();
+      if (va < vb) return _sysSortAsc ? -1 : 1;
+      if (va > vb) return _sysSortAsc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  const headerHtml = cols.map(c => {
+    const sorted = _sysSortCol === c.key;
+    const arrow = sorted ? (_sysSortAsc ? ' ▲' : ' ▼') : '';
+    return `<th class="sys-th ${sorted ? 'sys-th-sorted' : ''}" onclick="sortAgentTable('${c.key}')">${c.label}${arrow}</th>`;
+  }).join('');
+
+  const rowsHtml = agents.map(a => {
+    const isActive = a.status === 'active';
+    const fitClr = a.fitness > 0.8 ? 'var(--green)' : a.fitness > 0.6 ? 'var(--yellow)' : 'var(--red)';
+    return `
+      <tr class="sys-agent-row" onclick="openAgentDrawerById('${a.id}')" style="cursor:pointer">
+        <td>
+          <span class="sys-agent-dot ${isActive ? 'sys-agent-dot-active' : 'sys-agent-dot-idle'}"></span>
+          <span class="entity-link entity-agent">${a.emoji} ${a.name}</span>
+        </td>
+        <td><span class="sys-status-pill ${isActive ? 'sys-pill-active' : 'sys-pill-idle'}">${a.status}</span></td>
+        <td class="sys-task-cell">${a.task || '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${a.tasks}</td>
+        <td>${(a.tokens / 1000).toFixed(1)}K</td>
+        <td>
+          <div class="sys-fitness-wrap">
+            <div class="sys-fitness-bar"><div class="sys-fitness-fill" style="width:${a.fitness * 100}%;background:${fitClr}"></div></div>
+            <span class="sys-fitness-val">${(a.fitness * 100).toFixed(0)}%</span>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <table class="sys-table">
+      <thead><tr>${headerHtml}</tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+}
+
+function sortAgentTable(col) {
+  if (_sysSortCol === col) _sysSortAsc = !_sysSortAsc;
+  else { _sysSortCol = col; _sysSortAsc = true; }
+  _renderAgentStatusTable();
+}
+
+function openAgentDrawerById(id) {
+  if (typeof openAgentDrawer === 'function') openAgentDrawer(id);
+}
+
+// ── 4. Workflow Pipeline ──────────────────────────────────
+function _renderWorkflowPipeline() {
+  const wrap = $('sys-pipeline');
+  if (!wrap) return;
+
+  // Get real counts from overview or fallback
+  const stages = [
+    { id: 'proposed', label: 'Proposed', count: 3, color: '#89b4fa', icon: '💡' },
+    { id: 'queued',   label: 'Queued',   count: 4, color: '#f9e2af', icon: '📋' },
+    { id: 'working',  label: 'Working',  count: 2, color: '#fab387', icon: '⚡' },
+    { id: 'done',     label: 'Done',     count: 14, color: '#a6e3a1', icon: '✅' },
+    { id: 'failed',   label: 'Failed',   count: 1, color: '#f38ba8', icon: '❌' },
+  ];
+
+  // Try real data
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    Bridge.getSystemOverview().then(data => {
+      if (data.workflow) {
+        Object.keys(data.workflow).forEach(k => {
+          const s = stages.find(st => st.id === k);
+          if (s) s.count = data.workflow[k];
+        });
+      }
+      _drawPipeline(wrap, stages);
+    }).catch(() => _drawPipeline(wrap, stages));
+  } else {
+    _drawPipeline(wrap, stages);
+  }
+}
+
+function _drawPipeline(wrap, stages) {
+  wrap.innerHTML = `<div class="sys-pipeline-flow">${
+    stages.map((s, i) => `
+      ${i > 0 ? '<div class="sys-pipe-arrow"><svg width="32" height="20"><path d="M4,10 L22,10 M18,5 L24,10 L18,15" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round"><animate attributeName="stroke-dashoffset" from="20" to="0" dur="1.5s" repeatCount="indefinite"/></path></svg></div>' : ''}
+      <div class="sys-pipe-stage" style="--stage-clr:${s.color}" onclick="showPipelineItems('${s.id}','${s.label}')">
+        <div class="sys-pipe-icon">${s.icon}</div>
+        <div class="sys-pipe-count" style="color:${s.color}">${s.count}</div>
+        <div class="sys-pipe-label">${s.label}</div>
+      </div>`
+    ).join('')
+  }</div>`;
+}
+
+function showPipelineItems(stageId, label) {
+  const detail = $('sys-pipeline-detail');
+  if (!detail) return;
+  detail.classList.toggle('hidden', detail.dataset.stage === stageId && !detail.classList.contains('hidden'));
+  detail.dataset.stage = stageId;
+
+  // Map stages to board cards
+  const stageMap = { proposed: 'inbox', queued: 'queued', working: 'active', done: 'done', failed: 'done' };
+  const cards = (BOARD_CARDS[stageMap[stageId]] || []).slice(0, 5);
+
+  detail.innerHTML = `
+    <div class="sys-pipe-detail-header">
+      <strong>${label}</strong>
+      <button onclick="$('sys-pipeline-detail').classList.add('hidden')" style="background:none;border:none;color:var(--text-muted);cursor:pointer">✕</button>
+    </div>
+    ${cards.length === 0 ? '<div style="padding:8px;color:var(--text-muted);font-size:12px">No items</div>' :
+    cards.map(c => {
+      const agent = ga(c.agent) || { emoji: '❓' };
+      return `<div class="sys-pipe-item"><span>${agent.emoji}</span><span>${c.title}</span><span class="priority-badge ${(c.priority||'P3').toLowerCase()}">${c.priority}</span></div>`;
+    }).join('')}`;
+}
+
+// ── 5. Cron Schedule ──────────────────────────────────────
+function _renderCronSchedule() {
+  const el = $('sys-crons');
+  if (!el) return;
+
+  const now = new Date();
+  const cronData = CRONS.map(c => {
+    // Estimate next run from cron expression
+    const parts = c.s.split(' ');
+    const mins = parts[0] === '*' ? null : (parts[0].startsWith('*/') ? parseInt(parts[0].slice(2)) : parseInt(parts[0]));
+    let nextRun = '—';
+    if (mins && parts[0].startsWith('*/')) {
+      const next = new Date(now.getTime() + (mins - (now.getMinutes() % mins)) * 60000);
+      nextRun = next.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (parts[1] !== '*') {
+      nextRun = `${parts[1].padStart(2,'0')}:${(parts[0]||'00').padStart(2,'0')}`;
+    }
+    const disabled = localStorage.getItem('cron_disabled_' + c.n) === '1';
+    return { ...c, nextRun, disabled };
+  });
+
+  el.innerHTML = `<div class="sys-cron-timeline">${cronData.map(c => `
+    <div class="sys-cron-item ${c.ok ? '' : 'sys-cron-fail'} ${c.disabled ? 'sys-cron-disabled' : ''}">
+      <div class="sys-cron-left">
+        <span class="status-dot ${c.ok ? 'status-ok' : 'status-fail'}"></span>
+        <span class="sys-cron-name">${c.n}</span>
+      </div>
+      <span class="sys-cron-sched">${c.s}</span>
+      <span class="sys-cron-next">${c.disabled ? 'disabled' : 'next: ' + c.nextRun}</span>
+      <label class="sys-cron-toggle" onclick="event.stopPropagation()">
+        <input type="checkbox" ${c.disabled ? '' : 'checked'} onchange="toggleCronJob('${c.n}', this.checked)">
+        <span class="sys-cron-slider"></span>
+      </label>
+    </div>`).join('')}</div>`;
+}
+
+function toggleCronJob(name, enabled) {
+  localStorage.setItem('cron_disabled_' + name, enabled ? '0' : '1');
+  toast(`${enabled ? '✅ Enabled' : '⏸ Disabled'}: ${name}`, 'info');
+}
+
+// ── 6. Cost Tracking ──────────────────────────────────────
+function _renderCostTracking() {
+  const el = $('sys-cost-chart');
+  if (!el) return;
+
+  // Load from localStorage or fallback to COST_DATA
+  const stored = localStorage.getItem('sys_cost_data');
+  const data = stored ? JSON.parse(stored) : COST_DATA;
+
+  const agents = ['righthand', 'researcher', 'coder', 'utility', 'other'];
+  const colors = { righthand: '#E8A838', researcher: '#2BA89E', coder: '#57A773', utility: '#8E44AD', other: '#6C7A89' };
+
+  const displayData = _sysCostRange === 'weekly' ?
+    [{ day: 'This Week', ...agents.reduce((acc, a) => { acc[a] = data.reduce((s, d) => s + (d[a] || 0), 0); return acc; }, {}) }] :
+    data;
+
+  const maxT = Math.max(...displayData.map(d => agents.reduce((s, a) => s + (d[a] || 0), 0)), 1);
+
+  el.innerHTML = `
+    <div class="sys-cost-legend">${agents.map(a => `<span class="sys-cost-legend-item"><span class="sys-cost-legend-dot" style="background:${colors[a]}"></span>${a}</span>`).join('')}</div>
+    <div class="sys-cost-bars">${displayData.map(d => {
+      const total = agents.reduce((s, a) => s + (d[a] || 0), 0);
+      return `
+        <div class="sys-cost-bar-col">
+          <div class="sys-cost-bar-stack" style="height:120px">
+            ${agents.map(a => {
+              const pct = ((d[a] || 0) / maxT) * 100;
+              return `<div class="sys-cost-bar-seg" style="height:${pct}%;background:${colors[a]}" title="${a}: $${(d[a]||0).toFixed(2)}"></div>`;
+            }).join('')}
+          </div>
+          <div class="sys-cost-bar-label">${d.day}</div>
+          <div class="sys-cost-bar-total">$${total.toFixed(2)}</div>
+        </div>`;
+    }).join('')}</div>`;
+}
+
+function toggleCostRange(range) {
+  _sysCostRange = range;
+  document.querySelectorAll('.sys-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+  _renderCostTracking();
+}
+
+// ── 7. System Logs ────────────────────────────────────────
+function _renderSystemLogs() {
+  const el = $('sys-logs');
+  if (!el) return;
+
+  // Try fetching from /api/system/logs
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    Bridge.getSystemLogs('all', 20).then(lines => {
+      if (Array.isArray(lines) && lines.length > 0) {
+        _drawLogs(el, lines);
+      } else {
+        _drawLogsFromStream(el);
+      }
+    }).catch(() => _drawLogsFromStream(el));
+  } else {
+    _drawLogsFromStream(el);
+  }
+}
+
+function _drawLogsFromStream(el) {
+  const logs = STREAM_EVENTS.slice(0, 20);
+  _drawLogs(el, logs.map(e => ({
+    level: e.level,
+    time: e.time,
+    agent: e.agent,
+    text: e.text,
+  })));
+}
+
+function _drawLogs(el, logs) {
+  const colorMap = { error: 'var(--red)', warn: 'var(--yellow)', info: 'var(--accent2)', debug: 'var(--text-muted)' };
+  const bgMap = { error: 'rgba(243,139,168,0.06)', warn: 'rgba(249,226,175,0.04)', info: 'transparent', debug: 'transparent' };
+
+  el.innerHTML = logs.map(l => {
+    const agent = ga(l.agent) || { emoji: '❓' };
+    return `
+      <div class="sys-log-line" style="background:${bgMap[l.level] || 'transparent'}">
+        <span class="sys-log-time">${l.time}</span>
+        <span class="sys-log-level" style="color:${colorMap[l.level] || 'var(--text-muted)'}">${(l.level||'info').toUpperCase()}</span>
+        <span class="sys-log-agent">${agent.emoji}</span>
+        <span class="sys-log-text">${l.text}</span>
+      </div>`;
+  }).join('');
+
+  if (!_sysLogPaused) el.scrollTop = el.scrollHeight;
+}
+
+function toggleLogPause() {
+  _sysLogPaused = !_sysLogPaused;
+  const btn = $('sys-log-pause');
+  if (btn) btn.textContent = _sysLogPaused ? '▶ Resume' : '⏸ Pause';
 }
 
 function quickAction(action) {

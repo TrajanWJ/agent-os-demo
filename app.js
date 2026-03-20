@@ -461,6 +461,9 @@ function renderStreamItems() {
 
   filtered.forEach((item, idx) => list.appendChild(makeStreamItem(item, idx)));
 
+  // Update filter chip counts
+  updateFilterChipCounts();
+
   // Show batch bar if there are actionable items
   const batchBar = $('stream-batch-bar');
   if (batchBar) {
@@ -2752,69 +2755,6 @@ function renderAgentStatusBar() {
       ${a.status === 'active' && a.task ? `<span class="agent-pill-task">${a.task.substring(0, 20)}${a.task.length > 20 ? '…' : ''}</span>` : ''}
     </div>`;
   }).join('');
-}
-
-// ── Agent Drawer ──
-function openAgentDrawer(agentId) {
-  const a = AGENTS.find(x => x.id === agentId);
-  if (!a) return;
-
-  // Remove existing drawer
-  const existing = document.querySelector('.agent-drawer-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.className = 'agent-drawer-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) closeAgentDrawer(); };
-
-  const drawer = document.createElement('div');
-  drawer.className = 'agent-drawer';
-  drawer.innerHTML = `
-    <div class="agent-drawer-header">
-      <div class="agent-drawer-avatar" style="background:${a.color}20;border:2px solid ${a.color}">${a.emoji}</div>
-      <div class="agent-drawer-info">
-        <div class="agent-drawer-name" style="color:${a.color}">${a.name}</div>
-        <div class="agent-drawer-role">${a.role}</div>
-      </div>
-      <button class="agent-drawer-close" onclick="closeAgentDrawer()">✕</button>
-    </div>
-    <div class="agent-drawer-body">
-      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Status</span><span class="agent-drawer-stat-value">${a.status === 'active' ? '🟢 Active' : a.status === 'error' ? '🔴 Error' : '⚪ Idle'}</span></div>
-      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Tasks Completed</span><span class="agent-drawer-stat-value">${a.tasks || 0}</span></div>
-      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Files Modified</span><span class="agent-drawer-stat-value">${a.files || 0}</span></div>
-      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Tokens Used</span><span class="agent-drawer-stat-value">${(a.tokens || 0).toLocaleString()}</span></div>
-      <div class="agent-drawer-stat"><span class="agent-drawer-stat-label">Fitness</span><span class="agent-drawer-stat-value">${a.fitness ? Math.round(a.fitness * 100) + '%' : '—'}</span></div>
-      ${a.status === 'active' && a.task ? `
-        <div class="agent-drawer-section-title">Current Task</div>
-        <div class="agent-drawer-task-current">${a.task}</div>
-      ` : ''}
-      <div class="agent-drawer-section-title">Recent Activity</div>
-      <div style="font-size:12px;color:var(--text-muted);padding:8px 0">
-        ${streamItems.filter(s => s.agent === agentId).slice(0, 5).map(s =>
-          `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
-            <span style="color:var(--text-dim)">${s.displayTime || formatStreamTime(s.time)}</span> ${(s.title || '').substring(0, 60)}${(s.title || '').length > 60 ? '…' : ''}
-          </div>`
-        ).join('') || '<div>No recent activity</div>'}
-      </div>
-    </div>
-  `;
-
-  overlay.appendChild(drawer);
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => {
-    overlay.classList.add('visible');
-    drawer.classList.add('visible');
-  });
-}
-
-function closeAgentDrawer() {
-  const overlay = document.querySelector('.agent-drawer-overlay');
-  const drawer = document.querySelector('.agent-drawer');
-  if (drawer) drawer.classList.remove('visible');
-  if (overlay) {
-    overlay.classList.remove('visible');
-    setTimeout(() => overlay.remove(), 250);
-  }
 }
 
 // ── Typing Indicator ──
