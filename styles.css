@@ -2195,6 +2195,59 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 .reaction.mine { background: rgba(203,166,247,0.15); border-color: rgba(203,166,247,0.4); }
 .reaction-count { font-size: 12px; color: var(--text-dim); }
 
+/* Quick reaction bar — shown on message hover */
+.msg-quick-react-bar {
+  display: none;
+  position: absolute;
+  top: -12px;
+  right: 8px;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 8px;
+  padding: 2px 4px;
+  gap: 2px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.msg-group { position: relative; }
+.msg-group:hover .msg-quick-react-bar {
+  display: flex;
+}
+.quick-react-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  transition: background 0.15s, transform 0.15s;
+  line-height: 1;
+}
+.quick-react-btn:hover {
+  background: var(--bg-overlay, rgba(255,255,255,0.08));
+  transform: scale(1.25);
+}
+
+/* Pending / Failed message states */
+.msg-group.msg-pending {
+  opacity: 0.6;
+}
+.msg-group.msg-pending .msg-text::after {
+  content: ' ⏳';
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.msg-group.msg-failed {
+  opacity: 0.7;
+  border-left: 3px solid var(--red, #f38ba8);
+}
+.msg-group.msg-failed .msg-text::after {
+  content: ' ❌ Send failed';
+  font-size: 11px;
+  color: var(--red, #f38ba8);
+  margin-left: 6px;
+}
+
 .msg-actions-bar {
   display: flex;
   gap: 2px;
@@ -13871,4 +13924,231 @@ textarea:focus-visible,
   .wb-topbar {
     flex-wrap: wrap;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TASKS PAGE — Header, Quick-Add, Modal, Action Buttons
+   ═══════════════════════════════════════════════════════════ */
+
+/* Page header with New Task button */
+.tasks-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0 20px;
+}
+.tasks-page-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #cdd6f4;
+}
+.tasks-new-btn {
+  background: var(--accent, #89b4fa);
+  color: #1e1e2e;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.tasks-new-btn:hover {
+  background: #a6c8ff;
+  transform: translateY(-1px);
+}
+
+/* Quick-Add Bar */
+.tasks-quick-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  margin-bottom: 0;
+}
+.tasks-quick-input {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #cdd6f4;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.tasks-quick-input:focus {
+  border-color: var(--accent, #89b4fa);
+}
+.tasks-quick-input::placeholder {
+  color: rgba(205,214,244,0.4);
+}
+.tasks-quick-agent {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #cdd6f4;
+  outline: none;
+  cursor: pointer;
+  min-width: 120px;
+}
+.tasks-quick-add-btn {
+  background: var(--accent, #89b4fa);
+  color: #1e1e2e;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.tasks-quick-add-btn:hover {
+  background: #a6c8ff;
+}
+
+/* Action button variants */
+.tasks-action-btn.success {
+  background: rgba(166,227,161,0.15);
+  color: #a6e3a1;
+  border: 1px solid rgba(166,227,161,0.25);
+}
+.tasks-action-btn.success:hover {
+  background: rgba(166,227,161,0.25);
+}
+
+/* ── New Task Modal ──────────────────────────────────────── */
+.task-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.task-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.task-modal {
+  background: #1e1e2e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  animation: modalSlideIn 0.25s ease-out;
+}
+@keyframes modalSlideIn {
+  from { transform: translateY(20px) scale(0.97); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.task-modal-header {
+  padding: 18px 20px 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #cdd6f4;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.task-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.task-modal-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(205,214,244,0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.task-modal-input,
+.task-modal-select,
+.task-modal-textarea {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #cdd6f4;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.task-modal-input:focus,
+.task-modal-select:focus,
+.task-modal-textarea:focus {
+  border-color: var(--accent, #89b4fa);
+}
+.task-modal-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+.task-modal-priorities {
+  display: flex;
+  gap: 6px;
+}
+.task-modal-pri-btn {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 4px;
+  font-size: 12px;
+  color: #cdd6f4;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.task-modal-pri-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+.task-modal-pri-btn.selected {
+  background: rgba(137,180,250,0.2);
+  border-color: var(--accent, #89b4fa);
+  color: #89b4fa;
+  font-weight: 600;
+}
+.task-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 18px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.task-modal-cancel {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  color: #cdd6f4;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.task-modal-cancel:hover {
+  background: rgba(255,255,255,0.1);
+}
+.task-modal-submit {
+  background: var(--accent, #89b4fa);
+  color: #1e1e2e;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.task-modal-submit:hover {
+  background: #a6c8ff;
 }

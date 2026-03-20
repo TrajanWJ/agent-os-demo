@@ -2004,7 +2004,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
         <button class="msg-action-mini" onclick="pinMessage('${msg.id}','${channelId || ''}')">📌</button>
         <button class="msg-action-mini" onclick="threadFromMessage('${msg.id}')">🧵 Thread</button>
       </div>
-      ${THREAD_REPLIES[msg.id]?.length ? `<div class="thread-badge" onclick="threadFromMessage('${msg.id}')">🧵 ${THREAD_REPLIES[msg.id].length} replies</div>` : ''}
+      ${(THREAD_REPLIES[msg.id]?.length || msg._threadId) ? `<div class="thread-badge" onclick="threadFromMessage('${msg.id}')">💬 ${THREAD_REPLIES[msg.id]?.length || msg._threadReplyCount || '?'} replies</div>` : ''}
     </div>
   `;
   return group;
@@ -2484,17 +2484,35 @@ function sendThreadReply(msgId) {
   const text = input.value.trim();
 
   if (!THREAD_REPLIES[msgId]) THREAD_REPLIES[msgId] = [];
-  THREAD_REPLIES[msgId].push({
+  const newReply = {
     id: 'tr_' + Date.now(),
     agent: 'user',
     text,
     time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
     ts: Date.now() / 1000,
-  });
+    _pending: true,
+  };
+  THREAD_REPLIES[msgId].push(newReply);
 
   input.value = '';
   const msg = findMessage(msgId);
   if (msg) renderThreadPanel(msgId, msg);
+
+  // POST to bridge if live and the message has a threadId
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && msg && msg._threadId) {
+    Bridge.sendMessage(msg._threadId, text).then(result => {
+      newReply._pending = false;
+      if (result && result.id) newReply.id = result.id;
+      if (msg) renderThreadPanel(msgId, msg);
+    }).catch(e => {
+      newReply._pending = false;
+      newReply._failed = true;
+      if (msg) renderThreadPanel(msgId, msg);
+      toast('❌ Thread reply failed: ' + e.message, 'error');
+    });
+  } else {
+    newReply._pending = false;
+  }
   addXP(5, 'thread reply');
   toast('🧵 Reply added to thread', 'success');
 }

@@ -475,6 +475,8 @@ function bridgeMsgToLocal(msg) {
     _authorName: authorName,
     _authorAvatar: msg.author?.avatar ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=40` : null,
     _isBot: isBot,
+    _threadId: msg.thread?.id || null,
+    _threadReplyCount: msg.thread?.message_count || msg.thread?.messageCount || 0,
   };
 }
 

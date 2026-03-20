@@ -661,3 +661,99 @@ const _origNav = nav;
     }
   };
 })();
+
+// ── New Task Modal ────────────────────────────────────────
+
+let taskModalPriority = 'P1';
+
+function openNewTaskModal() {
+  taskModalPriority = 'P1';
+  const overlay = document.getElementById('task-modal-overlay');
+  if (overlay) {
+    overlay.classList.add('visible');
+    // Reset fields
+    const titleEl = document.getElementById('task-modal-title');
+    const descEl = document.getElementById('task-modal-desc');
+    const agentEl = document.getElementById('task-modal-agent');
+    if (titleEl) { titleEl.value = ''; }
+    if (descEl) { descEl.value = ''; }
+    if (agentEl) { agentEl.selectedIndex = 0; }
+    // Reset priority buttons
+    document.querySelectorAll('.task-modal-pri-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.pri === 'P1');
+    });
+    // Focus title
+    setTimeout(() => { if (titleEl) titleEl.focus(); }, 150);
+  }
+}
+
+function closeNewTaskModal() {
+  const overlay = document.getElementById('task-modal-overlay');
+  if (overlay) overlay.classList.remove('visible');
+}
+
+function selectTaskPri(pri) {
+  taskModalPriority = pri;
+  document.querySelectorAll('.task-modal-pri-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.pri === pri);
+  });
+}
+
+async function submitNewTask() {
+  const title = (document.getElementById('task-modal-title')?.value || '').trim();
+  const agent = document.getElementById('task-modal-agent')?.value || 'coder';
+  const description = (document.getElementById('task-modal-desc')?.value || '').trim();
+
+  if (!title) {
+    toast('❌ Title is required', 'error');
+    return;
+  }
+
+  try {
+    await Bridge.createDispatchTask({
+      title,
+      agent,
+      priority: taskModalPriority,
+      description,
+    });
+    toast('✅ Task created', 'success');
+    closeNewTaskModal();
+    setTimeout(loadTasksPage, 300);
+  } catch (e) {
+    toast(`❌ Failed to create task: ${e.message}`, 'error');
+  }
+}
+
+// ── Quick Add ─────────────────────────────────────────────
+
+async function quickAddTask() {
+  const input = document.getElementById('tasks-quick-input');
+  const agentSelect = document.getElementById('tasks-quick-agent');
+  const title = (input?.value || '').trim();
+  const agent = agentSelect?.value || 'coder';
+
+  if (!title) return;
+
+  try {
+    await Bridge.createDispatchTask({
+      title,
+      agent,
+      priority: 'P2',
+      description: '',
+    });
+    toast('✅ Task added', 'success');
+    if (input) input.value = '';
+    // Animate refresh
+    setTimeout(async () => {
+      await loadTasksPage();
+      // Flash the newest card
+      const listContent = document.querySelector('.tasks-list-content');
+      if (listContent && listContent.firstElementChild) {
+        listContent.firstElementChild.classList.add('tasks-card-glow');
+        setTimeout(() => listContent.firstElementChild.classList.remove('tasks-card-glow'), 2500);
+      }
+    }, 300);
+  } catch (e) {
+    toast(`❌ Failed to add task: ${e.message}`, 'error');
+  }
+}
