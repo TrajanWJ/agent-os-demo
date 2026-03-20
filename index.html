@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f0f12">
   <title>Agent OS v7</title>
-  <link rel="stylesheet" href="styles.css?v=62">
+  <link rel="stylesheet" href="styles.css?v=63">
   <!-- Lucide Icons (modern SVG icon set) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
@@ -162,6 +162,41 @@
             <div class="stat-item">
               <span class="stat-num" id="q-expired">0</span>
               <span class="stat-label">Expired</span>
+            </div>
+          </div>
+          <div class="proposal-flow" id="proposal-flow">
+            <div class="flow-step">
+              <div class="flow-icon">📡</div>
+              <div class="flow-label">Sources</div>
+              <div class="flow-desc">Agents, Feed, Vault, Cron</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <div class="flow-icon">📝</div>
+              <div class="flow-label">Created</div>
+              <div class="flow-desc" id="flow-created">0</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+              <div class="flow-icon">🤖</div>
+              <div class="flow-label">AI Triage</div>
+              <div class="flow-desc">Auto-classify</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step flow-safe">
+              <div class="flow-icon">✅</div>
+              <div class="flow-label">Auto-Execute</div>
+              <div class="flow-desc" id="flow-auto">0 safe</div>
+            </div>
+            <div class="flow-step flow-escalate">
+              <div class="flow-icon">⚠️</div>
+              <div class="flow-label">Human Review</div>
+              <div class="flow-desc" id="flow-escalate">0 risky</div>
+            </div>
+            <div class="flow-step flow-dismiss">
+              <div class="flow-icon">🗑️</div>
+              <div class="flow-label">Dismissed</div>
+              <div class="flow-desc" id="flow-dismiss">0</div>
             </div>
           </div>
           <div class="queue-batch-bar" id="queue-batch-bar">
@@ -609,11 +644,11 @@
     <div class="card-modal" id="card-modal-content"></div>
   </div>
 
-  <script src="data.js?v=62"></script>
-  <script src="app.js?v=62"></script>
-  <script src="app2.js?v=62"></script>
-  <script src="app3.js?v=62"></script>
-  <script src="live.js?v=62"></script>
-  <script src="bridge.js?v=62"></script>
+  <script src="data.js?v=63"></script>
+  <script src="app.js?v=63"></script>
+  <script src="app2.js?v=63"></script>
+  <script src="app3.js?v=63"></script>
+  <script src="live.js?v=63"></script>
+  <script src="bridge.js?v=63"></script>
 </body>
 </html>

@@ -551,11 +551,42 @@ async function loadLiveProposals() {
       badge.style.display = converted.length > 0 ? '' : 'none';
     }
     
+    // Update flow visualization
+    updateProposalFlow(proposals);
+    
     console.log(`[Bridge] Loaded ${converted.length} proposals`);
   } catch (e) {
     console.error('[Bridge] Proposals load failed:', e);
   }
 }
+
+function updateProposalFlow(proposals) {
+  const el = (id) => document.getElementById(id);
+  const total = proposals.length;
+  const auto = proposals.filter(p => p.triage_verdict === 'auto-execute').length;
+  const escalate = proposals.filter(p => p.triage_verdict === 'escalate').length;
+  const dismissed = proposals.filter(p => p.triage_verdict === 'dismissed' || p.status === 'dismissed').length;
+  if (el('flow-created')) el('flow-created').textContent = total;
+  if (el('flow-auto')) el('flow-auto').textContent = auto + ' safe';
+  if (el('flow-escalate')) el('flow-escalate').textContent = escalate + ' risky';
+  if (el('flow-dismiss')) el('flow-dismiss').textContent = dismissed;
+}
+
+// Also update flow from seed data on page load
+function updateFlowFromSeed() {
+  if (typeof queueCards !== 'undefined' && queueCards.length > 0) {
+    const el = (id) => document.getElementById(id);
+    const total = queueCards.length;
+    const auto = queueCards.filter(q => q._triageVerdict === 'auto-execute').length;
+    const escalate = queueCards.filter(q => q._triageVerdict === 'escalate').length;
+    if (el('flow-created')) el('flow-created').textContent = total;
+    if (el('flow-auto')) el('flow-auto').textContent = auto + ' safe';
+    if (el('flow-escalate')) el('flow-escalate').textContent = escalate + ' risky';
+  }
+}
+
+// Call on DOMContentLoaded after main app init
+document.addEventListener('DOMContentLoaded', () => setTimeout(updateFlowFromSeed, 500));
 
 function startProposalRefresh() {
   if (_proposalRefreshTimer) return;

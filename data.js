@@ -32,7 +32,20 @@ const FEED_EVENTS = [
 ];
 
 // ── QUEUE QUESTIONS ───────────────────────────────────────────────────────────
-const QUEUE_QUESTIONS = []; // Live proposals loaded from bridge API
+const QUEUE_QUESTIONS = [
+  {id:'prop-demo-1', agent:'ops', type:'approval', priority:'urgent', ttl:86400, elapsed:3600, remaining:82800,
+    question:'Disk at 85% — cleanup needed', context:'System health scan detected /dev/vda1 at 85%. Recommended: clean Docker images, rotate old logs, prune dispatch archives.',
+    options:['Approve cleanup','Dismiss'], _proposalId:'prop-demo-1', _priority:'P2', _source:'system-health', _type:'dispatch', _triageVerdict:'escalate', _triageReason:'System-level action requires human approval'},
+  {id:'prop-demo-2', agent:'researcher', type:'approval', priority:'normal', ttl:86400, elapsed:900, remaining:85500,
+    question:'Scan: New tools and techniques', context:'Strategic rotation — periodic scan for new AI agent tooling, frameworks, and techniques relevant to the stack.',
+    options:['Approve','Dismiss'], _proposalId:'prop-demo-2', _priority:'P4', _source:'strategic', _type:'research', _triageVerdict:'auto-execute', _triageReason:'Safe, non-disruptive research task'},
+  {id:'prop-demo-3', agent:'vault', type:'approval', priority:'normal', ttl:86400, elapsed:600, remaining:85800,
+    question:'Enrich vault note: Trajan/Priorities.md', context:'Vault gaps scan found note with missing wikilinks and cross-references. Agent can add backlinks automatically.',
+    options:['Approve','Dismiss'], _proposalId:'prop-demo-3', _priority:'P4', _source:'vault-gaps', _type:'dispatch', _triageVerdict:'auto-execute', _triageReason:'Safe vault enrichment'},
+  {id:'prop-demo-4', agent:'righthand', type:'approval', priority:'normal', ttl:86400, elapsed:300, remaining:86100,
+    question:'Review agent performance patterns (14 failure signals)', context:'Self-improvement hook detected recurring failure patterns across 14 agent task completions. Analysis may yield protocol improvements.',
+    options:['Approve','Dismiss'], _proposalId:'prop-demo-4', _priority:'P3', _source:'self-improvement', _type:'research', _triageVerdict:'auto-execute', _triageReason:'Safe analytical task'},
+]; // Seed proposals — replaced by live data when bridge connects
 
 // ── DISCORD MESSAGES ──────────────────────────────────────────────────────────
 const DC_CHANNELS = {
