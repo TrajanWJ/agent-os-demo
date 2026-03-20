@@ -1,4 +1,4 @@
-/* Agent OS v7 — mind.js — Complete Mind Page (Search, Browse, Graph, Reader, Insights) */
+/* Agent OS v7 — mind.js — Complete Mind Page (Search, Browse, Tags, Graph, Reader, Insights) */
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
@@ -28,6 +28,10 @@ let mindGraphFilter = '';
 let mindReaderNote = null;
 let mindInsightsData = null;
 let _mindGraphResizeHandler = null;
+let mindTagsData = null;
+let mindTagsExpanded = false;
+let mindFolderTreeData = null;
+let mindReaderEditing = false;
 
 const FOLDER_COLORS = {
   'Research': '#89b4fa',
@@ -42,10 +46,33 @@ const FOLDER_COLORS = {
   'root': '#94e2d5',
 };
 
+const TAG_CATEGORY_COLORS = {
+  'research': '#89b4fa',
+  'agents': '#cba6f7',
+  'system': '#fab387',
+  'architecture': '#cba6f7',
+  'projects': '#f9e2af',
+  'operations': '#fab387',
+  'code': '#a6e3a1',
+  'vision': '#f5c2e7',
+};
+
 function getFolderColor(folder) {
   if (!folder) return '#6c7086';
   const top = folder.split('/')[0];
   return FOLDER_COLORS[top] || '#6c7086';
+}
+
+function getTagColor(tag) {
+  const t = tag.toLowerCase();
+  for (const [cat, color] of Object.entries(TAG_CATEGORY_COLORS)) {
+    if (t.includes(cat)) return color;
+  }
+  return '#6c7086';
+}
+
+function getBridgeUrl() {
+  return (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -58,19 +85,17 @@ function initMind() {
 
 function setMindTab(tab) {
   mindTab = tab;
-  // Update tab buttons
   document.querySelectorAll('.mind-tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
-  // Show/hide panels
   document.querySelectorAll('.mind-tab-panel').forEach(p => {
     p.classList.toggle('hidden', p.id !== `mind-panel-${tab}`);
     p.classList.toggle('active', p.id === `mind-panel-${tab}`);
   });
-  // Activate tab content
   switch (tab) {
     case 'search': initMindSearch(); break;
     case 'browse': initMindBrowse(); break;
+    case 'tags': initMindTags(); break;
     case 'graph': initMindGraph(); break;
     case 'reader': renderMindReader(); break;
     case 'insights': initMindInsights(); break;
@@ -94,7 +119,6 @@ function doMindSearch() {
   const q = (input?.value || '').trim();
   if (!q) return;
 
-  // Save recent search
   mindRecentSearches = [q, ...mindRecentSearches.filter(s => s !== q)].slice(0, 8);
   localStorage.setItem('mind_recent_searches', JSON.stringify(mindRecentSearches));
   renderRecentSearches();
@@ -106,8 +130,7 @@ function doMindSearch() {
 
   const startTime = performance.now();
 
-  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-  fetch(`${bridgeUrl}/api/vault/search?q=${encodeURIComponent(q)}&limit=30`)
+  fetch(`${getBridgeUrl()}/api/vault/search?q=${encodeURIComponent(q)}&limit=30`)
     .then(r => r.json())
     .then(data => {
       const elapsed = Math.round(performance.now() - startTime);
@@ -115,9 +138,8 @@ function doMindSearch() {
       if (stats) stats.textContent = `Found ${data.length} notes in ${elapsed}ms`;
       renderSearchResults(data);
     })
-    .catch(err => {
-      // Fallback to seed data
-      const filtered = VAULT_NOTES.filter(n =>
+    .catch(() => {
+      const filtered = (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES : []).filter(n =>
         n.title.toLowerCase().includes(q.toLowerCase()) ||
         n.summary.toLowerCase().includes(q.toLowerCase()) ||
         n.tags.some(t => t.includes(q.toLowerCase()))
@@ -153,10 +175,7 @@ function renderSearchResults(results) {
 function renderRecentSearches() {
   const container = document.getElementById('mind-recent-searches');
   if (!container) return;
-  if (!mindRecentSearches.length) {
-    container.innerHTML = '';
-    return;
-  }
+  if (!mindRecentSearches.length) { container.innerHTML = ''; return; }
   container.innerHTML = `<div class="mind-recent-label">Recent searches</div>
     <div class="mind-recent-chips">${mindRecentSearches.map(s =>
       `<button class="mind-recent-chip" onclick="document.getElementById('mind-search-input').value='${escHtml(s)}';doMindSearch()">${escHtml(s)}</button>`
@@ -168,7 +187,7 @@ function handleMindSearchKey(e) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// TAB 2: BROWSE
+// TAB 2: BROWSE (Enhanced with /api/vault/folders)
 // ═══════════════════════════════════════════════════════════
 
 function initMindBrowse() {
@@ -181,23 +200,70 @@ function initMindBrowse() {
 
 async function loadBrowseData() {
   try {
-    const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-    const resp = await fetch(`${bridgeUrl}/api/vault/recent?limit=100`);
-    const notes = await resp.json();
+    // Try real folder tree endpoint first
+    const foldersResp = await fetch(`${getBridgeUrl()}/api/vault/folders`);
+    const folders = await foldersResp.json();
+    mindFolderTreeData = folders;
+    renderFolderTree(folders);
+
+    // Also load recent notes for the list panel
+    const notesResp = await fetch(`${getBridgeUrl()}/api/vault/recent?limit=100`);
+    const notes = await notesResp.json();
     mindBrowseNotes = notes;
-    buildFolderTree(notes);
+    buildFolderNoteIndex(notes);
   } catch {
-    // Fallback to seed data
-    mindBrowseNotes = VAULT_NOTES.map(n => ({
-      path: `${n.type}/${n.title.replace(/ /g, '-')}.md`,
-      modified: n.date + 'T00:00:00Z',
-      size: 0,
-    }));
-    buildFolderTree(mindBrowseNotes);
+    // Fallback to old method
+    try {
+      const resp = await fetch(`${getBridgeUrl()}/api/vault/recent?limit=100`);
+      const notes = await resp.json();
+      mindBrowseNotes = notes;
+      buildFolderTree(notes);
+    } catch {
+      mindBrowseNotes = (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES : []).map(n => ({
+        path: `${n.type}/${n.title.replace(/ /g, '-')}.md`,
+        modified: n.date + 'T00:00:00Z',
+        size: 0,
+      }));
+      buildFolderTree(mindBrowseNotes);
+    }
   }
 }
 
-function buildFolderTree(notes) {
+function renderFolderTree(folders) {
+  const tree = document.getElementById('mind-browse-tree');
+  if (!tree) return;
+
+  // folders is expected to be an array or tree structure from /api/vault/folders
+  // Handle both array-of-objects and flat formats
+  if (Array.isArray(folders)) {
+    tree.innerHTML = folders.map(f => {
+      const name = f.name || f.path || f;
+      const count = f.count || f.noteCount || 0;
+      const color = getFolderColor(name);
+      const children = f.children || [];
+      return `<div class="mind-folder-item">
+        <div class="mind-folder-header" onclick="selectBrowseFolderByPath('${escHtml(typeof name === 'string' ? name : '')}')" style="border-left: 3px solid ${color}">
+          <span class="mind-folder-icon">📂</span>
+          <span class="mind-folder-name">${escHtml(typeof name === 'string' ? name : '')}</span>
+          <span class="mind-folder-count">${count}</span>
+        </div>
+        ${children.map(c => {
+          const cName = c.name || c.path || c;
+          const cCount = c.count || c.noteCount || 0;
+          return `<div class="mind-subfolder" onclick="selectBrowseFolderByPath('${escHtml(typeof cName === 'string' ? cName : '')}')" style="padding-left:32px">
+            <span class="mind-folder-icon" style="font-size:12px">📁</span>
+            <span class="mind-folder-name">${escHtml(typeof cName === 'string' ? cName.split('/').pop() : '')}</span>
+            <span class="mind-folder-count">${cCount}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+  } else {
+    tree.innerHTML = '<div class="mind-empty">No folders found</div>';
+  }
+}
+
+function buildFolderNoteIndex(notes) {
   mindBrowseFolders = {};
   notes.forEach(n => {
     const parts = (n.path || '').split('/');
@@ -205,11 +271,84 @@ function buildFolderTree(notes) {
     if (!mindBrowseFolders[folder]) mindBrowseFolders[folder] = [];
     mindBrowseFolders[folder].push(n);
   });
+}
+
+function selectBrowseFolderByPath(folderPath) {
+  if (!folderPath) return;
+  mindSelectedFolder = folderPath;
+
+  // Highlight
+  document.querySelectorAll('.mind-folder-header, .mind-subfolder').forEach(el => {
+    el.classList.remove('selected');
+  });
+  event?.target?.closest?.('.mind-folder-header, .mind-subfolder')?.classList.add('selected');
+
+  // Fetch notes for this folder
+  const list = document.getElementById('mind-browse-list');
+  if (!list) return;
+  list.innerHTML = '<div class="mind-loading">Loading notes...</div>';
+
+  fetch(`${getBridgeUrl()}/api/vault/search?q=path:${encodeURIComponent(folderPath)}&limit=50`)
+    .then(r => r.json())
+    .then(notes => {
+      renderBrowseNoteList(folderPath, notes);
+    })
+    .catch(() => {
+      // Fallback: filter from loaded notes
+      let notes = [];
+      Object.keys(mindBrowseFolders).forEach(f => {
+        if (f === folderPath || f.startsWith(folderPath + '/')) {
+          notes = notes.concat(mindBrowseFolders[f]);
+        }
+      });
+      renderBrowseNoteList(folderPath, notes);
+    });
+}
+
+function renderBrowseNoteList(folder, notes) {
+  const list = document.getElementById('mind-browse-list');
+  if (!list) return;
+  if (!notes.length) {
+    list.innerHTML = '<div class="mind-empty">No notes in this folder</div>';
+    return;
+  }
+
+  switch (mindBrowseSort) {
+    case 'name': notes.sort((a, b) => extractTitle(a.path || a.title || '').localeCompare(extractTitle(b.path || b.title || ''))); break;
+    case 'size': notes.sort((a, b) => (b.size || 0) - (a.size || 0)); break;
+    default: notes.sort((a, b) => new Date(b.modified || 0) - new Date(a.modified || 0));
+  }
+
+  list.innerHTML = `<div class="mind-browse-sort-row">
+    <span class="mind-browse-folder-title">📂 ${escHtml(folder)} <span style="color:var(--text-muted);font-weight:400">(${notes.length})</span></span>
+    <select class="mind-browse-sort-select" onchange="mindBrowseSort=this.value;selectBrowseFolderByPath('${escHtml(folder)}')">
+      <option value="modified"${mindBrowseSort === 'modified' ? ' selected' : ''}>Modified</option>
+      <option value="name"${mindBrowseSort === 'name' ? ' selected' : ''}>Name</option>
+      <option value="size"${mindBrowseSort === 'size' ? ' selected' : ''}>Size</option>
+    </select>
+  </div>` +
+  notes.map(n => {
+    const path = n.path || '';
+    const title = extractTitle(path || n.title || '');
+    const relTime = n.modified ? mindTimeAgo(new Date(n.modified)) : '';
+    const size = n.size ? formatSize(n.size) : '';
+    return `<div class="mind-browse-note" onclick="openNoteInReader('${escHtml(path)}')">
+      <div class="mind-browse-note-title">${escHtml(title)}</div>
+      <div class="mind-browse-note-meta">
+        ${relTime ? `<span>${relTime}</span>` : ''}
+        ${size ? `<span>· ${size}</span>` : ''}
+        <span style="color:${getFolderColor(path)}">${escHtml(extractFolder(path))}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function buildFolderTree(notes) {
+  buildFolderNoteIndex(notes);
 
   const tree = document.getElementById('mind-browse-tree');
   if (!tree) return;
 
-  // Get top-level folders sorted by note count
   const topFolders = {};
   Object.keys(mindBrowseFolders).forEach(f => {
     const top = f.split('/')[0];
@@ -237,7 +376,6 @@ function buildFolderTree(notes) {
     </div>`;
   }).join('');
 
-  // Auto-select first folder
   if (sorted.length > 0 && !mindSelectedFolder) {
     selectBrowseFolder(sorted[0][0]);
   }
@@ -245,7 +383,6 @@ function buildFolderTree(notes) {
 
 function selectBrowseFolder(folder) {
   mindSelectedFolder = folder;
-  // Highlight selected folder
   document.querySelectorAll('.mind-folder-header, .mind-subfolder').forEach(el => {
     el.classList.remove('selected');
   });
@@ -256,7 +393,6 @@ function selectBrowseFolder(folder) {
     }
   });
 
-  // Get notes for this folder (include subfolders)
   let notes = [];
   Object.keys(mindBrowseFolders).forEach(f => {
     if (f === folder || f.startsWith(folder + '/')) {
@@ -264,46 +400,85 @@ function selectBrowseFolder(folder) {
     }
   });
 
-  // Sort
-  switch (mindBrowseSort) {
-    case 'name': notes.sort((a, b) => extractTitle(a.path).localeCompare(extractTitle(b.path))); break;
-    case 'size': notes.sort((a, b) => (b.size || 0) - (a.size || 0)); break;
-    default: notes.sort((a, b) => new Date(b.modified || 0) - new Date(a.modified || 0));
-  }
-
-  const list = document.getElementById('mind-browse-list');
-  if (!list) return;
-
-  if (!notes.length) {
-    list.innerHTML = '<div class="mind-empty">No notes in this folder</div>';
-    return;
-  }
-
-  list.innerHTML = `<div class="mind-browse-sort-row">
-    <span class="mind-browse-folder-title">📂 ${escHtml(folder)} <span style="color:var(--text-muted);font-weight:400">(${notes.length})</span></span>
-    <select class="mind-browse-sort-select" onchange="mindBrowseSort=this.value;selectBrowseFolder('${escHtml(folder)}')">
-      <option value="modified"${mindBrowseSort === 'modified' ? ' selected' : ''}>Modified</option>
-      <option value="name"${mindBrowseSort === 'name' ? ' selected' : ''}>Name</option>
-      <option value="size"${mindBrowseSort === 'size' ? ' selected' : ''}>Size</option>
-    </select>
-  </div>` +
-  notes.map(n => {
-    const title = extractTitle(n.path);
-    const relTime = n.modified ? mindTimeAgo(new Date(n.modified)) : '';
-    const size = n.size ? formatSize(n.size) : '';
-    return `<div class="mind-browse-note" onclick="openNoteInReader('${escHtml(n.path)}')">
-      <div class="mind-browse-note-title">${escHtml(title)}</div>
-      <div class="mind-browse-note-meta">
-        ${relTime ? `<span>${relTime}</span>` : ''}
-        ${size ? `<span>· ${size}</span>` : ''}
-        <span style="color:${getFolderColor(n.path)}">${escHtml(extractFolder(n.path))}</span>
-      </div>
-    </div>`;
-  }).join('');
+  renderBrowseNoteList(folder, notes);
 }
 
 // ═══════════════════════════════════════════════════════════
-// TAB 3: GRAPH
+// TAB 3: TAGS (NEW — /api/vault/tags)
+// ═══════════════════════════════════════════════════════════
+
+async function initMindTags() {
+  const container = document.getElementById('mind-tags-content');
+  if (!container) return;
+  if (mindTagsData) { renderTagCloud(mindTagsData); return; }
+
+  container.innerHTML = '<div class="mind-loading">Loading tags...</div>';
+
+  try {
+    const resp = await fetch(`${getBridgeUrl()}/api/vault/tags`);
+    const data = await resp.json();
+    mindTagsData = Array.isArray(data) ? data : (data.tags || []);
+    renderTagCloud(mindTagsData);
+  } catch {
+    container.innerHTML = '<div class="mind-empty">Could not load tags. Bridge may be offline.</div>';
+  }
+}
+
+function renderTagCloud(tags) {
+  const container = document.getElementById('mind-tags-content');
+  if (!container) return;
+
+  if (!tags.length) {
+    container.innerHTML = '<div class="mind-empty">No tags found in vault</div>';
+    return;
+  }
+
+  // Sort by count descending
+  const sorted = [...tags].sort((a, b) => (b.count || 0) - (a.count || 0));
+  const maxCount = sorted[0]?.count || 1;
+  const showAll = mindTagsExpanded;
+  const displayTags = showAll ? sorted : sorted.slice(0, 20);
+
+  const totalTags = sorted.length;
+  const totalNotes = sorted.reduce((sum, t) => sum + (t.count || 0), 0);
+
+  container.innerHTML = `
+    <div class="mind-tags-header">
+      <div class="mind-tags-stats">
+        <span class="mind-tags-stat"><strong>${totalTags}</strong> tags</span>
+        <span class="mind-tags-stat"><strong>${totalNotes}</strong> tagged notes</span>
+      </div>
+    </div>
+    <div class="mind-tag-cloud">
+      ${displayTags.map(t => {
+        const name = t.tag || t.name || t;
+        const count = t.count || 0;
+        const ratio = count / maxCount;
+        const fontSize = Math.max(12, Math.min(32, 12 + ratio * 20));
+        const color = getTagColor(typeof name === 'string' ? name : '');
+        return `<span class="mind-tag-cloud-item" 
+          style="font-size:${fontSize}px;color:${color}" 
+          onclick="searchByTag('${escHtml(typeof name === 'string' ? name : '')}')"
+          title="${count} notes">#${escHtml(typeof name === 'string' ? name : '')} <sup style="font-size:10px;opacity:0.6">${count}</sup></span>`;
+      }).join('')}
+    </div>
+    ${totalTags > 20 ? `<div class="mind-tags-expand">
+      <button class="mind-tags-expand-btn" onclick="mindTagsExpanded=!mindTagsExpanded;renderTagCloud(mindTagsData)">
+        ${showAll ? '▲ Show top 20' : `▼ Show all ${totalTags} tags`}
+      </button>
+    </div>` : ''}
+  `;
+}
+
+function searchByTag(tag) {
+  const input = document.getElementById('mind-search-input');
+  if (input) input.value = `tag:${tag}`;
+  setMindTab('search');
+  doMindSearch();
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB 4: GRAPH (Enhanced with /api/vault/graph REAL data)
 // ═══════════════════════════════════════════════════════════
 
 function initMindGraph() {
@@ -311,7 +486,6 @@ function initMindGraph() {
   if (!mindGraphCanvas) return;
   mindGraphCtx = mindGraphCanvas.getContext('2d');
 
-  // Remove old resize listener
   if (_mindGraphResizeHandler) window.removeEventListener('resize', _mindGraphResizeHandler);
   _mindGraphResizeHandler = () => {
     if (mindTab !== 'graph' || !mindGraphCanvas) return;
@@ -326,7 +500,6 @@ function initMindGraph() {
   mindGraphCanvas.width = parent.clientWidth || 800;
   mindGraphCanvas.height = parent.clientHeight || 500;
 
-  // Try real API first, fallback to seed data
   loadGraphData().then(() => {
     setupGraphInteraction();
     startGraphSim();
@@ -338,47 +511,66 @@ async function loadGraphData() {
   const H = mindGraphCanvas.height;
 
   try {
-    const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-    const resp = await fetch(`${bridgeUrl}/api/vault/graph?limit=150`);
+    const resp = await fetch(`${getBridgeUrl()}/api/vault/graph`);
     const data = await resp.json();
 
     if (data.nodes && data.nodes.length > 0) {
-      mindGraphNodes = data.nodes.map((n, i) => ({
-        id: n.id || i,
-        label: n.title || extractTitle(n.id || ''),
-        folder: n.category || extractFolder(n.id || ''),
-        hex: getFolderColor(n.category || n.id || ''),
-        x: W / 2 + (Math.random() - 0.5) * 300,
-        y: H / 2 + (Math.random() - 0.5) * 200,
-        vx: 0, vy: 0,
-        r: Math.min(8 + (data.edges || []).filter(e => e.source === n.id || e.target === n.id).length * 1.5, 22),
-      }));
+      // Count edges per node for sizing
+      const edgeCounts = {};
+      (data.edges || []).forEach(e => {
+        edgeCounts[e.source] = (edgeCounts[e.source] || 0) + 1;
+        edgeCounts[e.target] = (edgeCounts[e.target] || 0) + 1;
+      });
 
-      // Build node ID → index map
+      mindGraphNodes = data.nodes.map((n, i) => {
+        const id = n.id || n.path || i;
+        const folder = n.category || n.folder || extractFolder(id);
+        const linkCount = edgeCounts[id] || 0;
+        return {
+          id: id,
+          label: n.title || extractTitle(id),
+          folder: folder,
+          hex: getFolderColor(folder),
+          x: W / 2 + (Math.random() - 0.5) * 300,
+          y: H / 2 + (Math.random() - 0.5) * 200,
+          vx: 0, vy: 0,
+          r: Math.min(8 + linkCount * 1.5, 22),
+          linkCount: linkCount,
+        };
+      });
+
       const idMap = {};
       mindGraphNodes.forEach((n, i) => { idMap[n.id] = i; });
 
-      mindGraphEdges = (data.edges || []).map(e => ({
-        source: idMap[e.source],
-        target: idMap[e.target],
-        type: e.type || 'link',
-      })).filter(e => e.source !== undefined && e.target !== undefined);
+      mindGraphEdges = (data.edges || []).map(e => {
+        const sourceId = e.source;
+        const targetId = e.target;
+        return {
+          source: idMap[sourceId],
+          target: idMap[targetId],
+          type: e.type || 'link',
+          weight: e.weight || 1,
+        };
+      }).filter(e => e.source !== undefined && e.target !== undefined);
       return;
     }
   } catch { /* fallback */ }
 
   // Fallback to seed data
-  mindGraphNodes = GNODES.map(n => ({
-    ...n,
-    label: n.label,
-    folder: n.type,
-    hex: n.hex || getFolderColor(n.type),
-    x: W / 2 + (Math.random() - 0.5) * 200,
-    y: H / 2 + (Math.random() - 0.5) * 150,
-    vx: 0, vy: 0,
-    r: n.size || 12,
-  }));
-  mindGraphEdges = GEDGES.map(([a, b]) => ({ source: a, target: b, type: 'link' }));
+  if (typeof GNODES !== 'undefined') {
+    mindGraphNodes = GNODES.map(n => ({
+      ...n,
+      label: n.label,
+      folder: n.type,
+      hex: n.hex || getFolderColor(n.type),
+      x: W / 2 + (Math.random() - 0.5) * 200,
+      y: H / 2 + (Math.random() - 0.5) * 150,
+      vx: 0, vy: 0,
+      r: n.size || 12,
+      linkCount: 0,
+    }));
+    mindGraphEdges = (typeof GEDGES !== 'undefined' ? GEDGES : []).map(([a, b]) => ({ source: a, target: b, type: 'link', weight: 1 }));
+  }
 }
 
 function setupGraphInteraction() {
@@ -387,7 +579,6 @@ function setupGraphInteraction() {
   mindGraphCanvas.onmouseup = graphOnMouseUp;
   mindGraphCanvas.onclick = graphOnClick;
 
-  // Touch
   mindGraphCanvas.addEventListener('touchstart', e => {
     if (mindGraphLocked) return;
     const touch = e.touches[0];
@@ -428,15 +619,11 @@ function runMindGraphSim() {
   const W = mindGraphCanvas.width;
   const H = mindGraphCanvas.height;
   const k = Math.sqrt((W * H) / Math.max(mindGraphNodes.length, 1));
-  const filtered = getFilteredGraphNodes();
-  const filteredSet = new Set(filtered.map((_, i) => i));
 
   mindGraphAlpha *= 0.95;
 
-  // Reset forces
   mindGraphNodes.forEach(n => { n.fx = 0; n.fy = 0; });
 
-  // Repulsion
   for (let i = 0; i < mindGraphNodes.length; i++) {
     for (let j = i + 1; j < mindGraphNodes.length; j++) {
       const a = mindGraphNodes[i], b = mindGraphNodes[j];
@@ -451,8 +638,7 @@ function runMindGraphSim() {
     }
   }
 
-  // Attraction
-  mindGraphEdges.forEach(({ source, target }) => {
+  mindGraphEdges.forEach(({ source, target, weight }) => {
     const a = mindGraphNodes[source], b = mindGraphNodes[target];
     if (!a || !b) return;
     const dx = b.x - a.x, dy = b.y - a.y;
@@ -463,13 +649,11 @@ function runMindGraphSim() {
     b.fx -= fx; b.fy -= fy;
   });
 
-  // Center gravity
   mindGraphNodes.forEach(n => {
     n.fx += (W / 2 - n.x) * 0.08 * mindGraphAlpha;
     n.fy += (H / 2 - n.y) * 0.08 * mindGraphAlpha;
   });
 
-  // Integrate
   let totalEnergy = 0;
   mindGraphNodes.forEach(n => {
     if (n === mindGraphDragging) return;
@@ -519,8 +703,8 @@ function drawMindGraph() {
   }
   const hasFilter = mindGraphFilter && filteredSet.size > 0;
 
-  // Edges
-  mindGraphEdges.forEach(({ source, target, type }) => {
+  // Edges with thickness by weight
+  mindGraphEdges.forEach(({ source, target, type, weight }) => {
     const a = mindGraphNodes[source], b = mindGraphNodes[target];
     if (!a || !b) return;
     const dimmed = hasFilter && !filteredSet.has(source) && !filteredSet.has(target);
@@ -528,11 +712,11 @@ function drawMindGraph() {
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.strokeStyle = dimmed ? 'rgba(99,102,119,0.1)' : 'rgba(99,102,119,0.35)';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.min((weight || 1) * 0.8, 4);
     ctx.stroke();
   });
 
-  // Nodes
+  // Nodes colored by folder
   mindGraphNodes.forEach((n, i) => {
     const isH = n === mindGraphHovered;
     const isS = n === mindGraphSelected;
@@ -588,28 +772,21 @@ function graphOnMouseMove(e) {
   mindGraphHovered = graphHitTest(mx, my);
   mindGraphCanvas.style.cursor = mindGraphHovered ? 'pointer' : 'grab';
 
-  // Tooltip for edge type on hover
   const tip = document.getElementById('mind-graph-tooltip');
   if (mindGraphHovered && tip) {
-    tip.textContent = mindGraphHovered.label;
+    const nodeIdx = mindGraphNodes.indexOf(mindGraphHovered);
+    const hoveredEdges = mindGraphEdges.filter(e => e.source === nodeIdx || e.target === nodeIdx);
+    const conns = hoveredEdges.map(e => {
+      const other = mindGraphNodes[e.source === nodeIdx ? e.target : e.source];
+      return other ? other.label : '';
+    }).filter(Boolean).slice(0, 4);
+    tip.innerHTML = `<strong>${escHtml(mindGraphHovered.label)}</strong>` +
+      (conns.length ? `<br><span style="font-size:10px;color:var(--text-muted)">${conns.join(', ')}</span>` : '');
     tip.style.left = (mx + 14) + 'px';
     tip.style.top = (my - 8) + 'px';
     tip.classList.remove('hidden');
   } else if (tip) {
     tip.classList.add('hidden');
-  }
-
-  // Show edge label on hover
-  if (mindGraphHovered) {
-    const nodeIdx = mindGraphNodes.indexOf(mindGraphHovered);
-    const hoveredEdges = mindGraphEdges.filter(e => e.source === nodeIdx || e.target === nodeIdx);
-    if (hoveredEdges.length && tip) {
-      const conns = hoveredEdges.map(e => {
-        const other = mindGraphNodes[e.source === nodeIdx ? e.target : e.source];
-        return other ? other.label : '';
-      }).filter(Boolean).slice(0, 4);
-      tip.innerHTML = `<strong>${escHtml(mindGraphHovered.label)}</strong><br><span style="font-size:10px;color:var(--text-muted)">${conns.join(', ')}</span>`;
-    }
   }
   if (mindGraphSettled) drawMindGraph();
 }
@@ -645,7 +822,7 @@ function showGraphNodeDetail(node) {
     .map(e => {
       const otherIdx = e.source === nodeIdx ? e.target : e.source;
       const other = mindGraphNodes[otherIdx];
-      return other ? { label: other.label, type: e.type || 'link', hex: other.hex } : null;
+      return other ? { label: other.label, type: e.type || 'link', hex: other.hex, id: other.id } : null;
     })
     .filter(Boolean);
 
@@ -656,10 +833,10 @@ function showGraphNodeDetail(node) {
     ${conns.length ? `<div style="margin-top:10px">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Connected to</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px">${conns.slice(0, 10).map(c =>
-        `<span class="mind-graph-conn-chip" onclick="openNoteInReader('${escHtml(c.label)}')" style="border-left:2px solid ${c.hex}">${escHtml(c.label)}<span style="font-size:9px;color:var(--text-muted);margin-left:4px">${c.type}</span></span>`
+        `<span class="mind-graph-conn-chip" onclick="openNoteInReader('${escHtml(c.id || c.label)}')" style="border-left:2px solid ${c.hex}">${escHtml(c.label)}<span style="font-size:9px;color:var(--text-muted);margin-left:4px">${c.type}</span></span>`
       ).join('')}</div>
     </div>` : ''}
-    <button class="mind-graph-open-btn" onclick="openNoteInReader('${escHtml(node.label || node.id)}')">📖 Open in Reader</button>
+    <button class="mind-graph-open-btn" onclick="openNoteInReader('${escHtml(node.id || node.label)}')">📖 Open in Reader</button>
   `;
   panel.classList.remove('hidden');
 }
@@ -685,12 +862,13 @@ function toggleMindGraphLock() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// TAB 4: READER
+// TAB 5: READER (Enhanced with backlinks + editing)
 // ═══════════════════════════════════════════════════════════
 
 function openNoteInReader(pathOrTitle) {
   if (!pathOrTitle) return;
   mindReaderNote = { path: pathOrTitle, loading: true };
+  mindReaderEditing = false;
   setMindTab('reader');
   renderMindReader();
   loadNoteContent(pathOrTitle);
@@ -702,16 +880,12 @@ async function loadNoteContent(pathOrTitle) {
   container.innerHTML = '<div class="mind-loading">Loading note...</div>';
 
   try {
-    const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-
-    // Try direct path first
-    let resp = await fetch(`${bridgeUrl}/api/vault/note?path=${encodeURIComponent(pathOrTitle)}`);
+    let resp = await fetch(`${getBridgeUrl()}/api/vault/note?path=${encodeURIComponent(pathOrTitle)}`);
     if (!resp.ok) {
-      // Try search as fallback
-      const searchResp = await fetch(`${bridgeUrl}/api/vault/search?q=${encodeURIComponent(extractTitle(pathOrTitle))}&limit=1`);
+      const searchResp = await fetch(`${getBridgeUrl()}/api/vault/search?q=${encodeURIComponent(extractTitle(pathOrTitle))}&limit=1`);
       const searchResults = await searchResp.json();
       if (searchResults.length > 0) {
-        resp = await fetch(`${bridgeUrl}/api/vault/note?path=${encodeURIComponent(searchResults[0].path)}`);
+        resp = await fetch(`${getBridgeUrl()}/api/vault/note?path=${encodeURIComponent(searchResults[0].path)}`);
       }
     }
 
@@ -724,12 +898,14 @@ async function loadNoteContent(pathOrTitle) {
         loading: false,
       };
       renderNoteView();
+      // Load backlinks
+      loadBacklinks(mindReaderNote.path);
       return;
     }
   } catch { /* fallback */ }
 
   // Fallback to seed data
-  const seedNote = VAULT_NOTES.find(n =>
+  const seedNote = (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES : []).find(n =>
     n.title.toLowerCase() === extractTitle(pathOrTitle).toLowerCase() ||
     pathOrTitle.toLowerCase().includes(n.title.toLowerCase().replace(/ /g, '-'))
   );
@@ -750,6 +926,39 @@ async function loadNoteContent(pathOrTitle) {
     };
   }
   renderNoteView();
+}
+
+async function loadBacklinks(path) {
+  const backlinkContainer = document.getElementById('mind-reader-backlinks');
+  if (!backlinkContainer) return;
+
+  try {
+    const resp = await fetch(`${getBridgeUrl()}/api/vault/backlinks/${encodeURIComponent(path)}`);
+    if (!resp.ok) throw new Error('not ok');
+    const data = await resp.json();
+    const backlinks = Array.isArray(data) ? data : (data.backlinks || []);
+
+    if (backlinks.length === 0) {
+      backlinkContainer.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0">No backlinks found</div>';
+      return;
+    }
+
+    backlinkContainer.innerHTML = `
+      <div class="mind-backlinks-header">← ${backlinks.length} note${backlinks.length !== 1 ? 's' : ''} link here</div>
+      <div class="mind-backlinks-list">
+        ${backlinks.map(bl => {
+          const blPath = bl.path || bl.source || bl;
+          const blTitle = bl.title || extractTitle(typeof blPath === 'string' ? blPath : '');
+          return `<div class="mind-backlink-item" onclick="openNoteInReader('${escHtml(typeof blPath === 'string' ? blPath : '')}')">
+            <span class="mind-backlink-icon">🔗</span>
+            <span class="mind-backlink-title">${escHtml(blTitle)}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+  } catch {
+    backlinkContainer.innerHTML = '';
+  }
 }
 
 function renderMindReader() {
@@ -785,10 +994,6 @@ function renderNoteView() {
   const tags = fm.tags ? fm.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
   const rendered = renderBasicMarkdown(note.content || '');
 
-  // Check localStorage for drafts
-  const draftKey = `mind_draft_${note.path}`;
-  const hasDraft = localStorage.getItem(draftKey);
-
   container.innerHTML = `
     <div class="mind-reader-header">
       <div class="mind-reader-title">${escHtml(title)}</div>
@@ -801,16 +1006,16 @@ function renderNoteView() {
         <div class="mind-reader-edit-area hidden" id="mind-reader-edit-area">
           <textarea id="mind-reader-edit-textarea" class="mind-reader-textarea">${escHtml(note.content || '')}</textarea>
           <div class="mind-reader-edit-actions">
-            <button class="mind-reader-save-btn" onclick="saveDraft()">💾 Save Draft</button>
+            <button class="mind-reader-save-btn" onclick="saveNoteToVault()">💾 Save to Vault</button>
             <button class="mind-reader-cancel-btn" onclick="cancelEdit()">Cancel</button>
           </div>
         </div>
+        <div id="mind-reader-backlinks" class="mind-reader-backlinks-section"></div>
       </div>
       <div class="mind-reader-sidebar">
         <div class="mind-reader-sidebar-section">
           <div class="mind-reader-sidebar-title">Actions</div>
           <button class="mind-reader-action-btn" onclick="toggleEdit()">✏️ Edit</button>
-          ${hasDraft ? '<button class="mind-reader-action-btn" onclick="loadDraft()">📝 Load Draft</button>' : ''}
         </div>
         ${confidence !== null ? `<div class="mind-reader-sidebar-section">
           <div class="mind-reader-sidebar-title">Confidence</div>
@@ -823,7 +1028,7 @@ function renderNoteView() {
         </div>` : ''}
         ${tags.length ? `<div class="mind-reader-sidebar-section">
           <div class="mind-reader-sidebar-title">Tags</div>
-          <div class="mind-reader-tags">${tags.map(t => `<span class="mind-reader-tag">#${escHtml(t)}</span>`).join('')}</div>
+          <div class="mind-reader-tags">${tags.map(t => `<span class="mind-reader-tag" onclick="searchByTag('${escHtml(t)}')" style="cursor:pointer">#${escHtml(t)}</span>`).join('')}</div>
         </div>` : ''}
       </div>
     </div>
@@ -837,6 +1042,7 @@ function toggleEdit() {
   const isEditing = !editArea.classList.contains('hidden');
   rendered.classList.toggle('hidden', !isEditing);
   editArea.classList.toggle('hidden', isEditing);
+  mindReaderEditing = !isEditing;
 }
 
 function cancelEdit() {
@@ -844,32 +1050,38 @@ function cancelEdit() {
   const editArea = document.getElementById('mind-reader-edit-area');
   if (rendered) rendered.classList.remove('hidden');
   if (editArea) editArea.classList.add('hidden');
+  mindReaderEditing = false;
 }
 
-function saveDraft() {
-  if (!mindReaderNote) return;
+async function saveNoteToVault() {
+  if (!mindReaderNote || !mindReaderNote.path) return;
   const textarea = document.getElementById('mind-reader-edit-textarea');
   if (!textarea) return;
-  const draftKey = `mind_draft_${mindReaderNote.path}`;
-  localStorage.setItem(draftKey, textarea.value);
-  if (typeof toast === 'function') toast('📝 Draft saved to localStorage', 'success');
-  cancelEdit();
-}
 
-function loadDraft() {
-  if (!mindReaderNote) return;
-  const draftKey = `mind_draft_${mindReaderNote.path}`;
-  const draft = localStorage.getItem(draftKey);
-  if (!draft) return;
-  mindReaderNote.content = draft;
-  renderNoteView();
-  toggleEdit();
-  const textarea = document.getElementById('mind-reader-edit-textarea');
-  if (textarea) textarea.value = draft;
+  const content = textarea.value;
+
+  try {
+    const resp = await fetch(`${getBridgeUrl()}/api/vault/note/${encodeURIComponent(mindReaderNote.path)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+
+    if (resp.ok) {
+      mindReaderNote.content = content;
+      cancelEdit();
+      renderNoteView();
+      if (typeof toast === 'function') toast('✅ Note saved to vault', 'success');
+    } else {
+      if (typeof toast === 'function') toast('❌ Failed to save note', 'error');
+    }
+  } catch {
+    if (typeof toast === 'function') toast('❌ Bridge error — could not save', 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
-// TAB 5: INSIGHTS
+// TAB 6: INSIGHTS
 // ═══════════════════════════════════════════════════════════
 
 function initMindInsights() {
@@ -888,35 +1100,33 @@ async function loadInsightsData() {
   let graphData = null;
 
   try {
-    const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
     const [statsResp, recentResp, graphResp] = await Promise.all([
-      fetch(`${bridgeUrl}/api/vault/stats`).then(r => r.json()).catch(() => null),
-      fetch(`${bridgeUrl}/api/vault/recent?limit=10`).then(r => r.json()).catch(() => []),
-      fetch(`${bridgeUrl}/api/vault/graph?limit=200`).then(r => r.json()).catch(() => null),
+      fetch(`${getBridgeUrl()}/api/vault/stats`).then(r => r.json()).catch(() => null),
+      fetch(`${getBridgeUrl()}/api/vault/recent?limit=10`).then(r => r.json()).catch(() => []),
+      fetch(`${getBridgeUrl()}/api/vault/graph`).then(r => r.json()).catch(() => null),
     ]);
     stats = statsResp;
     recent = recentResp;
     graphData = graphResp;
   } catch { /* fallback below */ }
 
-  // Fallback stats
   if (!stats) {
     stats = {
-      totalNotes: VAULT_NOTES.length,
+      totalNotes: (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES.length : 0),
       totalSize: 0,
       categories: {},
     };
-    VAULT_NOTES.forEach(n => {
-      stats.categories[n.type] = (stats.categories[n.type] || 0) + 1;
-    });
+    if (typeof VAULT_NOTES !== 'undefined') {
+      VAULT_NOTES.forEach(n => {
+        stats.categories[n.type] = (stats.categories[n.type] || 0) + 1;
+      });
+    }
   }
 
-  // Compute graph stats
-  const totalLinks = graphData ? (graphData.edges || []).length : GEDGES.length;
-  const totalGraphNodes = graphData ? (graphData.nodes || []).length : GNODES.length;
+  const totalLinks = graphData ? (graphData.edges || []).length : (typeof GEDGES !== 'undefined' ? GEDGES.length : 0);
+  const totalGraphNodes = graphData ? (graphData.nodes || []).length : (typeof GNODES !== 'undefined' ? GNODES.length : 0);
   const avgLinks = totalGraphNodes > 0 ? (totalLinks * 2 / totalGraphNodes).toFixed(1) : '0';
 
-  // Find orphan nodes (no edges)
   let orphanCount = 0;
   if (graphData && graphData.nodes) {
     const connected = new Set();
@@ -924,13 +1134,12 @@ async function loadInsightsData() {
     orphanCount = graphData.nodes.filter(n => !connected.has(n.id)).length;
   }
 
-  // Stale notes (>30 days)
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const staleCount = recent.length > 0 ? 0 : VAULT_NOTES.filter(n => new Date(n.date) < thirtyDaysAgo).length;
+  const staleCount = recent.length > 0 ? 0 : (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES.filter(n => new Date(n.date) < thirtyDaysAgo).length : 0);
 
-  // Growth data from recent notes — simple bar chart by week
   const weekBuckets = {};
-  (recent.length > 0 ? recent : VAULT_NOTES.map(n => ({ modified: n.date }))).forEach(n => {
+  const recentForBuckets = recent.length > 0 ? recent : (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES.slice(0, 10).map(n => ({ modified: n.date })) : []);
+  recentForBuckets.forEach(n => {
     const d = new Date(n.modified || n.date);
     const weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
@@ -938,17 +1147,10 @@ async function loadInsightsData() {
     weekBuckets[key] = (weekBuckets[key] || 0) + 1;
   });
 
-  // Knowledge gaps (from categories with few notes)
   const gapThreshold = 5;
   const gaps = Object.entries(stats.categories || {})
     .map(([cat, count]) => ({ cat, count }))
     .sort((a, b) => a.count - b.count);
-
-  // Contradictions (seed data — would come from ~/dispatch/proposals/)
-  const contradictions = [
-    { noteA: 'Token Budget Strategy', noteB: 'Rate Limiting Mitigation', issue: 'Budget says 100K/day but rate limiter uses 3-concurrent which may exceed' },
-    { noteA: 'Session Watchdog Spec', noteB: 'Cron Scheduler Design', issue: 'Watchdog heartbeat is 2min but watchdog spec says restart after 30s backoff — timing conflict' },
-  ];
 
   container.innerHTML = `
     <div class="mind-insights-stats">
@@ -981,7 +1183,7 @@ async function loadInsightsData() {
     <div class="mind-insights-section">
       <h3>📊 Recent Activity</h3>
       <div class="mind-insights-recent">
-        ${(recent.length > 0 ? recent : VAULT_NOTES.slice(0, 10).map(n => ({ path: n.type + '/' + n.title + '.md', modified: n.date }))).map(n => {
+        ${(recent.length > 0 ? recent : (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES.slice(0, 10).map(n => ({ path: n.type + '/' + n.title + '.md', modified: n.date })) : [])).map(n => {
           const title = extractTitle(n.path || '');
           const relTime = n.modified ? mindTimeAgo(new Date(n.modified)) : '';
           return `<div class="mind-insights-recent-item" onclick="openNoteInReader('${escHtml(n.path || '')}')">
@@ -992,22 +1194,7 @@ async function loadInsightsData() {
       </div>
     </div>
 
-    <div class="mind-insights-section">
-      <h3>⚠️ Contradictions</h3>
-      ${contradictions.map(c => `
-        <div class="mind-insights-contradiction">
-          <div class="mind-insights-contradiction-notes">
-            <span class="mind-insights-contradiction-note" onclick="openNoteInReader('${escHtml(c.noteA)}')">${escHtml(c.noteA)}</span>
-            <span style="color:var(--text-muted)">vs</span>
-            <span class="mind-insights-contradiction-note" onclick="openNoteInReader('${escHtml(c.noteB)}')">${escHtml(c.noteB)}</span>
-          </div>
-          <div class="mind-insights-contradiction-issue">${escHtml(c.issue)}</div>
-          <button class="mind-insights-resolve-btn" onclick="this.textContent='✅ Noted';this.disabled=true">🔍 Review</button>
-        </div>
-      `).join('')}
-    </div>
-
-    <div class="mind-insights-section">
+    ${gaps.length ? `<div class="mind-insights-section">
       <h3>🏷️ Knowledge Coverage</h3>
       <div class="mind-insights-gaps">
         ${gaps.map(g => {
@@ -1015,7 +1202,7 @@ async function loadInsightsData() {
           return `<span class="mind-insights-gap-tag" style="border-left:3px solid ${color}">${escHtml(g.cat)} <strong>${g.count}</strong></span>`;
         }).join('')}
       </div>
-    </div>
+    </div>` : ''}
 
     <div class="mind-insights-section">
       <h3>📈 Growth</h3>
@@ -1032,6 +1219,88 @@ async function loadInsightsData() {
       </div>
     </div>
   `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// NOTE CREATION MODAL
+// ═══════════════════════════════════════════════════════════
+
+async function openNewNoteModal() {
+  const modal = document.getElementById('new-note-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  // Load folders into dropdown
+  const select = document.getElementById('new-note-folder');
+  if (select) {
+    select.innerHTML = '<option value="">Loading...</option>';
+    try {
+      const resp = await fetch(`${getBridgeUrl()}/api/vault/folders`);
+      const folders = await resp.json();
+      const flatFolders = [];
+      function flatten(items, prefix) {
+        if (!Array.isArray(items)) return;
+        items.forEach(f => {
+          const name = typeof f === 'string' ? f : (f.name || f.path || '');
+          flatFolders.push(prefix ? `${prefix}/${name}` : name);
+          if (f.children) flatten(f.children, prefix ? `${prefix}/${name}` : name);
+        });
+      }
+      flatten(folders, '');
+      select.innerHTML = flatFolders.map(f =>
+        `<option value="${escHtml(f)}">${escHtml(f)}</option>`
+      ).join('');
+    } catch {
+      select.innerHTML = '<option value="">root</option>';
+    }
+  }
+
+  // Clear form
+  const titleInput = document.getElementById('new-note-title');
+  const contentInput = document.getElementById('new-note-content');
+  if (titleInput) titleInput.value = '';
+  if (contentInput) contentInput.value = '';
+}
+
+function closeNewNoteModal() {
+  const modal = document.getElementById('new-note-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function closeNewNoteModalIfOutside(e) {
+  if (e.target.id === 'new-note-modal') closeNewNoteModal();
+}
+
+async function submitNewNote() {
+  const title = document.getElementById('new-note-title')?.value?.trim();
+  const folder = document.getElementById('new-note-folder')?.value || '';
+  const content = document.getElementById('new-note-content')?.value || '';
+
+  if (!title) {
+    if (typeof toast === 'function') toast('❌ Title is required', 'error');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${getBridgeUrl()}/api/vault/note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, folder, content }),
+    });
+
+    if (resp.ok) {
+      closeNewNoteModal();
+      if (typeof toast === 'function') toast(`✅ Created "${title}"`, 'success');
+      // Open the new note
+      const path = folder ? `${folder}/${title}.md` : `${title}.md`;
+      openNoteInReader(path);
+    } else {
+      const err = await resp.text().catch(() => 'Unknown error');
+      if (typeof toast === 'function') toast(`❌ Failed: ${err}`, 'error');
+    }
+  } catch {
+    if (typeof toast === 'function') toast('❌ Bridge error — could not create note', 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1075,32 +1344,23 @@ function renderBasicMarkdown(text) {
   if (!text) return '<p style="color:var(--text-muted)">No content</p>';
   let html = escHtml(text);
 
-  // Code blocks
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="mind-md-code"><code>$2</code></pre>');
-  // Inline code
   html = html.replace(/`([^`]+)`/g, '<code class="mind-md-inline">$1</code>');
-  // Headers
   html = html.replace(/^#### (.+)$/gm, '<h4 class="mind-md-h4">$1</h4>');
   html = html.replace(/^### (.+)$/gm, '<h3 class="mind-md-h3">$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2 class="mind-md-h2">$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1 class="mind-md-h1">$1</h1>');
-  // Bold/italic
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // Lists
   html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
   html = html.replace(/<\/ul>\s*<ul>/g, '');
-  // Wikilinks
   html = html.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) =>
     `<a class="mind-wikilink" onclick="openNoteInReader('${escHtml(target)}')">${escHtml(label || target)}</a>`
   );
-  // Regular links
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-  // Paragraphs
   html = html.replace(/\n\n/g, '</p><p>');
   html = '<p>' + html + '</p>';
-  // Clean empty paragraphs
   html = html.replace(/<p>\s*<\/p>/g, '');
   html = html.replace(/<p>(<h[1-4])/g, '$1');
   html = html.replace(/(<\/h[1-4]>)<\/p>/g, '$1');
@@ -1113,11 +1373,10 @@ function renderBasicMarkdown(text) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// COMPATIBILITY — bridge old function names to new system
+// COMPATIBILITY
 // ═══════════════════════════════════════════════════════════
 
 function searchMind(query) {
-  // Called from app.js omnibus search
   if (query) {
     const input = document.getElementById("mind-search-input");
     if (input) input.value = query;
@@ -1126,15 +1385,12 @@ function searchMind(query) {
   }
 }
 
-// Legacy setMindMode — redirect to tab system
 function setMindMode(mode) {
   if (mode === "graph") setMindTab("graph");
   else if (mode === "cards") setMindTab("search");
   else if (mode === "timeline") setMindTab("insights");
 }
 
-
-// Override openVaultNote after all scripts load
 document.addEventListener('DOMContentLoaded', () => {
   const _origOpenVaultNote = window.openVaultNote;
   window.openVaultNote = function(note) {
@@ -1146,4 +1402,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 });
-
