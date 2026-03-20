@@ -961,10 +961,17 @@
       <div class="cmd-palette-input-row">
         <span class="cmd-palette-prefix" id="palette-prefix">🔍</span>
         <input type="text" id="palette-input" class="cmd-palette-input" 
-          placeholder="Search or type > command, @ agent, / system..."
+          placeholder="Search pages, agents, vault... or type > for actions"
           oninput="handlePaletteInput(this.value)"
           onkeydown="handlePaletteKey(event)"
           autocomplete="off">
+        <span class="palette-mode-indicator" id="palette-mode-indicator"></span>
+        <div class="palette-hints">
+          <kbd>↑↓</kbd> navigate
+          <kbd>⏎</kbd> select
+          <kbd>esc</kbd> close
+          <kbd>tab</kbd> mode
+        </div>
         <button class="palette-close" onclick="closeCommandPalette()">✕</button>
       </div>
       <div class="palette-results" id="palette-results"></div>

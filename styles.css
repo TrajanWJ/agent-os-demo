@@ -11332,6 +11332,137 @@ textarea:focus-visible,
 }
 .shortcut-close:hover { border-color: var(--accent); color: var(--text); }
 
+/* Shortcut sections for grouped help modal */
+.shortcut-section { margin-bottom: 12px; }
+.shortcut-section:last-child { margin-bottom: 0; }
+.shortcut-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Command Palette Enhancements ─────────────────────────── */
+.palette-mode-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.palette-hints {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: auto;
+  margin-right: 6px;
+}
+.palette-hints kbd {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+}
+
+/* Quick action chips */
+.palette-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.palette-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.palette-chip:hover {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.palette-chip-icon { font-size: 14px; }
+.palette-chip-label { font-weight: 500; }
+
+/* Section label in results */
+.palette-section-label {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* Selected item accent border */
+.palette-item.selected {
+  background: var(--bg-raised);
+  border-left: 2px solid var(--accent);
+  padding-left: 14px;
+}
+
+/* Shortcut kbd in palette results */
+.palette-item-shortcut {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Empty state for no results */
+.palette-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.palette-empty-icon { font-size: 28px; opacity: 0.5; }
+.palette-empty-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.palette-empty-hint kbd {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
 /* ── 8. Skeleton Loading Enhancement ────────────────────── */
 .skeleton-loading {
   background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-overlay) 50%, var(--bg-raised) 75%);
@@ -11966,4 +12097,700 @@ textarea:focus-visible,
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COMPREHENSIVE MOBILE RESPONSIVE PASS
+   Breakpoints: Desktop >1200 | Tablet 768-1200 | Mobile <768
+═══════════════════════════════════════════════════════════ */
+
+/* ── TABLET: 768px – 1200px ─────────────────────────────── */
+@media (max-width: 1200px) and (min-width: 768px) {
+  /* Sidebar narrower on tablet */
+  :root { --sidebar-w: 200px; }
+
+  /* Omnibus shrink */
+  .topbar-center { max-width: 360px; }
+
+  /* Three-panel layouts: hide right sidebar */
+  .inbox-context-panel { display: none; }
+  .tasks-actions-panel { display: none; }
+  .member-list { display: none; }
+  .thread-panel { display: none; }
+
+  /* Talk: channel sidebar narrower */
+  .channel-sidebar { width: 200px; min-width: 200px; }
+
+  /* Mission control sidebar */
+  .mc-sidebar { width: 220px; min-width: 220px; }
+
+  /* Roles: agent list narrower */
+  .acenter-list { width: 240px; min-width: 240px; }
+
+  /* Cards grids → 2 columns */
+  .projects-cards { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .mc-cards-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .mc-overview-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+  /* Quick stats: allow horizontal scroll */
+  .quick-stats-row { flex-wrap: nowrap; overflow-x: auto; }
+
+  /* Pulse metrics */
+  .pulse-metrics { grid-template-columns: repeat(3, 1fr); }
+  .pulse-grid { grid-template-columns: 1fr; }
+
+  /* System dashboard */
+  .sys-dashboard-header { grid-template-columns: repeat(2, 1fr); }
+  .sys-two-col { grid-template-columns: 1fr; }
+}
+
+/* ── MOBILE: <768px — COMPREHENSIVE ─────────────────────── */
+@media (max-width: 767px) {
+
+  /* ─── 1. SIDEBAR → BOTTOM NAV ───────────────────────── */
+  /* Already handled: #sidebar hidden, #mobile-bar shown, .main-content margin-left: 0 */
+  /* Reinforce and extend: */
+  #sidebar { display: none !important; }
+  #mobile-bar { display: flex !important; }
+  #main { 
+    padding-bottom: calc(var(--mobile-bar-h) + var(--safe-bottom)); 
+    margin-left: 0 !important;
+  }
+
+  /* ─── 2. THREE-PANEL LAYOUTS → STACKED ──────────────── */
+
+  /* Inbox */
+  .inbox-layout {
+    flex-direction: column !important;
+  }
+  .inbox-list-panel {
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: unset !important;
+    max-height: 40vh;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .inbox-context-panel { display: none !important; }
+  .inbox-detail-panel { min-height: 55vh; }
+  .inbox-detail-header { padding: 12px 14px; }
+  .inbox-detail-body { padding: 12px 14px; }
+  .inbox-detail-subject { font-size: 17px; }
+  .inbox-action-bar { 
+    padding: 8px 14px; 
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .inbox-action-btn { 
+    padding: 0 10px; 
+    font-size: 11px; 
+    min-height: 44px; /* touch target */
+  }
+  .inbox-action-btn kbd { display: none; }
+  .inbox-reply-section { padding: 8px 14px; }
+  .inbox-confidence-bar { padding: 8px 14px; }
+  .inbox-thread-section { padding: 12px 14px; }
+  .inbox-linked-section { padding: 10px 14px; }
+
+  /* Tasks */
+  .tasks-layout {
+    flex-direction: column !important;
+    background: var(--bg-base);
+  }
+  .tasks-list-panel {
+    width: 100% !important;
+    min-width: unset !important;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .tasks-detail-panel { min-height: 55vh; padding: 16px; }
+  .tasks-actions-panel { display: none !important; }
+  .tasks-detail-title { font-size: 17px; }
+
+  /* Talk */
+  #view-talk {
+    flex-direction: column !important;
+  }
+  .server-rail { display: none !important; }
+  .channel-sidebar { display: none !important; }
+  .member-list { display: none !important; }
+  .thread-panel { display: none !important; }
+  .message-area { 
+    width: 100% !important; 
+    min-width: unset !important;
+  }
+  .messages-container { 
+    padding: 8px;
+    padding-bottom: 80px; /* room for input bar */
+  }
+
+  /* Rooms */
+  .rooms-layout {
+    flex-direction: column !important;
+  }
+  .rooms-list-panel {
+    width: 100% !important;
+    min-width: unset !important;
+    max-height: 35vh;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .rooms-view-panel { min-height: 60vh; }
+
+  /* ─── 3. CARDS → SINGLE COLUMN ──────────────────────── */
+  .projects-cards { grid-template-columns: 1fr !important; }
+  .mc-cards-grid { grid-template-columns: 1fr !important; }
+  .mc-overview-grid { grid-template-columns: 1fr !important; }
+  .vault-cards-grid { grid-template-columns: 1fr !important; }
+  .capacity-grid { grid-template-columns: 1fr !important; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .mind-insights-stats { grid-template-columns: repeat(2, 1fr) !important; }
+  .acenter-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .records-fields-grid { grid-template-columns: 1fr !important; }
+  .project-overview-grid { grid-template-columns: 1fr !important; }
+  .briefing-stats-row { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* ─── 4. TABLES → HORIZONTAL SCROLL ─────────────────── */
+  .rec-table-container,
+  .records-table-wrap,
+  .sys-agents-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rec-table,
+  .records-table,
+  .sys-table {
+    min-width: 600px;
+  }
+
+  /* ─── 5. AGENT STATUS BAR → HORIZONTAL SCROLL ──────── */
+  .agent-status-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 12px;
+  }
+  .agent-status-bar::-webkit-scrollbar { display: none; }
+  .agent-status-pill { flex-shrink: 0; }
+
+  /* ─── 6. QUICK STATS → 2x3 GRID ────────────────────── */
+  .quick-stats-row {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 8px 12px;
+    overflow-x: visible;
+  }
+  .quick-stat {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 6px 4px;
+    gap: 2px;
+  }
+  .quick-stat-value { font-size: 16px; }
+  .quick-stat-label { font-size: 10px; }
+
+  /* ─── 7. TOUCH-FRIENDLY ─────────────────────────────── */
+  /* Minimum 44px touch targets */
+  .nav-item,
+  .mobile-nav-item,
+  .mobile-menu-item,
+  .channel-item,
+  .inbox-card,
+  .tasks-card,
+  .rooms-list-item,
+  .mc-sb-item,
+  .acenter-agent-card,
+  .explore-result,
+  .mind-browse-note,
+  .vtl-item,
+  .records-row,
+  .rec-row,
+  .queue-card,
+  .proposal-card,
+  .stream-item {
+    min-height: 44px;
+  }
+
+  /* Buttons: min 44px touch target */
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-ghost,
+  .approve-btn,
+  .reject-btn,
+  .edit-btn,
+  .submit-btn,
+  .inbox-action-btn,
+  .proposal-action-btn,
+  .stream-action-btn,
+  .send-btn,
+  .rooms-send-btn,
+  .drawer-action-btn,
+  .quick-btn,
+  .mc-tab,
+  .records-tab,
+  .pipelines-tab,
+  .project-tab,
+  .acenter-tab,
+  .mind-tab-btn,
+  .rec-tab,
+  .filter-chip,
+  .stream-chip,
+  .chip,
+  .mind-pill,
+  .inbox-cat-tab {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Increase padding on interactive elements */
+  .chip, .mind-pill, .filter-chip, .stream-chip {
+    padding: 8px 14px !important;
+    font-size: 13px;
+  }
+  .inbox-cat-tab {
+    padding: 8px 12px;
+  }
+
+  /* Make hover-only actions always visible on mobile (tap works) */
+  .feed-actions,
+  .stream-item-actions,
+  .msg-actions-bar,
+  .task-card-agent-actions,
+  .inbox-card-actions {
+    opacity: 1 !important;
+    pointer-events: all !important;
+  }
+
+  /* ─── 8. OMNIBUS INPUT → FULL WIDTH ON MOBILE ──────── */
+  .topbar-center { display: none; }
+  /* Add omnibus to mobile as a search bar in topbar */
+  .hamburger { display: flex; }
+  .topbar-agents { display: none; }
+  .xp-badge { display: none; }
+  .cmd-k-btn { display: none; }
+
+  /* ─── 9. TOPBAR ADJUSTMENTS ─────────────────────────── */
+  #topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .page-title { font-size: 15px; }
+  .notif-count { font-size: 9px; }
+
+  /* ─── 10. VIEW HEADERS ──────────────────────────────── */
+  .view-header {
+    padding: 12px 14px !important;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .view-header h2 { font-size: 17px; }
+  .page-header {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .page-header h2 { font-size: 17px; }
+
+  /* ─── 11. MISSION CONTROL ───────────────────────────── */
+  .mc-layout { flex-direction: column !important; }
+  .mc-sidebar {
+    width: 100% !important;
+    min-width: unset !important;
+    max-height: 200px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .mc-detail { padding: 14px; }
+  .mc-back-btn { display: inline-flex !important; }
+  .mc-detail-title { font-size: 18px; }
+  .mc-ov-top { flex-direction: column; gap: 12px; }
+  .mc-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .mc-tab { white-space: nowrap; padding: 8px 12px; font-size: 12px; }
+
+  /* ─── 12. ROLES / AGENT CENTER ──────────────────────── */
+  .acenter-layout { flex-direction: column !important; }
+  .acenter-list {
+    width: 100% !important;
+    min-width: unset !important;
+    max-height: 180px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .acenter-list-items {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 8px;
+    padding: 8px;
+  }
+  .acenter-agent-card { min-width: 150px; flex-shrink: 0; }
+  .acenter-tab-content { padding: 14px; }
+  .acenter-tabs { overflow-x: auto; }
+  .acenter-tab { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
+
+  /* ─── 13. PIPELINES ─────────────────────────────────── */
+  .pipeline-stages {
+    flex-direction: column !important;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+  }
+  .pipeline-stage-col {
+    max-width: 100% !important;
+    min-width: unset !important;
+    width: 100%;
+  }
+
+  /* ─── 14. KANBAN BOARD ──────────────────────────────── */
+  .kanban-board {
+    flex-direction: column !important;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+  }
+  .kanban-col { 
+    flex: none !important; 
+    width: 100% !important; 
+  }
+
+  /* ─── 15. PLANS ─────────────────────────────────────── */
+  .plan-header-top { flex-direction: column; }
+  .plan-header-meta { align-items: flex-start; }
+  .plan-header-stats { flex-wrap: wrap; gap: 10px; }
+  .plan-detail-view { padding: 8px 12px 12px; }
+
+  /* ─── 16. PROPOSALS ─────────────────────────────────── */
+  .proposals-topbar { padding: 10px 12px; }
+  .proposals-title { font-size: 17px; }
+  .proposals-title-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .proposals-topbar-right { width: 100%; flex-wrap: wrap; }
+  .proposals-pipeline { flex-wrap: wrap; gap: 4px; padding: 8px 12px; }
+  .pipeline-stage { min-width: 60px; padding: 6px 10px; }
+  .pipeline-count { font-size: 14px; }
+  .proposals-main { padding: 10px 12px; }
+
+  /* ─── 17. COMMAND PALETTE ───────────────────────────── */
+  .cmd-palette { max-width: 95vw; margin: 0 8px; }
+  .overlay { padding-top: 40px; }
+  .command-view { padding: 16px 12px; }
+  .command-input { font-size: 16px !important; /* prevent iOS zoom */ }
+
+  /* ─── 18. PULSE / SYSTEM VIEW ───────────────────────── */
+  #view-pulse { padding: 10px 12px; gap: 10px; }
+  .sys-dashboard-header { grid-template-columns: 1fr 1fr !important; gap: 8px; }
+  .sys-card-value { font-size: 22px; }
+  .sys-services-grid { grid-template-columns: 1fr !important; }
+  .sys-pipeline-flow { flex-direction: column !important; }
+  .sys-pipe-arrow { transform: rotate(90deg); }
+  .sys-two-col { grid-template-columns: 1fr !important; }
+  .quick-actions { flex-wrap: wrap; gap: 6px; }
+  .quick-btn { 
+    flex: 1 1 calc(50% - 3px); 
+    min-width: 140px; 
+    min-height: 44px;
+    font-size: 12px; 
+    padding: 8px 10px; 
+  }
+
+  /* ─── 19. PULSE METRICS ─────────────────────────────── */
+  .pulse-metrics { grid-template-columns: repeat(3, 1fr) !important; gap: 6px; }
+  .metric-card { padding: 10px; }
+  .metric-value { font-size: 22px; }
+  .metric-label { font-size: 11px; }
+  .pulse-grid { grid-template-columns: 1fr !important; }
+
+  /* ─── 20. MIND VIEW ─────────────────────────────────── */
+  .mind-tab-btn { padding: 8px 12px; font-size: 12px; }
+  .mind-browse-layout { flex-direction: column !important; }
+  .mind-browse-tree-panel {
+    width: 100% !important;
+    min-width: unset !important;
+    max-height: 180px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .mind-reader-body-wrap { flex-direction: column !important; }
+  .mind-reader-sidebar {
+    width: 100% !important;
+    min-width: unset !important;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+  }
+  .mind-reader-header { padding: 14px 12px; }
+  .mind-reader-title { font-size: 18px; }
+  .mind-reader-body { padding: 14px 12px; }
+  .mind-graph-toolbar { flex-wrap: wrap; gap: 6px; }
+  .mind-search-bar { flex-wrap: wrap; }
+  .mind-search-input { width: 100%; }
+
+  /* ─── 21. RECORDS ───────────────────────────────────── */
+  .rec-toolbar { flex-direction: column; gap: 8px; }
+  .rec-toolbar-right { width: 100%; justify-content: flex-end; }
+  .rec-detail-panel { width: 100vw !important; max-width: 100vw !important; }
+  .rec-det-grid { grid-template-columns: 1fr !important; }
+  .rec-tab { padding: 8px 12px; font-size: 12px; }
+  .rec-tab-icon { display: none; }
+
+  /* ─── 22. BRIEFING ──────────────────────────────────── */
+  .briefing-document-wrap { padding: 16px 12px 40px; }
+  .briefing-document { font-size: 14px; }
+  .briefing-doc-greeting { font-size: 18px; }
+  .briefing-view-toolbar { padding: 10px 12px; }
+  .briefing-view-title { font-size: 17px; }
+  .briefing-stats-row { grid-template-columns: repeat(2, 1fr) !important; }
+  .briefing-svc-row { flex-direction: column; gap: 6px; }
+
+  /* ─── 23. DRAWERS → FULL WIDTH ──────────────────────── */
+  .agent-drawer { width: 100% !important; }
+  .ctx-panel { width: 100% !important; }
+  .plan-chat-panel { width: 100% !important; }
+  .rec-detail-panel { width: 100% !important; }
+  .notif-panel { 
+    right: 8px; 
+    left: 8px; 
+    width: auto; 
+  }
+
+  /* ─── 24. MODAL / OVERLAY ADJUSTMENTS ───────────────── */
+  .card-modal { max-width: 95vw; width: 95%; }
+  .briefing-modal { max-width: 95vw; width: 95%; }
+  .rooms-modal { max-width: 95vw; }
+  .project-modal { max-width: 95vw; }
+  .confirm-dialog { max-width: 95vw; }
+  .shortcut-card { max-width: 95vw; }
+  .tutorial-card { max-width: 95vw; padding: 20px 16px; }
+
+  /* ─── 25. TOASTS ────────────────────────────────────── */
+  .toast-container {
+    right: 8px;
+    left: 8px;
+    bottom: calc(var(--mobile-bar-h) + var(--safe-bottom) + 8px);
+  }
+  .toast { max-width: 100%; }
+
+  /* ─── 26. FAB BUTTONS ───────────────────────────────── */
+  .quick-actions-fab {
+    bottom: calc(var(--mobile-bar-h) + var(--safe-bottom) + 16px);
+    right: 16px;
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+  .quick-actions-menu {
+    bottom: calc(var(--mobile-bar-h) + var(--safe-bottom) + 72px);
+    right: 16px;
+  }
+  .agent-chat-fab {
+    bottom: calc(var(--mobile-bar-h) + var(--safe-bottom) + 72px);
+    right: 16px;
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+  .agent-chat-panel {
+    bottom: calc(var(--mobile-bar-h) + var(--safe-bottom) + 128px);
+    right: 8px;
+    left: 8px;
+    width: auto;
+    height: 55vh;
+  }
+
+  /* ─── 27. PREVENT HORIZONTAL OVERFLOW ───────────────── */
+  html, body, #app, #main, #views, .view {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  /* Ensure all content respects viewport */
+  .stream-list,
+  .feed-list,
+  .queue-list,
+  .proposals-main,
+  .schedule-content,
+  .explore-content,
+  .mind-insights-content,
+  .pipelines-body,
+  .projects-grid,
+  .mc-detail {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* ─── 28. DASHBOARD GRID ON MOBILE ──────────────────── */
+  .dash-grid { padding: 10px 12px; gap: 8px; }
+  .dash-agents { gap: 4px; }
+  .dash-agent { padding: 4px 8px; font-size: 11px; }
+  .dash-agent-task { display: none; }
+  .dash-metrics { gap: 6px; }
+  .dash-metric { min-width: 60px; padding: 6px 8px; }
+  .dash-metric-num { font-size: 16px; }
+  .dash-actions { flex-wrap: wrap; gap: 4px; }
+  .dash-action-btn { 
+    font-size: 11px; 
+    padding: 6px 10px;
+    min-height: 36px;
+  }
+
+  /* ─── 29. EXPLORE VIEW ──────────────────────────────── */
+  .explore-content { padding: 10px 12px; }
+  .explore-search-box { padding: 10px 12px; }
+  .explore-search-input { font-size: 15px; }
+
+  /* ─── 30. STREAM ITEMS ──────────────────────────────── */
+  .stream-item-header { padding: 8px 10px; flex-wrap: wrap; gap: 6px; }
+  .stream-item-agent { display: none; }
+  .stream-item-title { white-space: normal; font-size: 13px; }
+  .stream-item-actions { opacity: 1 !important; }
+  .stream-filter-chips { 
+    overflow-x: auto; 
+    flex-wrap: nowrap !important; 
+    -webkit-overflow-scrolling: touch;
+  }
+  .stream-chip { flex-shrink: 0; }
+  .stream-filter-bar { padding: 8px 12px; }
+  .stream-list { padding: 8px 10px; gap: 6px; }
+
+  /* ─── 31. PROJECTS DETAIL ───────────────────────────── */
+  .project-detail-title-row { flex-wrap: wrap; }
+  .project-detail-name { font-size: 18px; }
+  .project-detail-tabs { overflow-x: auto; }
+  .project-tab { white-space: nowrap; }
+
+  /* ─── 32. CONFIG VIEW ───────────────────────────────── */
+  #view-config { padding: 10px 12px; gap: 10px; }
+  .theme-options { flex-wrap: wrap; }
+
+  /* ─── 33. WORKFLOW PIPELINE (system page) ────────────── */
+  .workflow-pipeline { gap: 2px; }
+  .workflow-stage { padding: 6px 8px; min-width: 50px; }
+  .workflow-stage-count { font-size: 14px; }
+  .workflow-stage-icon { font-size: 16px; }
+  .workflow-arrow { font-size: 14px; }
+
+  /* ─── 34. HILL CHART ────────────────────────────────── */
+  .hill-chart-svg { max-height: 130px; }
+  .hill-chart-container { padding: 12px 12px 8px; }
+
+  /* ─── 35. BREADCRUMB BAR ────────────────────────────── */
+  .breadcrumb-bar { padding: 4px 12px; font-size: 11px; }
+
+  /* ─── 36. ENTITY LINKS ──────────────────────────────── */
+  /* Make entity links more tappable */
+  .entity-link { padding: 2px 0; }
+
+  /* ─── 37. SKELETON LOADING ──────────────────────────── */
+  .skeleton-card { padding: 10px 12px; }
+
+  /* ─── 38. MISC FONT SIZE ENFORCEMENT ────────────────── */
+  /* Already in existing mobile block, reinforcing here */
+  .feed-time, .feed-type-badge, .queue-priority-badge,
+  .cron-schedule, .hook-latency, .health-tokens,
+  .log-time, .log-agent, .log-level,
+  .vault-date, .vault-backlinks,
+  .session-task, .session-dur,
+  .channel-category-header,
+  .countdown-timer, .batch-count,
+  .error-time { font-size: 12px !important; }
+
+  /* ─── 39. KEYBOARD SHORTCUTS MODAL ──────────────────── */
+  .inbox-shortcuts-grid { grid-template-columns: 1fr; }
+  .shortcut-list { gap: 6px; }
+
+  /* ─── 40. SCROLLABLE TABS/CHIPS EVERYWHERE ──────────── */
+  .proposals-filter-chips,
+  .records-tabs,
+  .rec-tab-bar,
+  .pipelines-tabs,
+  .mc-tabs,
+  .project-detail-tabs,
+  .acenter-tabs,
+  .mind-tab-bar,
+  .inbox-category-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .proposals-filter-chips::-webkit-scrollbar,
+  .records-tabs::-webkit-scrollbar,
+  .rec-tab-bar::-webkit-scrollbar,
+  .pipelines-tabs::-webkit-scrollbar,
+  .mc-tabs::-webkit-scrollbar,
+  .project-detail-tabs::-webkit-scrollbar,
+  .acenter-tabs::-webkit-scrollbar,
+  .mind-tab-bar::-webkit-scrollbar,
+  .inbox-category-tabs::-webkit-scrollbar { display: none; }
+
+  /* ─── 41. MOBILE MENU DRAWER ITEMS ──────────────────── */
+  .mobile-menu-item {
+    min-height: 48px;
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+  .mobile-menu-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* ─── 42. CHAT INPUT iOS ZOOM PREVENTION ────────────── */
+  .message-input,
+  .rooms-input,
+  .agent-chat-input,
+  .plan-chat-input,
+  .thread-input,
+  .inbox-reply-input,
+  .inbox-search-input,
+  .mind-search-input,
+  .explore-search-input,
+  .rec-search,
+  .records-search,
+  .stream-search {
+    font-size: 16px !important; /* prevents iOS auto-zoom on input focus */
+  }
+
+  /* ─── 43. PROPOSALS EMPTY STATE ─────────────────────── */
+  .queue-empty { padding: 40px 16px; }
+  .queue-empty .empty-icon { font-size: 36px; }
+  .queue-empty .empty-title { font-size: 16px; }
+
+  /* ─── 44. CRON / COST SECTIONS ──────────────────────── */
+  .sys-cron-item { 
+    flex-wrap: wrap; 
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .sys-cron-left { flex-wrap: wrap; }
+  .sys-cost-bars { padding: 8px 12px; }
+
+  /* ─── 45. MISSION MILESTONE TRACK ───────────────────── */
+  .mc-milestone-markers { overflow-x: auto; }
+  .mc-milestone-label { font-size: 9px; max-width: 60px; }
+
+} /* end @media (max-width: 767px) */
+
+/* ═══════════════════════════════════════════════════════════
+   SMALL MOBILE: <400px (very narrow phones)
+═══════════════════════════════════════════════════════════ */
+@media (max-width: 400px) {
+  .quick-stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .quick-stat-value { font-size: 14px; }
+  .quick-stat-label { font-size: 9px; }
+
+  .pulse-metrics { grid-template-columns: repeat(2, 1fr) !important; }
+  .sys-dashboard-header { grid-template-columns: 1fr !important; }
+  
+  .mobile-label { font-size: 9px; }
+  .mobile-icon-svg { width: 20px; height: 20px; }
+  
+  .briefing-stats-row { grid-template-columns: 1fr !important; }
+  .mind-insights-stats { grid-template-columns: 1fr 1fr !important; }
+  
+  .page-title { font-size: 14px; }
+  #topbar { padding: 0 8px; }
 }

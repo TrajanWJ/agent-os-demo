@@ -47,8 +47,15 @@ function getTaskAgent(agentStr) {
 
 function getTaskPriority(task) {
   if (task.priority && TASK_PRIORITY_BADGES[task.priority]) return task.priority;
-  // Try to extract from various fields
-  const p = (task.priority || task._priority || '').toUpperCase();
+  // Try to extract from various fields — handle numeric priorities
+  const raw = task.priority ?? task._priority ?? '';
+  if (typeof raw === 'number') {
+    // Map numeric 0-4 to P0-P3 (clamp at P3)
+    const idx = Math.min(Math.max(raw, 0), 3);
+    const mapped = 'P' + idx;
+    return TASK_PRIORITY_BADGES[mapped] ? mapped : 'P3';
+  }
+  const p = String(raw).toUpperCase();
   if (p.startsWith('P') && TASK_PRIORITY_BADGES[p]) return p;
   return 'P3';
 }

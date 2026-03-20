@@ -3509,24 +3509,5 @@ async function submitOmnibus() {
   addXP(5, 'omnibus command');
 }
 
-// Keyboard shortcut: Cmd+K or / focuses omnibus
-document.addEventListener('keydown', e => {
-  // Cmd+K — open omnibus (override existing palette only if omnibus exists)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-    const omnibus = $('omnibus-input');
-    if (omnibus) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      omnibus.focus();
-      return;
-    }
-  }
-  // / focuses omnibus from anywhere (if not in input)
-  if (e.key === '/' && !paletteOpen && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-    const omnibus = $('omnibus-input');
-    if (omnibus) {
-      e.preventDefault();
-      omnibus.focus();
-    }
-  }
-});
+// Keyboard shortcut: ⌘K opens command palette (handled by global handler in ux.js)
+// / on feed page is handled by feed keydown handler above

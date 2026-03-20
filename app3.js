@@ -1,23 +1,93 @@
 /* Agent OS v5 — app3.js — Command Palette + Simulation + Init */
 'use strict';
 
-// COMMAND PALETTE (⌘K overlay)
+// COMMAND PALETTE (⌘K overlay) — Raycast-style launcher
 // ═══════════════════════════════════════════════════════════
 
 let paletteOpen = false;
 let paletteSelectedIdx = 0;
+let _paletteMode = 'search'; // search | action | agent | slash | task | vault
+
+// ── Quick action chips (shown when palette first opens) ──
+const PALETTE_QUICK_ACTIONS = [
+  { icon: '📬', label: 'Inbox', action: () => { nav('inbox'); closeCommandPalette(); } },
+  { icon: '🔍', label: 'Search Vault', action: () => { _setPaletteMode('vault'); } },
+  { icon: '✅', label: 'New Task', action: () => { nav('tasks'); closeCommandPalette(); toast('Create a new task', 'info'); } },
+  { icon: '📋', label: 'New Proposal', action: () => { if (typeof showNewProposalModal === 'function') showNewProposalModal(); closeCommandPalette(); } },
+  { icon: '⚡', label: 'Actions', action: () => { _setPaletteMode('action'); } },
+  { icon: '🤖', label: 'Agents', action: () => { _setPaletteMode('agent'); } },
+];
+
+function _setPaletteMode(mode) {
+  _paletteMode = mode;
+  const input = $('palette-input');
+  const prefix = $('palette-prefix');
+  const modeIndicator = $('palette-mode-indicator');
+  switch (mode) {
+    case 'action':
+      input.value = '> ';
+      prefix.textContent = '⚡';
+      if (modeIndicator) modeIndicator.textContent = 'Actions';
+      input.focus();
+      input.setSelectionRange(2, 2);
+      renderPaletteResults('> ');
+      break;
+    case 'agent':
+      input.value = '@ ';
+      prefix.textContent = '🤖';
+      if (modeIndicator) modeIndicator.textContent = 'Agents';
+      input.focus();
+      input.setSelectionRange(2, 2);
+      renderPaletteResults('@ ');
+      break;
+    case 'slash':
+      input.value = '/ ';
+      prefix.textContent = '⌨️';
+      if (modeIndicator) modeIndicator.textContent = 'Commands';
+      input.focus();
+      input.setSelectionRange(2, 2);
+      renderPaletteResults('/ ');
+      break;
+    case 'task':
+      input.value = 'task: ';
+      prefix.textContent = '✅';
+      if (modeIndicator) modeIndicator.textContent = 'Tasks';
+      input.focus();
+      input.setSelectionRange(6, 6);
+      renderPaletteResults('task: ');
+      break;
+    case 'vault':
+      input.value = 'vault: ';
+      prefix.textContent = '📚';
+      if (modeIndicator) modeIndicator.textContent = 'Vault';
+      input.focus();
+      input.setSelectionRange(7, 7);
+      renderPaletteResults('vault: ');
+      break;
+    default:
+      prefix.textContent = '🔍';
+      if (modeIndicator) modeIndicator.textContent = '';
+      break;
+  }
+}
 
 function openCommandPalette() {
   paletteOpen = true;
+  _paletteMode = 'search';
   $('cmd-palette-overlay').classList.remove('hidden');
   const input = $('palette-input');
   input.value = '';
   input.focus();
+  const prefix = $('palette-prefix');
+  if (prefix) prefix.textContent = '🔍';
+  const mi = $('palette-mode-indicator');
+  if (mi) mi.textContent = '';
   renderPaletteResults('');
 }
 
 function closeCommandPalette() {
   paletteOpen = false;
+  _paletteMode = 'search';
   $('cmd-palette-overlay').classList.add('hidden');
 }
 
@@ -26,83 +96,211 @@ function closeCmdPaletteIfOutside(e) {
 }
 
 function handlePaletteInput(val) {
-  // Update prefix icon
+  // Update prefix icon based on mode prefix
   const prefix = $('palette-prefix');
-  if (val.startsWith('>')) prefix.textContent = '⚡';
-  else if (val.startsWith('@')) prefix.textContent = '🤖';
-  else if (val.startsWith('/')) prefix.textContent = '⌨️';
-  else prefix.textContent = '🔍';
+  const mi = $('palette-mode-indicator');
+  if (val.startsWith('>')) { prefix.textContent = '⚡'; if (mi) mi.textContent = 'Actions'; _paletteMode = 'action'; }
+  else if (val.startsWith('@')) { prefix.textContent = '🤖'; if (mi) mi.textContent = 'Agents'; _paletteMode = 'agent'; }
+  else if (val.startsWith('/')) { prefix.textContent = '⌨️'; if (mi) mi.textContent = 'Commands'; _paletteMode = 'slash'; }
+  else if (val.toLowerCase().startsWith('task:')) { prefix.textContent = '✅'; if (mi) mi.textContent = 'Tasks'; _paletteMode = 'task'; }
+  else if (val.toLowerCase().startsWith('vault:')) { prefix.textContent = '📚'; if (mi) mi.textContent = 'Vault'; _paletteMode = 'vault'; }
+  else { prefix.textContent = '🔍'; if (mi) mi.textContent = ''; _paletteMode = 'search'; }
 
   renderPaletteResults(val);
+}
+
+// ── All available actions for ">" mode ──
+function _getPaletteActions() {
+  return [
+    // Navigation
+    { icon: '📡', title: 'Go to Stream', desc: 'Navigate', sc: '1', cat: 'nav', action: () => { nav('feed'); closeCommandPalette(); } },
+    { icon: '📬', title: 'Go to Inbox', desc: 'Navigate', sc: '2', cat: 'nav', action: () => { nav('inbox'); closeCommandPalette(); } },
+    { icon: '💬', title: 'Go to Talk', desc: 'Navigate', sc: '3', cat: 'nav', action: () => { nav('talk'); closeCommandPalette(); } },
+    { icon: '✅', title: 'Go to Tasks', desc: 'Navigate', sc: '4', cat: 'nav', action: () => { nav('tasks'); closeCommandPalette(); } },
+    { icon: '🧠', title: 'Go to Mind', desc: 'Navigate', sc: '5', cat: 'nav', action: () => { nav('mind'); closeCommandPalette(); } },
+    { icon: '⚙️', title: 'Go to System', desc: 'Navigate', sc: '6', cat: 'nav', action: () => { nav('pulse'); closeCommandPalette(); } },
+    { icon: '📋', title: 'Go to Proposals', desc: 'Navigate', cat: 'nav', action: () => { nav('queue'); closeCommandPalette(); } },
+    { icon: '🎯', title: 'Go to Missions', desc: 'Navigate', cat: 'nav', action: () => { nav('missions'); closeCommandPalette(); } },
+    { icon: '📁', title: 'Go to Projects', desc: 'Navigate', cat: 'nav', action: () => { nav('projects'); closeCommandPalette(); } },
+    { icon: '🔀', title: 'Go to Pipelines', desc: 'Navigate', cat: 'nav', action: () => { nav('pipelines'); closeCommandPalette(); } },
+    { icon: '🏠', title: 'Go to Rooms', desc: 'Navigate', cat: 'nav', action: () => { nav('rooms'); closeCommandPalette(); } },
+    { icon: '📜', title: 'Go to Briefing', desc: 'Navigate', cat: 'nav', action: () => { nav('briefing'); closeCommandPalette(); } },
+    { icon: '🛡️', title: 'Go to Roles', desc: 'Navigate', cat: 'nav', action: () => { nav('roles'); closeCommandPalette(); } },
+    { icon: '📊', title: 'Go to Records', desc: 'Navigate', cat: 'nav', action: () => { nav('records'); closeCommandPalette(); } },
+    // Create
+    { icon: '✅', title: 'New Task', desc: 'Create', cat: 'create', action: () => { nav('tasks'); closeCommandPalette(); toast('➕ Create a new task', 'info'); } },
+    { icon: '🎯', title: 'New Mission', desc: 'Create', cat: 'create', action: () => { nav('missions'); closeCommandPalette(); toast('➕ Create a new mission', 'info'); } },
+    { icon: '📁', title: 'New Project', desc: 'Create', cat: 'create', action: () => { nav('projects'); closeCommandPalette(); toast('➕ Create a new project', 'info'); } },
+    { icon: '📋', title: 'New Proposal', desc: 'Create', cat: 'create', action: () => { if (typeof showNewProposalModal === 'function') showNewProposalModal(); closeCommandPalette(); } },
+    // System actions
+    { icon: '🔄', title: 'Restart Gateway', desc: 'System', cat: 'system', action: () => { quickAction('restart-gateway'); closeCommandPalette(); } },
+    { icon: '📚', title: 'Reindex Vault', desc: 'System', cat: 'system', action: () => { quickAction('reindex'); closeCommandPalette(); } },
+    { icon: '🩺', title: 'Health Check', desc: 'System', cat: 'system', action: () => { quickAction('health-check'); closeCommandPalette(); } },
+    { icon: '🗑️', title: 'Clear Inbox', desc: 'System', cat: 'system', action: () => { toast('Inbox cleared', 'success'); closeCommandPalette(); } },
+    { icon: '📊', title: 'Export Records', desc: 'System — CSV export', cat: 'system', action: () => { toast('Exporting records as CSV...', 'info'); closeCommandPalette(); } },
+  ];
 }
 
 function renderPaletteResults(val) {
   const container = $('palette-results');
   let results = [];
-  const q = val.toLowerCase().replace(/^[>@/]\s*/, '');
+  const q = val.toLowerCase().replace(/^[>@/]\s*/, '').replace(/^(task|vault):\s*/i, '').trim();
 
   if (val.startsWith('>')) {
-    // Commands
-    const cmds = [
-      { icon: '🏠', title: 'Go to Feed', sc: '1', action: () => { nav('feed'); closeCommandPalette(); } },
-      { icon: '❓', title: 'Go to Queue', sc: '2', action: () => { nav('queue'); closeCommandPalette(); } },
-      { icon: '💬', title: 'Go to Talk', sc: '3', action: () => { nav('talk'); closeCommandPalette(); } },
-      { icon: '🧠', title: 'Go to Mind', sc: '4', action: () => { nav('mind'); closeCommandPalette(); } },
-      { icon: '⚡', title: 'Go to Pulse', sc: '5', action: () => { nav('pulse'); closeCommandPalette(); } },
-      { icon: '🔄', title: 'Restart Gateway', action: () => { quickAction('restart-gateway'); closeCommandPalette(); } },
-      { icon: '📚', title: 'Reindex Vault', action: () => { quickAction('reindex'); closeCommandPalette(); } },
-      { icon: '🩺', title: 'Health Check', action: () => { quickAction('health-check'); closeCommandPalette(); } },
-    ];
-    results = cmds.filter(c => !q || c.title.toLowerCase().includes(q));
+    // Actions mode — show all commands
+    const actions = _getPaletteActions();
+    results = actions.filter(c => !q || c.title.toLowerCase().includes(q) || (c.desc && c.desc.toLowerCase().includes(q)));
   } else if (val.startsWith('@')) {
-    results = AGENTS.filter(a => !q || a.name.toLowerCase().includes(q))
+    // Agent mode
+    results = (typeof AGENTS !== 'undefined' ? AGENTS : []).filter(a => !q || a.name.toLowerCase().includes(q))
       .map(a => ({
-        icon: a.emoji,
-        title: `Talk to ${a.name}`,
-        desc: `${a.role} · ${a.status}`,
-        action: () => { nav('talk'); setTimeout(() => selectDM(a.id), 200); closeCommandPalette(); },
+        icon: a.emoji, title: a.name, desc: `${a.role} · ${a.status}`,
+        action: () => {
+          if (typeof openAgentDrawer === 'function') openAgentDrawer(a.id);
+          else { nav('talk'); setTimeout(() => { if (typeof selectDM === 'function') selectDM(a.id); }, 200); }
+          closeCommandPalette();
+        },
       }));
   } else if (val.startsWith('/')) {
-    results = SLASH_COMMANDS.filter(c => !q || c.cmd.includes(q))
+    // Slash commands
+    results = (typeof SLASH_COMMANDS !== 'undefined' ? SLASH_COMMANDS : []).filter(c => !q || c.cmd.includes(q))
       .map(c => ({
         icon: '⌨️', title: c.cmd, desc: c.desc,
         action: () => { toast(`${c.usage}`, 'info', 4000); closeCommandPalette(); },
       }));
+  } else if (val.toLowerCase().startsWith('task:')) {
+    // Task search
+    if (typeof TASKS_DATA !== 'undefined') {
+      results = TASKS_DATA.filter(t => !q || t.title.toLowerCase().includes(q)).slice(0, 12)
+        .map(t => ({
+          icon: t.status === 'done' ? '✅' : t.status === 'active' ? '🔵' : '⬜',
+          title: t.title, desc: `${t.status} · ${t.agent || 'unassigned'}`,
+          action: () => { nav('tasks'); closeCommandPalette(); },
+        }));
+    }
+    if (results.length === 0 && q) {
+      results.push({ icon: '✅', title: `Create task: "${q}"`, desc: 'New task', action: () => { nav('tasks'); closeCommandPalette(); toast(`➕ Task: ${q}`, 'info'); } });
+    }
+  } else if (val.toLowerCase().startsWith('vault:')) {
+    // Vault search
+    if (typeof VAULT_NOTES !== 'undefined') {
+      results = VAULT_NOTES.filter(n => !q || n.title.toLowerCase().includes(q)).slice(0, 12)
+        .map(n => ({
+          icon: '📚', title: n.title, desc: n.type || 'Note',
+          action: () => { nav('mind'); if (typeof openVaultNote === 'function') openVaultNote(n.title); else if (typeof setMindTab === 'function') setMindTab('search'); closeCommandPalette(); },
+        }));
+    }
   } else {
-    // Default: search everything
-    // Pages
-    Object.entries(PAGE_TITLES).forEach(([k, v]) => {
-      if (!q || v.toLowerCase().includes(q)) {
-        results.push({ icon: '📄', title: v, desc: `Navigate to ${v}`, sc: '', action: () => { nav(k); closeCommandPalette(); } });
+    // ── Default: show quick actions + search everything ──
+    if (!q) {
+      // Show quick action chips as first "row", then frequent pages
+      container.innerHTML = _renderQuickChips() + _renderDefaultResults();
+      paletteSelectedIdx = -1;
+      window.paletteResults = [];
+      return;
+    }
+
+    // Search pages
+    const dedupPages = new Set();
+    Object.entries(typeof PAGE_TITLES !== 'undefined' ? PAGE_TITLES : {}).forEach(([k, v]) => {
+      if (dedupPages.has(v)) return;
+      if (v.toLowerCase().includes(q) || k.toLowerCase().includes(q)) {
+        dedupPages.add(v);
+        results.push({ icon: '📄', title: v, desc: 'Page', sc: '', action: () => { nav(k); closeCommandPalette(); } });
       }
     });
-    // Agents
-    if (q) {
-      AGENTS.forEach(a => {
-        if (a.name.toLowerCase().includes(q) || a.id.includes(q)) {
-          results.push({ icon: a.emoji, title: a.name, desc: a.role, action: () => { nav('talk'); setTimeout(() => selectDM(a.id), 200); closeCommandPalette(); } });
-        }
-      });
-      // Vault notes
-      VAULT_NOTES.forEach(n => {
-        if (n.title.toLowerCase().includes(q)) {
-          results.push({ icon: '📚', title: n.title, desc: n.type, action: () => { nav('mind'); setMindMode('cards'); closeCommandPalette(); } });
+    // Search agents
+    (typeof AGENTS !== 'undefined' ? AGENTS : []).forEach(a => {
+      if (a.name.toLowerCase().includes(q) || a.id.includes(q)) {
+        results.push({
+          icon: a.emoji, title: a.name, desc: a.role,
+          action: () => {
+            if (typeof openAgentDrawer === 'function') openAgentDrawer(a.id);
+            else { nav('talk'); setTimeout(() => { if (typeof selectDM === 'function') selectDM(a.id); }, 200); }
+            closeCommandPalette();
+          },
+        });
+      }
+    });
+    // Search vault notes
+    (typeof VAULT_NOTES !== 'undefined' ? VAULT_NOTES : []).forEach(n => {
+      if (n.title.toLowerCase().includes(q)) {
+        results.push({ icon: '📚', title: n.title, desc: n.type || 'Vault note', action: () => { nav('mind'); if (typeof setMindTab === 'function') setMindTab('search'); closeCommandPalette(); } });
+      }
+    });
+    // Search tasks
+    if (typeof TASKS_DATA !== 'undefined') {
+      TASKS_DATA.forEach(t => {
+        if (t.title.toLowerCase().includes(q)) {
+          results.push({ icon: '✅', title: t.title, desc: `Task · ${t.status}`, action: () => { nav('tasks'); closeCommandPalette(); } });
         }
       });
     }
+    // Search actions
+    _getPaletteActions().forEach(a => {
+      if (a.title.toLowerCase().includes(q)) {
+        results.push(a);
+      }
+    });
   }
 
   paletteSelectedIdx = 0;
   window.paletteResults = results;
 
-  container.innerHTML = results.slice(0, 12).map((r, i) => `
-    <div class="palette-item${i === 0 ? ' selected' : ''}" onclick="window.paletteResults[${i}]?.action?.()" data-idx="${i}">
+  if (results.length === 0 && q) {
+    container.innerHTML = `<div class="palette-empty"><span class="palette-empty-icon">🔍</span><span>No results for "<strong>${_escHTML(q)}</strong>"</span><div class="palette-empty-hint">Try <kbd>></kbd> for actions, <kbd>@</kbd> for agents, <kbd>vault:</kbd> for vault</div></div>`;
+    return;
+  }
+
+  container.innerHTML = results.slice(0, 14).map((r, i) => `
+    <div class="palette-item${i === 0 ? ' selected' : ''}" onclick="window.paletteResults[${i}]?.action?.()" data-idx="${i}" onmouseenter="_paletteHover(${i})">
       <span class="palette-item-icon">${r.icon}</span>
       <div class="palette-item-text">
         <div class="palette-item-title">${r.title}</div>
         ${r.desc ? `<div class="palette-item-desc">${r.desc}</div>` : ''}
       </div>
-      ${r.sc ? `<span class="palette-item-shortcut">${r.sc}</span>` : ''}
+      ${r.sc ? `<kbd class="palette-item-shortcut">${r.sc}</kbd>` : ''}
+    </div>
+  `).join('');
+}
+
+function _paletteHover(idx) {
+  paletteSelectedIdx = idx;
+  $$('.palette-item').forEach((it, i) => it.classList.toggle('selected', i === idx));
+}
+
+function _escHTML(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function _renderQuickChips() {
+  return `<div class="palette-quick-actions">${PALETTE_QUICK_ACTIONS.map((qa, i) =>
+    `<button class="palette-chip" onclick="PALETTE_QUICK_ACTIONS[${i}].action()" title="${qa.label}"><span class="palette-chip-icon">${qa.icon}</span><span class="palette-chip-label">${qa.label}</span></button>`
+  ).join('')}</div>`;
+}
+
+function _renderDefaultResults() {
+  // Show recently-used / high-value destinations
+  const defaults = [
+    { icon: '📡', title: 'Stream', desc: 'Live activity feed', sc: '1', action: () => { nav('feed'); closeCommandPalette(); } },
+    { icon: '📬', title: 'Inbox', desc: 'Items needing attention', sc: '2', action: () => { nav('inbox'); closeCommandPalette(); } },
+    { icon: '💬', title: 'Talk', desc: 'Discord channels', sc: '3', action: () => { nav('talk'); closeCommandPalette(); } },
+    { icon: '✅', title: 'Tasks', desc: 'Task management', sc: '4', action: () => { nav('tasks'); closeCommandPalette(); } },
+    { icon: '🧠', title: 'Mind', desc: 'Knowledge vault', sc: '5', action: () => { nav('mind'); closeCommandPalette(); } },
+    { icon: '⚙️', title: 'System', desc: 'System health & config', sc: '6', action: () => { nav('pulse'); closeCommandPalette(); } },
+  ];
+  window.paletteResults = defaults;
+  paletteSelectedIdx = -1;
+  return `<div class="palette-section-label">Pages</div>` + defaults.map((r, i) => `
+    <div class="palette-item" onclick="window.paletteResults[${i}]?.action?.()" data-idx="${i}" onmouseenter="_paletteHover(${i})">
+      <span class="palette-item-icon">${r.icon}</span>
+      <div class="palette-item-text">
+        <div class="palette-item-title">${r.title}</div>
+        <div class="palette-item-desc">${r.desc}</div>
+      </div>
+      <kbd class="palette-item-shortcut">${r.sc}</kbd>
     </div>
   `).join('');
 }
@@ -113,10 +311,12 @@ function handlePaletteKey(e) {
     e.preventDefault();
     paletteSelectedIdx = Math.min(paletteSelectedIdx + 1, items.length - 1);
     items.forEach((it, i) => it.classList.toggle('selected', i === paletteSelectedIdx));
+    if (items[paletteSelectedIdx]) items[paletteSelectedIdx].scrollIntoView({ block: 'nearest' });
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     paletteSelectedIdx = Math.max(paletteSelectedIdx - 1, 0);
     items.forEach((it, i) => it.classList.toggle('selected', i === paletteSelectedIdx));
+    if (items[paletteSelectedIdx]) items[paletteSelectedIdx].scrollIntoView({ block: 'nearest' });
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (window.paletteResults && window.paletteResults[paletteSelectedIdx]?.action) {
@@ -124,17 +324,36 @@ function handlePaletteKey(e) {
     }
   } else if (e.key === 'Escape') {
     closeCommandPalette();
+  } else if (e.key === 'Backspace') {
+    // If input is empty and we're in a mode, go back to search mode
+    const input = $('palette-input');
+    if (input && input.value.length <= 1 && _paletteMode !== 'search') {
+      _paletteMode = 'search';
+      input.value = '';
+      const prefix = $('palette-prefix');
+      if (prefix) prefix.textContent = '🔍';
+      const mi = $('palette-mode-indicator');
+      if (mi) mi.textContent = '';
+      renderPaletteResults('');
+    }
+  } else if (e.key === 'Tab') {
+    // Tab cycles through modes
+    e.preventDefault();
+    const modes = ['search', 'action', 'agent', 'vault'];
+    const idx = modes.indexOf(_paletteMode);
+    const next = modes[(idx + 1) % modes.length];
+    _setPaletteMode(next);
   }
 }
 
-// ⌘K keyboard shortcut
+// ⌘K keyboard shortcut — handled by global handler in ux.js now
+// Keep this as a backup for edge cases
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault();
     if (paletteOpen) closeCommandPalette();
     else openCommandPalette();
   }
-  if (e.key === 'Escape' && paletteOpen) closeCommandPalette();
 });
 
 // ═══════════════════════════════════════════════════════════
