@@ -336,6 +336,79 @@ function mapEventType(type) {
   return map[type] || 'activity';
 }
 
+// ── Inbox API (local) ─────────────────────────────────────
+
+// In-memory inbox store (seed with some items)
+const inboxStore = [
+  { id: 'inb_1', agent: 'researcher', category: 'review', priority: 'normal', unread: true, subject: 'Competitive Analysis Report', preview: 'Phase 2 complete', body: 'Report ready.', time: new Date().toISOString(), thread: [] },
+  { id: 'inb_2', agent: 'coder', category: 'proposals', priority: 'urgent', unread: true, subject: 'Proposal: Async dispatch', preview: 'Sync dispatch causing backups', body: 'Proposal details.', time: new Date().toISOString(), thread: [] },
+];
+
+app.get('/api/inbox', (req, res) => {
+  res.json(inboxStore);
+});
+
+app.post('/api/inbox/:id/action', (req, res) => {
+  const { id } = req.params;
+  const { action, value } = req.body;
+  console.log(`[Inbox Action] ${id}: ${action}${value ? ' — ' + value : ''}`);
+  
+  if (action === 'archive' || action === 'approve' || action === 'reject') {
+    const idx = inboxStore.findIndex(i => i.id === id);
+    if (idx !== -1) inboxStore.splice(idx, 1);
+  }
+
+  res.json({ ok: true, id, action, timestamp: new Date().toISOString() });
+});
+
+// ── Rooms API (local) ─────────────────────────────────────
+
+const roomStore = [
+  { id: 'room_build', name: 'Build Room', agents: ['coder', 'ops', 'righthand'], purpose: 'Sprint coordination', messages: [] },
+  { id: 'room_research', name: 'Research Room', agents: ['researcher', 'devil'], purpose: 'Competitive analysis', messages: [] },
+];
+
+app.get('/api/rooms', (req, res) => {
+  res.json(roomStore.map(r => ({ ...r, messages: undefined, messageCount: r.messages.length })));
+});
+
+app.post('/api/rooms', (req, res) => {
+  const { name, agents, purpose } = req.body;
+  const room = { id: 'room_' + Date.now(), name, agents: agents || [], purpose: purpose || '', messages: [] };
+  roomStore.push(room);
+  res.json({ ok: true, room: { ...room, messages: undefined } });
+});
+
+app.get('/api/rooms/:id/messages', (req, res) => {
+  const room = roomStore.find(r => r.id === req.params.id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  res.json(room.messages);
+});
+
+app.post('/api/rooms/:id/messages', (req, res) => {
+  const room = roomStore.find(r => r.id === req.params.id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  const { content, sender } = req.body;
+  const msg = { id: 'rmsg_' + Date.now(), sender: sender || 'user', content, time: new Date().toISOString() };
+  room.messages.push(msg);
+
+  // Simulate agent response
+  const agentResponses = [
+    'Got it, working on it.', 'Understood.', 'I\'ll factor that in.', 'On it.',
+    'Acknowledged.', 'Good point.', 'Noted — adjusting.', 'Will do.',
+  ];
+  const respondingAgent = room.agents[Math.floor(Math.random() * room.agents.length)];
+  const agentMsg = {
+    id: 'rmsg_' + (Date.now() + 1),
+    sender: respondingAgent,
+    content: agentResponses[Math.floor(Math.random() * agentResponses.length)],
+    time: new Date(Date.now() + 1500).toISOString(),
+  };
+  room.messages.push(agentMsg);
+
+  res.json({ ok: true, userMessage: msg, agentResponse: agentMsg });
+});
+
 // Proxy /api/* to bridge (after local endpoints)
 app.use('/api', createProxyMiddleware({
   target: BRIDGE,
