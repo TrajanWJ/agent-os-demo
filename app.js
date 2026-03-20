@@ -357,32 +357,364 @@ function prependFeedCard(event) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// QUEUE PAGE
+// QUEUE PAGE — Proposals "Daily Brief" Redesign
 // ═══════════════════════════════════════════════════════════
 
 let queueCards = QUEUE_QUESTIONS.map(q => ({ ...q, remaining: q.ttl - q.elapsed }));
 let qStats = { answered: 0, autoresolved: 0, expired: 0 };
 let qTimerInterval = null;
+let _proposalFilter = 'all';
+let _lastProposalSync = Date.now();
+
+const PRIORITY_COLORS = { P0: '#f38ba8', P1: '#fab387', P2: '#89b4fa', P3: '#6c7086' };
+const SOURCE_AGENTS = {
+  researcher: { emoji: '🔬', name: 'Researcher', color: '#89b4fa' },
+  coder: { emoji: '💻', name: 'Coder', color: '#a6e3a1' },
+  ops: { emoji: '⚙️', name: 'Ops', color: '#fab387' },
+  righthand: { emoji: '🤝', name: 'Right Hand', color: '#E8A838' },
+  utility: { emoji: '🔧', name: 'Utility', color: '#cba6f7' },
+  orchestrator: { emoji: '🎯', name: 'Orchestrator', color: '#f5c2e7' },
+  unknown: { emoji: '🤖', name: 'Agent', color: '#6c7086' },
+};
+
+function getSourceAgent(source) {
+  if (!source) return SOURCE_AGENTS.unknown;
+  const key = source.toLowerCase().replace(/[^a-z]/g, '');
+  return SOURCE_AGENTS[key] || ga(source) || SOURCE_AGENTS.unknown;
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function getConfidenceColor(c) {
+  if (c > 0.8) return '#a6e3a1';
+  if (c > 0.6) return '#f9e2af';
+  return '#f38ba8';
+}
+
+function getNormalizedPriority(q) {
+  return q._priority || (q.priority === 'urgent' ? 'P0' : q.priority === 'normal' ? 'P2' : 'P3');
+}
+
+function filterProposals(filter) {
+  _proposalFilter = filter;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === filter));
+  renderQueue();
+}
+
+function applyProposalFilter(cards) {
+  if (_proposalFilter === 'all') return cards;
+  if (_proposalFilter === 'high') return cards.filter(q => { const p = getNormalizedPriority(q); return p === 'P0' || p === 'P1'; });
+  if (_proposalFilter === 'review') return cards.filter(q => q._triageVerdict === 'escalate' || q._status === 'pending');
+  if (_proposalFilter === 'auto') return cards.filter(q => q._triageVerdict === 'auto-execute' || q._status === 'auto-approved');
+  if (_proposalFilter === 'deferred') return cards.filter(q => q._status === 'deferred');
+  return cards;
+}
 
 function renderQueue() {
-  updateQueueStats();
-  const list = $('queue-list');
-  list.innerHTML = '';
+  _lastProposalSync = Date.now();
+
+  // Sync indicator
+  const syncEl = document.getElementById('proposals-sync-indicator');
+  if (syncEl) syncEl.textContent = 'Synced just now';
 
   if (queueCards.length === 0) {
-    $('queue-empty').classList.remove('hidden');
+    document.getElementById('queue-empty')?.classList.remove('hidden');
+    document.getElementById('proposals-needs-decision')?.classList.add('hidden');
+    document.getElementById('proposals-resolved-section')?.classList.add('hidden');
+    document.getElementById('proposals-stats-section')?.classList.add('hidden');
+    document.getElementById('proposals-pipeline')?.classList.add('hidden');
     return;
   }
-  $('queue-empty').classList.add('hidden');
+  document.getElementById('queue-empty')?.classList.add('hidden');
+  document.getElementById('proposals-needs-decision')?.classList.remove('hidden');
+  document.getElementById('proposals-resolved-section')?.classList.remove('hidden');
+  document.getElementById('proposals-stats-section')?.classList.remove('hidden');
+  document.getElementById('proposals-pipeline')?.classList.remove('hidden');
 
-  queueCards.forEach(q => {
-    list.appendChild(makeQueueCard(q));
+  // Count badge
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const newToday = queueCards.filter(q => q._createdAt && new Date(q._createdAt) >= todayStart).length;
+  const countBadge = document.getElementById('proposals-count-badge');
+  if (countBadge) countBadge.textContent = newToday > 0 ? `${newToday} new today` : `${queueCards.length} total`;
+
+  // Pipeline
+  renderProposalPipeline(queueCards);
+
+  // Split cards
+  const pending = queueCards.filter(q => q._status === 'pending' || (!q._status || q._status === 'pending'));
+  const resolved = queueCards.filter(q => q._status === 'approved' || q._status === 'rejected' || q._status === 'auto-approved' || q._status === 'dismissed');
+  const filtered = applyProposalFilter(pending);
+
+  // Section 1: Needs Decision
+  renderNeedsDecision(filtered);
+
+  // Section 2: Recently Resolved
+  renderRecentlyResolved(resolved);
+
+  // Section 3: Stats
+  renderProposalStats(queueCards);
+
+  // Update nav badges
+  const count = pending.length;
+  const badge = document.getElementById('queue-badge');
+  if (badge) { badge.textContent = count || ''; badge.style.display = count > 0 ? '' : 'none'; }
+  const mobileBadge = document.getElementById('queue-mobile-badge');
+  if (mobileBadge) mobileBadge.textContent = count || '';
+
+  // Start sync indicator timer
+  if (!qTimerInterval) {
+    qTimerInterval = setInterval(tickSyncIndicator, 10000);
+  }
+}
+
+function renderProposalPipeline(cards) {
+  const el = document.getElementById('proposals-pipeline');
+  if (!el) return;
+
+  const total = cards.length;
+  const triaged = cards.filter(q => q._triageVerdict).length;
+  const autoApproved = cards.filter(q => q._triageVerdict === 'auto-execute' || q._status === 'auto-approved').length;
+  const needsDecision = cards.filter(q => q._status === 'pending' && q._triageVerdict !== 'auto-execute').length;
+  const deferred = cards.filter(q => q._status === 'deferred').length;
+
+  const stages = [
+    { label: 'Generated', count: total, color: '#cba6f7', filter: 'all' },
+    { label: 'Triaged', count: triaged, color: '#89b4fa', filter: 'all' },
+    { label: 'Auto-Approved', count: autoApproved, color: '#a6e3a1', filter: 'auto' },
+    { label: 'Needs Decision', count: needsDecision, color: '#fab387', filter: 'review' },
+    { label: 'Deferred', count: deferred, color: '#6c7086', filter: 'deferred' },
+  ];
+
+  el.innerHTML = stages.map((s, i) =>
+    `<button class="pipeline-stage" style="--stage-color:${s.color}" onclick="filterProposals('${s.filter}')">` +
+    `<span class="pipeline-count">${s.count}</span>` +
+    `<span class="pipeline-label">${s.label}</span>` +
+    `</button>` +
+    (i < stages.length - 1 ? '<span class="pipeline-arrow">→</span>' : '')
+  ).join('');
+}
+
+function renderNeedsDecision(cards) {
+  const container = document.getElementById('proposals-cards-pending');
+  if (!container) return;
+
+  // Sort by priority: P0 first, then P1, P2, P3
+  const sorted = [...cards].sort((a, b) => {
+    const pa = parseInt((getNormalizedPriority(a) || 'P3').replace('P', ''));
+    const pb = parseInt((getNormalizedPriority(b) || 'P3').replace('P', ''));
+    return pa - pb;
   });
 
-  // Start countdown
-  if (!qTimerInterval) {
-    qTimerInterval = setInterval(tickQueue, 1000);
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="proposals-empty-hint">No proposals needing decisions right now</div>';
+    const batchBtn = document.getElementById('batch-approve-safe');
+    if (batchBtn) batchBtn.style.display = 'none';
+    return;
   }
+
+  // Show/hide batch approve button
+  const safeCount = sorted.filter(q => (q._confidence || 0) > 0.85).length;
+  const batchBtn = document.getElementById('batch-approve-safe');
+  if (batchBtn) {
+    batchBtn.style.display = safeCount > 0 ? '' : 'none';
+    batchBtn.textContent = `✅ Approve all safe (${safeCount})`;
+  }
+
+  container.innerHTML = sorted.map(q => makeProposalCard(q)).join('');
+}
+
+function makeProposalCard(q) {
+  const priority = getNormalizedPriority(q);
+  const priorityColor = PRIORITY_COLORS[priority] || PRIORITY_COLORS.P3;
+  const source = getSourceAgent(q._source || q.agent);
+  const confidence = q._confidence || (Math.random() * 0.4 + 0.5); // fallback for demo
+  const confColor = getConfidenceColor(confidence);
+  const confWidth = Math.round(confidence * 100);
+  const proposalType = q._type || 'idea';
+  const typeEmojis = { research: '🔬', dispatch: '🚀', improvement: '⚡', idea: '💡', build: '🔨', question: '❓' };
+  const created = timeAgo(q._createdAt);
+  const linkedMission = q._linkedMission || q._linkedPlan || null;
+
+  return `
+    <div class="proposal-card" id="qcard-${q.id}" style="--priority-color:${priorityColor}">
+      <div class="proposal-card-top">
+        <div class="proposal-card-title">${q.question || q.title || 'Untitled'}</div>
+        <span class="proposal-priority-pill" style="background:${priorityColor}20;color:${priorityColor}">${priority}</span>
+      </div>
+      <div class="proposal-confidence-bar" style="width:${confWidth}%;background:${confColor}"></div>
+      <div class="proposal-card-meta">
+        <span class="proposal-source-badge" style="background:${source.color}18;color:${source.color}">${source.emoji} ${source.name}</span>
+        <span class="proposal-type-badge">${typeEmojis[proposalType] || '📝'} ${proposalType}</span>
+        ${created ? `<span class="proposal-time">${created}</span>` : ''}
+        ${linkedMission ? `<span class="proposal-linked">🔗 ${linkedMission}</span>` : ''}
+      </div>
+      ${q.context ? `<div class="proposal-card-context">${q.context}</div>` : ''}
+      <div class="proposal-actions">
+        <button class="proposal-action-btn approve" onclick="resolveProposalAction('${q.id}','approve')">✅ Approve</button>
+        <button class="proposal-action-btn edit" onclick="resolveProposalAction('${q.id}','edit')">✏️ Edit</button>
+        <button class="proposal-action-btn reject" onclick="resolveProposalAction('${q.id}','reject')">❌ Reject</button>
+        <button class="proposal-action-btn defer" onclick="resolveProposalAction('${q.id}','defer')">💤 Defer</button>
+      </div>
+    </div>`;
+}
+
+function renderRecentlyResolved(cards) {
+  const countEl = document.getElementById('proposals-resolved-count');
+  const listEl = document.getElementById('proposals-resolved-list');
+  if (!listEl) return;
+
+  // Show last 24h resolved
+  const cutoff = Date.now() - 86400000;
+  const recent = cards.filter(q => q._createdAt && new Date(q._createdAt).getTime() > cutoff);
+
+  if (countEl) countEl.textContent = recent.length > 0 ? `(${recent.length})` : '';
+
+  if (recent.length === 0) {
+    listEl.innerHTML = '<div class="proposals-empty-hint">No resolved proposals in the last 24h</div>';
+    return;
+  }
+
+  const verdictBadge = (status) => {
+    const map = {
+      'approved': { label: 'Approved', cls: 'approved' },
+      'rejected': { label: 'Rejected', cls: 'rejected' },
+      'auto-approved': { label: 'Auto', cls: 'auto' },
+      'dismissed': { label: 'Dismissed', cls: 'rejected' },
+    };
+    const v = map[status] || { label: status || 'resolved', cls: '' };
+    return `<span class="resolved-verdict ${v.cls}">${v.label}</span>`;
+  };
+
+  listEl.innerHTML = recent.map(q => `
+    <div class="resolved-item">
+      <span class="resolved-title">${q.question || q.title || 'Untitled'}</span>
+      ${verdictBadge(q._status)}
+      <span class="resolved-time">${timeAgo(q._createdAt)}</span>
+    </div>
+  `).join('');
+}
+
+function renderProposalStats(cards) {
+  const el = document.getElementById('proposals-stats-content');
+  if (!el) return;
+
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - 7); weekStart.setHours(0,0,0,0);
+  const thisWeek = cards.filter(q => q._createdAt && new Date(q._createdAt) >= weekStart);
+
+  const approved = cards.filter(q => q._status === 'approved').length;
+  const rejected = cards.filter(q => q._status === 'rejected' || q._status === 'dismissed').length;
+  const autoExec = cards.filter(q => q._triageVerdict === 'auto-execute' || q._status === 'auto-approved').length;
+  const deferred = cards.filter(q => q._status === 'deferred').length;
+
+  // Source counts
+  const sourceCounts = {};
+  cards.forEach(q => {
+    const src = (q._source || q.agent || 'unknown');
+    sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+  });
+  const maxSource = Math.max(1, ...Object.values(sourceCounts));
+  const sourceHTML = Object.entries(sourceCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([src, count]) => {
+      const agent = getSourceAgent(src);
+      const pct = Math.round((count / maxSource) * 100);
+      return `
+        <div class="stats-bar-row">
+          <span class="stats-bar-label">${agent.emoji} ${agent.name}</span>
+          <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%;background:${agent.color}"></div></div>
+          <span class="stats-bar-value">${count}</span>
+        </div>`;
+    }).join('');
+
+  // Avg confidence
+  const confidences = cards.map(q => q._confidence || 0).filter(c => c > 0);
+  const avgConf = confidences.length > 0 ? (confidences.reduce((a, b) => a + b, 0) / confidences.length) : 0;
+
+  el.innerHTML = `
+    <div class="stats-grid">
+      <div class="stats-metric"><span class="stats-metric-num">${thisWeek.length}</span><span class="stats-metric-label">Generated this week</span></div>
+      <div class="stats-metric"><span class="stats-metric-num" style="color:#a6e3a1">${approved}</span><span class="stats-metric-label">Approved</span></div>
+      <div class="stats-metric"><span class="stats-metric-num" style="color:#f38ba8">${rejected}</span><span class="stats-metric-label">Rejected</span></div>
+      <div class="stats-metric"><span class="stats-metric-num" style="color:#89b4fa">${autoExec}</span><span class="stats-metric-label">Auto-executed</span></div>
+      <div class="stats-metric"><span class="stats-metric-num" style="color:#6c7086">${deferred}</span><span class="stats-metric-label">Deferred</span></div>
+    </div>
+    <div class="stats-section-title">Top Sources</div>
+    <div class="stats-bars">${sourceHTML || '<div class="proposals-empty-hint">No data yet</div>'}</div>
+    <div class="stats-section-title">Avg Confidence</div>
+    <div class="stats-confidence-row">
+      <div class="stats-confidence-track"><div class="stats-confidence-fill" style="width:${Math.round(avgConf * 100)}%;background:${getConfidenceColor(avgConf)}"></div></div>
+      <span class="stats-confidence-value">${(avgConf * 100).toFixed(0)}%</span>
+    </div>
+    <div class="stats-scan-countdown">Next scan in ~${30 - Math.floor((Date.now() / 1000) % 30)}s</div>
+  `;
+}
+
+function resolveProposalAction(qId, action) {
+  if (action === 'defer') {
+    if (Bridge.liveMode) {
+      Bridge.resolveProposal(qId, 'defer').then(() => {
+        loadLiveProposals();
+        toast('💤 Proposal deferred', 'info');
+      }).catch(e => toast('Failed: ' + e.message, 'error'));
+    } else {
+      const q = queueCards.find(c => c.id === qId);
+      if (q) q._status = 'deferred';
+      toast('💤 Proposal deferred', 'info');
+      renderQueue();
+    }
+    return;
+  }
+  if (action === 'edit') {
+    toast('✏️ Edit not yet implemented', 'info');
+    return;
+  }
+  // approve or reject
+  if (Bridge.liveMode) {
+    Bridge.resolveProposal(qId, action).then(() => {
+      loadLiveProposals();
+      toast(action === 'approve' ? '✅ Proposal approved' : '❌ Proposal rejected', action === 'approve' ? 'success' : 'info');
+    }).catch(e => toast('Failed: ' + e.message, 'error'));
+  } else {
+    answerQueue(qId, action === 'approve' ? 'approved' : 'rejected');
+  }
+}
+
+function batchApproveSafe() {
+  const safe = queueCards.filter(q => (q._status === 'pending' || !q._status) && (q._confidence || 0) > 0.85);
+  if (safe.length === 0) { toast('No safe proposals to approve', 'info'); return; }
+  let count = 0;
+  safe.forEach(q => {
+    resolveProposalAction(q.id, 'approve');
+    count++;
+  });
+  toast(`✅ Batch approved ${count} safe proposals`, 'success');
+}
+
+function toggleResolvedSection() {
+  const list = document.getElementById('proposals-resolved-list');
+  const icon = document.getElementById('proposals-collapse-icon');
+  if (!list) return;
+  const isHidden = list.classList.contains('hidden');
+  list.classList.toggle('hidden', !isHidden);
+  if (icon) icon.textContent = isHidden ? '▾' : '▸';
+}
+
+function tickSyncIndicator() {
+  const el = document.getElementById('proposals-sync-indicator');
+  if (!el) return;
+  const diff = Math.floor((Date.now() - _lastProposalSync) / 1000);
+  if (diff < 10) el.textContent = 'Synced just now';
+  else if (diff < 60) el.textContent = `Synced ${diff}s ago`;
+  else el.textContent = `Synced ${Math.floor(diff / 60)}m ago`;
 }
 
 function makeQueueCard(q) {
@@ -635,15 +967,19 @@ function batchDelegateAll() {
 }
 
 function updateQueueStats() {
-  $('q-answered').textContent = qStats.answered;
-  $('q-autoresolved').textContent = qStats.autoresolved;
-  $('q-expired').textContent = qStats.expired;
+  // Legacy stat elements may not exist in new layout
+  const answered = document.getElementById('q-answered');
+  if (answered) answered.textContent = qStats.answered;
+  const autoresolved = document.getElementById('q-autoresolved');
+  if (autoresolved) autoresolved.textContent = qStats.autoresolved;
+  const expired = document.getElementById('q-expired');
+  if (expired) expired.textContent = qStats.expired;
 
   // Update badges
   const count = queueCards.length;
-  const badge = $('queue-badge');
-  if (badge) badge.textContent = count || '';
-  const mobileBadge = $('queue-mobile-badge');
+  const badge = document.getElementById('queue-badge');
+  if (badge) { badge.textContent = count || ''; badge.style.display = count > 0 ? '' : 'none'; }
+  const mobileBadge = document.getElementById('queue-mobile-badge');
   if (mobileBadge) mobileBadge.textContent = count || '';
 }
 

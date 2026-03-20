@@ -1158,61 +1158,491 @@ function renderSchedule() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// MISSIONS VIEW
+// MISSION CONTROL VIEW
 // ═══════════════════════════════════════════════════════════
 
+// Seed data — replaced by bridge data when live
 const MISSIONS_DATA = [
-  { id:'m1', icon:'🎯', title:'Competitive Dominance', desc:'Complete analysis of all 60+ competitors', progress:73, status:'active',
+  { id:'m1', icon:'🎯', title:'Competitive Dominance', desc:'Complete analysis of all 60+ competitors',
+    progress:73, status:'active', goal:'Market Intelligence', target_date:'2026-04-15',
+    success_criteria:'60+ competitors profiled, final report published to vault',
+    agents_active:2, blocking_items:1, velocity:2.3, tasks_done:11, tasks_total:15, days_active:18,
     milestones:['Surface scan ✓','Deep dive: 3/13','Final report'] },
-  { id:'m2', icon:'🏗️', title:'Frontend Vision', desc:'Build the Agent OS cockpit — replace Discord', progress:35, status:'active',
+  { id:'m2', icon:'🏗️', title:'Frontend Vision', desc:'Build the Agent OS cockpit — replace Discord',
+    progress:35, status:'active', goal:'Product Development', target_date:'2026-05-01',
+    success_criteria:'Fully functional frontend replacing Discord as primary interface',
+    agents_active:3, blocking_items:2, velocity:1.8, tasks_done:7, tasks_total:20, days_active:24,
     milestones:['Design spec ✓','Demo v6 ✓','Mobile QA','Deploy live'] },
-  { id:'m3', icon:'💰', title:'Wilson Premier Revenue', desc:'Ship Phase 0 feasibility for Wilson Premier', progress:15, status:'active',
+  { id:'m3', icon:'💰', title:'Wilson Premier Revenue', desc:'Ship Phase 0 feasibility for Wilson Premier',
+    progress:15, status:'active', goal:'Revenue Generation', target_date:'2026-06-01',
+    success_criteria:'Phase 0 feasibility delivered, client approval received',
+    agents_active:1, blocking_items:0, velocity:0.7, tasks_done:3, tasks_total:20, days_active:10,
     milestones:['Research','Architecture','Prototype','Pitch deck'] },
-  { id:'m4', icon:'🧠', title:'Vault Mastery', desc:'500 vault notes, all cross-linked, confidence calibrated', progress:88, status:'active',
+  { id:'m4', icon:'🧠', title:'Vault Mastery', desc:'500 vault notes, all cross-linked, confidence calibrated',
+    progress:88, status:'active', goal:'Knowledge Management', target_date:'2026-04-01',
+    success_criteria:'500 notes with backlinks and confidence scores',
+    agents_active:1, blocking_items:0, velocity:3.1, tasks_done:44, tasks_total:50, days_active:30,
     milestones:['100 notes ✓','250 notes ✓','Backlinks ✓','500 notes'] },
-  { id:'m5', icon:'🔒', title:'Zero Security Criticals', desc:'Clear all security audit findings', progress:100, status:'completed',
+  { id:'m5', icon:'🔒', title:'Zero Security Criticals', desc:'Clear all security audit findings',
+    progress:100, status:'completed', goal:'Infrastructure', target_date:'2026-03-10',
+    success_criteria:'All critical and high findings resolved',
+    agents_active:0, blocking_items:0, velocity:0, tasks_done:8, tasks_total:8, days_active:14,
     milestones:['Port scan ✓','SSH hardened ✓','Firewall ✓','All clear ✓'] },
+  { id:'m6', icon:'📋', title:'Dispatch Engine v3', desc:'Priority queue with agent capability matrix',
+    progress:0, status:'planned', goal:'Architecture', target_date:'2026-07-01',
+    success_criteria:'Load balancer + capability matrix operational',
+    agents_active:0, blocking_items:0, velocity:0, tasks_done:0, tasks_total:12, days_active:0,
+    milestones:['Design','Implementation','Testing','Deploy'] },
 ];
 
-const STREAKS_DATA = [
-  { icon:'🔥', number:14, label:'Days uptime' },
-  { icon:'⚡', number:847, label:'Tasks dispatched' },
-  { icon:'🧠', number:312, label:'Vault notes' },
-  { icon:'🎯', number:23, label:'Day streak' },
+// Seed feed events for missions
+const MISSION_FEED_DATA = [
+  { ts:'2026-03-20T07:45:00Z', agent:'🔬', type:'task', text:'Completed competitor profile: Cursor', mission:'m1' },
+  { ts:'2026-03-20T07:30:00Z', agent:'💻', type:'task', text:'Pushed plans page redesign PR', mission:'m2' },
+  { ts:'2026-03-20T07:15:00Z', agent:'🤖', type:'agent', text:'Coder assigned to missions redesign', mission:'m2' },
+  { ts:'2026-03-20T06:50:00Z', agent:'📊', type:'task', text:'Vault note #488 indexed with backlinks', mission:'m4' },
+  { ts:'2026-03-20T06:30:00Z', agent:'💻', type:'error', text:'Build failed: CSS syntax error in pulse view', mission:'m2' },
+  { ts:'2026-03-20T06:00:00Z', agent:'🔬', type:'task', text:'Started deep dive: Devin AI', mission:'m1' },
+  { ts:'2026-03-19T23:00:00Z', agent:'💰', type:'task', text:'Wilson research doc v1 drafted', mission:'m3' },
+  { ts:'2026-03-19T22:30:00Z', agent:'🤖', type:'agent', text:'Researcher idle — waiting for direction', mission:'m1' },
+  { ts:'2026-03-19T21:00:00Z', agent:'📊', type:'task', text:'Confidence calibration pass 3 complete', mission:'m4' },
 ];
 
-function renderMissions() {
-  const el = $('missions-content');
+const MISSION_DECISIONS_DATA = [
+  { date:'2026-03-19', mission:'m2', decision:'Approved: Use Catppuccin Mocha as base theme', who:'Trajan', type:'approved' },
+  { date:'2026-03-18', mission:'m1', decision:'Rejected: Skip smaller competitors (<$1M ARR)', who:'Trajan', type:'rejected' },
+  { date:'2026-03-17', mission:'m2', decision:'Auto-approved: Add command palette shortcut', who:'Auto', type:'approved' },
+  { date:'2026-03-16', mission:'m3', decision:'Approved: Focus on hospitality vertical first', who:'Trajan', type:'approved' },
+  { date:'2026-03-15', mission:'m4', decision:'Auto-approved: Enable QMD cron every 30min', who:'Auto', type:'approved' },
+  { date:'2026-03-14', mission:'m2', decision:'Direction change: Move from 4-panel to sidebar layout', who:'Trajan', type:'direction' },
+];
+
+const MISSION_BLOCKING_DATA = [
+  { mission:'m1', type:'proposal', title:'Add pricing data to competitor profiles?', source:'Researcher' },
+  { mission:'m2', type:'review', title:'Review: Mission Control mockup', source:'Coder' },
+  { mission:'m2', type:'proposal', title:'Use WebSocket for live feed updates?', source:'Ops' },
+];
+
+const MISSION_PLANS_DATA = [
+  { id:'plan-agent-os-frontend', name:'Agent OS Frontend', mission:'m2', backlog:3, active:2, done:5, agents:['💻','🎨'] },
+  { id:'plan-competitor-research', name:'Competitor Research', mission:'m1', backlog:8, active:2, done:3, agents:['🔬'] },
+  { id:'plan-wilson-phase0', name:'Wilson Phase 0', mission:'m3', backlog:5, active:1, done:1, agents:['🔬','💻'] },
+  { id:'plan-vault-indexing', name:'Vault Indexing & QMD', mission:'m4', backlog:2, active:1, done:8, agents:['🧠','⚙️'] },
+];
+
+let mcSelectedMission = null;
+let mcActiveTab = 'overview';
+let mcMissions = [...MISSIONS_DATA];
+let mcFeed = [...MISSION_FEED_DATA];
+let mcDecisions = [...MISSION_DECISIONS_DATA];
+let mcBlocking = [...MISSION_BLOCKING_DATA];
+let mcPlans = [...MISSION_PLANS_DATA];
+
+async function renderMissions() {
+  // Try loading from bridge
+  try {
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+      const [goals, feed, proposals, plans] = await Promise.all([
+        Bridge.getMissionsGoals().catch(() => null),
+        Bridge.getMissionsFeed(50).catch(() => null),
+        Bridge.getProposals('pending').catch(() => null),
+        Bridge.getPlans().catch(() => null),
+      ]);
+      if (goals && Array.isArray(goals) && goals.length > 0) {
+        mcMissions = goals.map(g => ({
+          id: g.id, icon: g.icon || '🎯', title: g.title || g.name,
+          desc: g.description || g.desc || '', progress: g.progress || 0,
+          status: g.status || 'active', goal: g.goal || g.category || '',
+          target_date: g.target_date || g.deadline || '',
+          success_criteria: g.success_criteria || '',
+          agents_active: g.agents_active || 0, blocking_items: g.blocking_items || 0,
+          velocity: g.velocity || 0, tasks_done: g.tasks_done || 0,
+          tasks_total: g.tasks_total || 0, days_active: g.days_active || 0,
+          milestones: g.milestones || [],
+        }));
+      }
+      if (feed && Array.isArray(feed)) {
+        mcFeed = feed.map(f => ({
+          ts: f.timestamp || f.ts, agent: f.agent_emoji || f.agent || '🤖',
+          type: f.type || 'task', text: f.text || f.message || f.description,
+          mission: f.mission_id || f.mission || '',
+        }));
+      }
+      if (proposals && Array.isArray(proposals)) {
+        mcBlocking = proposals.filter(p => p.status === 'pending').map(p => ({
+          mission: p.mission_id || p.goal_id || '', type: 'proposal',
+          title: p.title || p.description, source: p.agent || 'Agent',
+        }));
+      }
+      if (plans && Array.isArray(plans)) {
+        mcPlans = plans.map(p => {
+          const tasks = p.tasks || [];
+          return {
+            id: p.id, name: p.name, mission: p.mission_id || p.goal_id || '',
+            backlog: tasks.filter(t => t.column === 'backlog').length,
+            active: tasks.filter(t => t.column === 'active' || t.column === 'in_progress').length,
+            done: tasks.filter(t => t.column === 'done').length,
+            agents: [...new Set(tasks.map(t => t.agent).filter(Boolean))].map(a => {
+              const ag = typeof ga === 'function' ? ga(a) : null;
+              return ag ? ag.emoji : '🤖';
+            }),
+          };
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[MissionControl] Bridge load failed, using seed data:', e.message);
+  }
+
+  renderMCSidebar();
+  if (mcSelectedMission) {
+    renderMCDetail(mcSelectedMission);
+  } else {
+    renderMCOverviewGrid();
+  }
+}
+
+function renderMCSidebar() {
+  const sidebar = $('mc-sidebar');
+  if (!sidebar) return;
+
+  const grouped = { active: [], planned: [], completed: [] };
+  mcMissions.forEach(m => {
+    const s = m.status === 'completed' ? 'completed' : m.status === 'planned' ? 'planned' : 'active';
+    grouped[s].push(m);
+  });
+
+  const renderGroup = (label, missions, status, expanded) => {
+    if (missions.length === 0) return '';
+    return `
+      <div class="mc-sb-group">
+        <div class="mc-sb-group-header" onclick="toggleMCGroup(this)">
+          <span class="mc-sb-chevron${expanded ? ' expanded' : ''}">›</span>
+          <span class="mc-sb-group-label">${label}</span>
+          <span class="mc-sb-group-count">${missions.length}</span>
+        </div>
+        <div class="mc-sb-group-items${expanded ? '' : ' collapsed'}">
+          ${missions.map(m => {
+            const isActive = mcSelectedMission === m.id;
+            const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
+            const pulsingDot = status === 'active' && m.agents_active > 0
+              ? '<span class="mc-pulse-dot"></span>' : '';
+            return `
+              <div class="mc-sb-item${isActive ? ' active' : ''}" onclick="selectMCMission('${m.id}')">
+                <div class="mc-sb-item-top">
+                  ${pulsingDot}
+                  <span class="mc-sb-item-icon">${m.icon}</span>
+                  <span class="mc-sb-item-name">${m.title}</span>
+                </div>
+                <div class="mc-sb-item-bar">
+                  <div class="mc-sb-item-bar-fill" style="width:${m.progress}%;background:${progressColor}"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  };
+
+  sidebar.innerHTML = `
+    ${renderGroup('ACTIVE', grouped.active, 'active', true)}
+    ${renderGroup('PLANNED', grouped.planned, 'planned', false)}
+    ${renderGroup('COMPLETED', grouped.completed, 'completed', false)}
+    <button class="mc-new-mission-btn" onclick="toast('New mission creation coming soon','info')">＋ New Mission</button>
+  `;
+}
+
+function toggleMCGroup(header) {
+  const chevron = header.querySelector('.mc-sb-chevron');
+  const items = header.nextElementSibling;
+  chevron.classList.toggle('expanded');
+  items.classList.toggle('collapsed');
+}
+
+function selectMCMission(id) {
+  mcSelectedMission = id;
+  mcActiveTab = 'overview';
+  renderMCSidebar();
+  renderMCDetail(id);
+}
+
+function renderMCOverviewGrid() {
+  const detail = $('mc-detail');
+  if (!detail) return;
+
+  const active = mcMissions.filter(m => m.status !== 'completed');
+  // Sort: blocking items first, then by recent activity
+  active.sort((a, b) => (b.blocking_items || 0) - (a.blocking_items || 0) || (b.velocity || 0) - (a.velocity || 0));
+
+  detail.innerHTML = `
+    <div class="mc-overview-grid">
+      ${active.map(m => {
+        const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
+        const blocking = mcBlocking.filter(b => b.mission === m.id);
+        return `
+          <div class="mc-overview-card" onclick="selectMCMission('${m.id}')">
+            <div class="mc-ov-card-header">
+              <span class="mc-ov-card-icon">${m.icon}</span>
+              <span class="mc-ov-card-title">${m.title}</span>
+            </div>
+            <div class="mc-ov-card-progress">
+              ${renderMiniProgressRing(m.progress, progressColor, 36)}
+              <div class="mc-ov-card-stats">
+                <span class="mc-ov-card-pct">${m.progress}%</span>
+                <span class="mc-ov-card-agents">${m.agents_active} agent${m.agents_active !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+            ${blocking.length > 0 ? `<div class="mc-ov-card-badge">⚠ ${blocking.length} needs input</div>` : ''}
+            <div class="mc-ov-card-desc">${m.desc}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderMiniProgressRing(pct, color, size) {
+  const r = (size - 4) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (pct / 100) * circ;
+  return `
+    <svg class="mc-mini-ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--bg-raised)" stroke-width="3"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="3"
+        stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+        stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"
+        style="transition: stroke-dashoffset 0.5s ease"/>
+    </svg>
+  `;
+}
+
+function renderMCDetail(missionId) {
+  const detail = $('mc-detail');
+  if (!detail) return;
+  const m = mcMissions.find(x => x.id === missionId);
+  if (!m) { renderMCOverviewGrid(); return; }
+
+  const statusClass = m.status === 'completed' ? 'mc-badge-completed' : m.status === 'planned' ? 'mc-badge-planned' : 'mc-badge-active';
+  const statusLabel = m.status === 'completed' ? '✓ Completed' : m.status === 'planned' ? 'Planned' : 'Active';
+
+  detail.innerHTML = `
+    <div class="mc-detail-header">
+      <div class="mc-detail-title-row">
+        <button class="mc-back-btn" onclick="mcSelectedMission=null;renderMCSidebar();renderMCOverviewGrid()">←</button>
+        <span class="mc-detail-icon">${m.icon}</span>
+        <h2 class="mc-detail-title">${m.title}</h2>
+        <span class="mc-badge ${statusClass}">${statusLabel}</span>
+      </div>
+      ${m.goal ? `<div class="mc-detail-goal">Serves: ${m.goal}</div>` : ''}
+      <details class="mc-detail-criteria">
+        <summary>Target & Criteria</summary>
+        <div class="mc-detail-criteria-body">
+          ${m.target_date ? `<div><strong>Target:</strong> ${m.target_date}</div>` : ''}
+          ${m.success_criteria ? `<div><strong>Success:</strong> ${m.success_criteria}</div>` : ''}
+        </div>
+      </details>
+    </div>
+
+    <div class="mc-tabs">
+      ${['overview','plans','activity','decisions'].map(tab => `
+        <button class="mc-tab${mcActiveTab === tab ? ' active' : ''}" onclick="mcSwitchTab('${tab}','${missionId}')">${tab.charAt(0).toUpperCase()+tab.slice(1)}</button>
+      `).join('')}
+    </div>
+
+    <div class="mc-tab-content" id="mc-tab-content"></div>
+  `;
+
+  mcRenderTab(mcActiveTab, missionId);
+}
+
+function mcSwitchTab(tab, missionId) {
+  mcActiveTab = tab;
+  $$('.mc-tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase() === tab));
+  mcRenderTab(tab, missionId);
+}
+
+function mcRenderTab(tab, missionId) {
+  const el = $('mc-tab-content');
   if (!el) return;
+  switch(tab) {
+    case 'overview':  mcRenderOverview(el, missionId); break;
+    case 'plans':     mcRenderPlans(el, missionId); break;
+    case 'activity':  mcRenderActivity(el, missionId); break;
+    case 'decisions': mcRenderDecisions(el, missionId); break;
+  }
+}
+
+function mcRenderOverview(el, missionId) {
+  const m = mcMissions.find(x => x.id === missionId);
+  if (!m) return;
+
+  const blocking = mcBlocking.filter(b => b.mission === missionId);
+  const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
+  const estCompletion = m.velocity > 0 ? Math.ceil((m.tasks_total - m.tasks_done) / m.velocity) : null;
+
   el.innerHTML = `
-    <div class="streaks-row">
-      ${STREAKS_DATA.map(s => `
-        <div class="streak-card">
-          <div class="streak-icon">${s.icon}</div>
-          <div class="streak-number">${s.number}</div>
-          <div class="streak-label">${s.label}</div>
+    <div class="mc-ov-top">
+      <div class="mc-progress-ring-wrap">
+        ${renderProgressRing(m.progress, progressColor, 120)}
+        <div class="mc-ring-label">${m.progress}%</div>
+      </div>
+      <div class="mc-ov-metrics">
+        <div class="mc-metric">
+          <span class="mc-metric-val">${m.tasks_done}/${m.tasks_total}</span>
+          <span class="mc-metric-label">Tasks</span>
+        </div>
+        <div class="mc-metric">
+          <span class="mc-metric-val">${m.agents_active}</span>
+          <span class="mc-metric-label">Agents</span>
+        </div>
+        <div class="mc-metric">
+          <span class="mc-metric-val">${m.days_active}d</span>
+          <span class="mc-metric-label">Active</span>
+        </div>
+        <div class="mc-metric">
+          <span class="mc-metric-val">${m.velocity.toFixed(1)}/d</span>
+          <span class="mc-metric-label">Velocity</span>
+        </div>
+        ${estCompletion !== null ? `
+        <div class="mc-metric">
+          <span class="mc-metric-val">~${estCompletion}d</span>
+          <span class="mc-metric-label">Est. Left</span>
+        </div>` : ''}
+      </div>
+    </div>
+
+    ${blocking.length > 0 ? `
+    <div class="mc-needs-input">
+      <div class="mc-needs-input-header">⚡ Needs Your Input</div>
+      ${blocking.map(b => `
+        <div class="mc-blocking-item">
+          <span class="mc-blocking-type">${b.type === 'proposal' ? '📋' : b.type === 'review' ? '👁️' : '❓'}</span>
+          <div class="mc-blocking-body">
+            <div class="mc-blocking-title">${b.title}</div>
+            <div class="mc-blocking-source">From: ${b.source}</div>
+          </div>
         </div>
       `).join('')}
     </div>
-    ${MISSIONS_DATA.map(m => {
-      const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
-      return `
-        <div class="mission-card">
-          <div class="mission-header">
-            <span class="mission-icon">${m.icon}</span>
-            <span class="mission-title">${m.title}</span>
-            <span class="mission-status ${m.status === 'completed' ? 'mission-completed' : 'mission-active'}">${m.status === 'completed' ? '✓ Done' : `${m.progress}%`}</span>
+    ` : ''}
+
+    <div class="mc-milestones-section">
+      <div class="mc-section-label">Milestones</div>
+      <div class="mc-milestones-row">
+        ${m.milestones.map(ms => `<span class="milestone-badge${ms.includes('✓')?' earned':''}">${ms}</span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderProgressRing(pct, color, size) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (pct / 100) * circ;
+  return `
+    <svg class="mc-progress-ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--bg-raised)" stroke-width="6"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="6"
+        stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+        stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"
+        style="transition: stroke-dashoffset 0.8s ease"/>
+    </svg>
+  `;
+}
+
+function mcRenderPlans(el, missionId) {
+  const plans = mcPlans.filter(p => p.mission === missionId);
+
+  el.innerHTML = `
+    <div class="mc-plans-list">
+      ${plans.length === 0 ? '<div class="mc-empty">No plans linked to this mission yet.</div>' : ''}
+      ${plans.map(p => {
+        const total = p.backlog + p.active + p.done;
+        const donePct = total > 0 ? Math.round((p.done / total) * 100) : 0;
+        return `
+          <div class="mc-plan-card" onclick="nav('plans');setTimeout(()=>typeof selectPlan==='function'&&selectPlan('${p.id}'),200)">
+            <div class="mc-plan-header">
+              <span class="mc-plan-name">${p.name}</span>
+              <span class="mc-plan-agents">${p.agents.join(' ')}</span>
+            </div>
+            <div class="mc-plan-summary">${p.backlog} backlog · ${p.active} active · ${p.done} done</div>
+            <div class="mc-plan-bar">
+              <div class="mc-plan-bar-fill" style="width:${donePct}%"></div>
+            </div>
           </div>
-          <div class="mission-progress-bar">
-            <div class="mission-progress-fill" style="width:${m.progress}%;background:${progressColor}"></div>
+        `;
+      }).join('')}
+      <button class="mc-create-plan-btn" onclick="toast('Plan creation coming soon','info')">＋ Create Plan</button>
+    </div>
+  `;
+}
+
+let mcActivityFilter = 'all';
+
+function mcRenderActivity(el, missionId) {
+  const events = mcFeed.filter(e => e.mission === missionId);
+  const filters = ['all','tasks','agents','errors'];
+
+  const filtered = mcActivityFilter === 'all' ? events :
+    events.filter(e => {
+      if (mcActivityFilter === 'tasks') return e.type === 'task';
+      if (mcActivityFilter === 'agents') return e.type === 'agent';
+      if (mcActivityFilter === 'errors') return e.type === 'error';
+      return true;
+    });
+
+  el.innerHTML = `
+    <div class="mc-activity-filters">
+      ${filters.map(f => `
+        <button class="mc-filter-chip${mcActivityFilter === f ? ' active' : ''}"
+          onclick="mcActivityFilter='${f}';mcRenderActivity($('mc-tab-content'),'${missionId}')">${f.charAt(0).toUpperCase()+f.slice(1)}</button>
+      `).join('')}
+    </div>
+    <div class="mc-activity-feed">
+      ${filtered.length === 0 ? '<div class="mc-empty">No activity yet.</div>' : ''}
+      ${filtered.map(e => {
+        const time = new Date(e.ts);
+        const timeStr = time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const dateStr = time.toLocaleDateString([], {month:'short', day:'numeric'});
+        const typeClass = e.type === 'error' ? 'mc-ev-error' : e.type === 'agent' ? 'mc-ev-agent' : '';
+        return `
+          <div class="mc-activity-event ${typeClass}">
+            <span class="mc-ev-agent">${e.agent}</span>
+            <span class="mc-ev-text">${e.text}</span>
+            <span class="mc-ev-time">${dateStr} ${timeStr}</span>
           </div>
-          <div class="mission-detail">${m.desc}</div>
-          <div class="mission-milestones">
-            ${m.milestones.map(ms => `<span class="milestone-badge${ms.includes('✓')?' earned':''}">${ms}</span>`).join('')}
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function mcRenderDecisions(el, missionId) {
+  const decisions = mcDecisions.filter(d => d.mission === missionId);
+
+  el.innerHTML = `
+    <div class="mc-decisions-timeline">
+      ${decisions.length === 0 ? '<div class="mc-empty">No decisions recorded yet.</div>' : ''}
+      ${decisions.map(d => {
+        const typeIcon = d.type === 'approved' ? '✅' : d.type === 'rejected' ? '❌' : '↪️';
+        const typeClass = d.type === 'rejected' ? 'mc-dec-rejected' : d.type === 'direction' ? 'mc-dec-direction' : '';
+        return `
+          <div class="mc-decision-card ${typeClass}">
+            <div class="mc-dec-line"></div>
+            <div class="mc-dec-dot"></div>
+            <div class="mc-dec-content">
+              <div class="mc-dec-header">
+                <span class="mc-dec-icon">${typeIcon}</span>
+                <span class="mc-dec-date">${d.date}</span>
+                <span class="mc-dec-who">${d.who}</span>
+              </div>
+              <div class="mc-dec-text">${d.decision}</div>
+            </div>
           </div>
-        </div>
-      `;
-    }).join('')}
+        `;
+      }).join('')}
+    </div>
   `;
 }
 
