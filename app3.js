@@ -378,6 +378,7 @@ function startSimulation() {
   }
   // Agent status changes every 8s — with event bus
   simTimers.agents = setInterval(() => {
+    if (!shouldPoll()) return;
     AGENTS.forEach(a => {
       if (Math.random() < 0.12) {
         const wasActive = a.status === 'active';
@@ -403,6 +404,7 @@ function startSimulation() {
 
   // Chat messages — the big new one. Every 12s, post a message to a channel
   simTimers.chat = setInterval(() => {
+    if (!shouldPoll()) return;
     const channels = Object.keys(SIM_CHAT_MESSAGES);
     const channel = channels[Math.floor(Math.random() * channels.length)];
     const speakers = SIM_CHAT_MESSAGES[channel];
@@ -461,6 +463,7 @@ function startSimulation() {
 
   // Feed update every 20s (slower now since chat drives feed events too)
   simTimers.feed = setInterval(() => {
+    if (!shouldPoll()) return;
     const agent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
     const types = ['task_started', 'task_completed', 'insight', 'vault_write', 'file_changed'];
     const type = types[Math.floor(Math.random() * types.length)];
@@ -484,11 +487,13 @@ function startSimulation() {
 
   // Queue cards every 30s
   simTimers.queue = setInterval(() => {
+    if (!shouldPoll()) return;
     if (typeof generateQueueCard === 'function') generateQueueCard();
   }, 30000);
 
   // Stream events every 8s
   simTimers.stream = setInterval(() => {
+    if (!shouldPoll()) return;
     const agent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
     const levels = ['debug', 'info', 'info', 'info', 'warn'];
     const level = levels[Math.floor(Math.random() * levels.length)];
@@ -510,6 +515,7 @@ function startSimulation() {
 
   // DM simulation — agents occasionally DM
   simTimers.dms = setInterval(() => {
+    if (!shouldPoll()) return;
     const agent = AGENTS.filter(a => a.status === 'active')[0] || AGENTS[0];
     const dmTexts = [
       'Quick update — task is progressing well. ETA 20 minutes.',
@@ -1539,6 +1545,7 @@ async function renderMissions() {
 function startMissionsRefresh() {
   if (_missionsRefreshTimer) return;
   _missionsRefreshTimer = setInterval(async () => {
+    if (!shouldPoll()) return;
     if (currentPage !== 'missions') { stopMissionsRefresh(); return; }
     const updated = await fetchMissionsFromBridge();
     if (updated) {

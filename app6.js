@@ -208,6 +208,7 @@ function startTaskTracker() {
   if (taskTrackerTimer) return;
   fetchTaskLifecycle().then(() => renderTaskTracker());
   taskTrackerTimer = setInterval(async () => {
+    if (!shouldPoll()) return;
     await fetchTaskLifecycle();
     renderTaskTracker();
     // Also update workflow viz if on system page

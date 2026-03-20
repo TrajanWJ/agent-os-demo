@@ -382,6 +382,7 @@ function renderPipelineBody() {
 function startPipelinesRefresh() {
   if (_pipelinesRefreshTimer) return;
   _pipelinesRefreshTimer = setInterval(async () => {
+    if (!shouldPoll()) return;
     if (currentPage !== 'pipelines') { stopPipelinesRefresh(); return; }
     const updated = await fetchPipelineData();
     if (updated) renderPipelineBody();

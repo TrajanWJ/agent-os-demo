@@ -264,6 +264,7 @@ async function initInbox() {
   // Start polling every 15 seconds
   if (!inboxPollTimer) {
     inboxPollTimer = setInterval(async () => {
+      if (!shouldPoll()) return;
       if (currentPage !== 'inbox') return;
       const updated = await fetchRealInboxItems();
       if (updated && updated.length > 0) {
@@ -1027,6 +1028,7 @@ function initBriefing() {
   renderBriefingDocument();
   if (briefingRefreshTimer) clearInterval(briefingRefreshTimer);
   briefingRefreshTimer = setInterval(() => {
+    if (!shouldPoll()) return;
     if (currentPage === 'briefing') renderBriefingDocument();
   }, 30000);
 }
@@ -1415,6 +1417,7 @@ function dismissBriefingItem(elementId) {
 // Poll for page changes
 let _lastCheckedPage = '';
 setInterval(() => {
+  if (!shouldPoll()) return;
   if (currentPage !== _lastCheckedPage) {
     _lastCheckedPage = currentPage;
     if (currentPage === 'inbox') initInbox();
@@ -1425,6 +1428,7 @@ setInterval(() => {
 
 // Update inbox badge on nav
 setInterval(() => {
+  if (!shouldPoll()) return;
   const badge = document.getElementById('inbox-badge');
   if (badge) {
     const unread = inboxItems.filter(i => i.unread).length;

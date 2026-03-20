@@ -7100,6 +7100,187 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   .briefing-doc-greeting { font-size: 20px; }
   .briefing-view-toolbar { padding: 12px 16px; }
   .briefing-view-title { font-size: 18px; }
+  .briefing-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .briefing-svc-row { flex-direction: column; gap: 6px; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BRIEFING CARDS — Collapsible sections with real data
+   ═══════════════════════════════════════════════════════════ */
+
+.briefing-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+.briefing-card:hover { border-color: var(--border-bright, var(--accent)); }
+
+.briefing-card-alert { border-color: var(--red); }
+.briefing-card-warn { border-left: 3px solid var(--yellow); }
+.briefing-card-attention { border-left: 3px solid var(--accent); }
+
+.briefing-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+.briefing-card-header:hover { background: var(--surface-hover, rgba(255,255,255,0.03)); }
+
+.briefing-card-icon { font-size: 18px; }
+.briefing-card-title { flex: 1; font-weight: 700; font-size: 15px; color: var(--text); }
+.briefing-card-chevron { color: var(--text-muted); font-size: 14px; width: 20px; text-align: center; }
+
+.briefing-card-body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Stat cards row */
+.briefing-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.briefing-stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  text-align: center;
+}
+.briefing-stat-alert { border-color: var(--red); background: rgba(243,139,168,0.06); }
+.briefing-stat-value { font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1.2; }
+.briefing-stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.briefing-stat-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* Service status row */
+.briefing-svc-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+  padding: 8px 0;
+}
+.briefing-svc { font-size: 13px; color: var(--text-dim); }
+.briefing-svc strong { color: var(--text); }
+
+/* Agent status list */
+.briefing-agent-list { display: flex; flex-direction: column; gap: 6px; }
+.briefing-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.briefing-agent-name { font-weight: 600; min-width: 160px; font-size: 14px; }
+.briefing-agent-status {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 56px;
+  text-align: center;
+}
+.briefing-agent-active { background: rgba(166,227,161,0.15); color: var(--green); }
+.briefing-agent-idle { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+.briefing-agent-meta { font-size: 12px; color: var(--text-dim); }
+.briefing-agent-tag {
+  font-size: 11px;
+  background: var(--accent);
+  color: var(--bg);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* Task list inside cards */
+.briefing-task-list { margin-bottom: 8px; }
+.briefing-task-list ul { margin: 4px 0 0 18px; padding: 0; }
+.briefing-task-list li { font-size: 13px; color: var(--text-dim); margin-bottom: 3px; }
+.briefing-more { color: var(--text-muted); font-style: italic; }
+
+/* Recent item one-liner */
+.briefing-recent-item { font-size: 13px; color: var(--text-dim); margin: 4px 0; }
+.briefing-recent-item strong { color: var(--text); }
+.briefing-path { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+
+/* Cron schedule rows */
+.briefing-cron-list { display: flex; flex-direction: column; gap: 4px; }
+.briefing-cron-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 70px;
+  gap: 10px;
+  padding: 5px 8px;
+  font-size: 13px;
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.briefing-cron-sched { font-family: monospace; color: var(--accent); font-size: 12px; }
+.briefing-cron-cmd { color: var(--text); }
+.briefing-cron-type { color: var(--text-muted); text-align: right; font-size: 11px; text-transform: uppercase; }
+
+/* Mission rows */
+.briefing-mission-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.briefing-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 120px;
+}
+.briefing-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.briefing-mission-agents { font-size: 14px; }
+
+/* Unavailable fallback */
+.briefing-unavailable { color: var(--text-muted); font-style: italic; font-size: 13px; }
+
+/* Skeleton loading */
+.briefing-skeleton { padding: 16px; }
+.briefing-skeleton-line {
+  height: 14px;
+  background: linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  animation: briefingSkelPulse 1.5s ease infinite;
+}
+@keyframes briefingSkelPulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Footer */
+.briefing-doc-footer {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 /* ═══════════════════════════════════════════════════════════
