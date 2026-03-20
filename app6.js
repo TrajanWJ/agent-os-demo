@@ -413,8 +413,7 @@ window.nav = function(page) {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     startDiscordMirror();
-    // Start task tracker immediately so data is ready
-    startTaskTracker();
+    // Task tracker starts on first visit to queue/tasks page, not on load
   }, 2000);
 });
 

@@ -622,6 +622,11 @@ const SIM_CHAT_MESSAGES = {
 };
 
 function startSimulation() {
+  // Don't run simulation when Bridge provides real data
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    console.log('[Sim] Bridge is live — simulation disabled');
+    return;
+  }
   // Agent status changes every 8s — with event bus
   simTimers.agents = setInterval(() => {
     AGENTS.forEach(a => {
