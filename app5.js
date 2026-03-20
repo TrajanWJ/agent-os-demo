@@ -1129,142 +1129,124 @@ document.addEventListener('keydown', e => {
 
 
 // ═══════════════════════════════════════════════════════════
-// PAGE 2: ROOMS — Agent Groupchats
+// PAGE 2: ROOMS — Real Agent Chat Interface
 // ═══════════════════════════════════════════════════════════
 
-let rooms = [];
 let roomsCurrentId = null;
-let roomsModalOpen = false;
+let roomsPollTimer = null;
+let roomsPollCount = 0;
+const ROOMS_POLL_INTERVAL = 3000;
+const ROOMS_POLL_MAX = 20; // 60s total
 
-const ROOM_RESPONSES = {
-  build: {
-    agents: ['coder', 'ops'],
-    triggers: {
-      'bug|fix|broken|error': ["I'll look into that. Can you share the error or which file?", "Let me check — what's the expected behavior?", "On it. Can you paste the stack trace or error output?"],
-      'build|deploy|ship': ["I can start on that. Want me to create a dispatch task?", "Ready to build. Should I prototype first or go straight to implementation?", "I'll set up the build pipeline. Any specific requirements?"],
-      'test|check': ["Running checks now. I'll report back.", "What specifically should I verify?", "On it — I'll run the test suite and flag anything failing."],
-      'refactor|clean|optimize': ["I can refactor that. Which parts feel most fragile?", "Let me profile it first, then we'll know where to optimize."],
-      default: ["Got it. I'll coordinate with Ops on implementation.", "Noted. Working on it.", "Understood. I'll get started and update you with progress."]
-    }
-  },
-  research: {
-    agents: ['researcher'],
-    triggers: {
-      'find|search|look': ["I'll dig into that. Give me a few minutes.", "Searching now — any specific sources to prioritize?", "On it. I'll check primary sources first."],
-      'compare|vs|alternative': ["I'll build a comparison. What criteria matter most?", "Good question. Let me analyze the tradeoffs.", "I'll put together a side-by-side. Give me a moment."],
-      'summarize|summary|tldr': ["I'll condense that down. How detailed do you want it?", "Working on a summary now."],
-      default: ["Interesting. Let me research that and come back with findings.", "I'll look into it.", "Let me dig into the literature on that."]
-    }
-  },
-  security: {
-    agents: ['devil', 'security'],
-    triggers: {
-      'risk|danger|vuln': ["Let me run a threat assessment.", "Where's the attack surface? I need specifics.", "I'll map out the risk vectors. Stand by."],
-      'review|audit': ["I'll tear this apart. Expect pushback — that's my job.", "Send me the code or config. I'll find the holes.", "Starting adversarial review now."],
-      'permission|access|auth': ["Let me check the access controls. This is usually where things break.", "I'll audit the auth flow end to end."],
-      default: ["I'll find what's wrong with this. Give me a moment.", "Noted. Running adversarial analysis.", "Let me poke at this and see what breaks."]
-    }
-  },
-  knowledge: {
-    agents: ['vault'],
-    triggers: {
-      'find|search|where': ["Searching the vault now...", "Let me check what we have on that.", "Querying the knowledge base — one moment."],
-      'organize|clean|merge': ["I can help reorganize. What's the target structure?", "Which notes need merging?", "I'll audit the current structure and propose changes."],
-      'link|connect|relate': ["I'll trace the connections between those notes.", "Let me build a link map for that topic."],
-      default: ["Checking the vault for related notes.", "I'll look into our knowledge base.", "Let me see what we've captured on that topic."]
-    }
-  }
+// Core agents that always get rooms
+const ROOM_AGENTS = ['righthand', 'researcher', 'coder', 'ops', 'devil', 'utility'];
+
+// Per-agent smart suggestions
+const ROOM_SUGGESTIONS = {
+  righthand:  ['What are you working on?', 'Show me your latest output', 'What\'s the team status?', 'Any open threads?'],
+  researcher: ['Research [topic]', 'What are you working on?', 'Summarize your latest findings', 'Compare X vs Y'],
+  coder:      ['Review this code', 'What are you working on?', 'Show me your latest output', 'Fix the build'],
+  ops:        ['Check system health', 'What are you working on?', 'Show service status', 'Run diagnostics'],
+  devil:      ['Tear this apart', 'What are you working on?', 'Review for security risks', 'Find the weak spots'],
+  utility:    ['What are you working on?', 'Show me your latest output', 'Clean up the vault', 'Organize notes'],
 };
 
-function getRoomResponseKey(roomId) {
-  if (roomId === 'room_build') return 'build';
-  if (roomId === 'room_research') return 'research';
-  if (roomId === 'room_security') return 'security';
-  if (roomId === 'room_knowledge') return 'knowledge';
-  // Custom rooms — try to match by agents
-  const room = rooms.find(r => r.id === roomId);
-  if (!room) return null;
-  for (const [key, val] of Object.entries(ROOM_RESPONSES)) {
-    if (val.agents.some(a => room.agents.includes(a))) return key;
-  }
-  return null;
+// Get chat history from localStorage
+function getRoomMessages(agentId) {
+  try {
+    const saved = localStorage.getItem('agent-os-room-' + agentId);
+    return saved ? JSON.parse(saved) : [];
+  } catch { return []; }
 }
 
-function getTemplateResponse(roomId, text) {
-  const key = getRoomResponseKey(roomId);
-  if (!key) return "Understood. I'll look into that.";
-  const triggers = ROOM_RESPONSES[key].triggers;
-  const lowerText = text.toLowerCase();
-  for (const [pattern, responses] of Object.entries(triggers)) {
-    if (pattern === 'default') continue;
-    if (new RegExp(pattern, 'i').test(lowerText)) {
-      if (Array.isArray(responses)) return responses[Math.floor(Math.random() * responses.length)];
-      return responses;
-    }
-  }
-  const def = triggers.default;
-  if (Array.isArray(def)) return def[Math.floor(Math.random() * def.length)];
-  return def || "Got it. I'll work on that.";
+function saveRoomMessages(agentId, messages) {
+  localStorage.setItem('agent-os-room-' + agentId, JSON.stringify(messages));
 }
 
-function seedRooms() {
-  return [
-    {
-      id: 'room_build', name: '🔨 Build Room', agents: ['coder', 'ops'],
-      purpose: 'Talk to Coder + Ops about implementation', unread: 3,
-      messages: [
-        { id: 'rm1', sender: 'coder', content: 'Just pushed the async dispatch refactor. Tests passing.', time: new Date(Date.now() - 45 * 60000).toISOString() },
-        { id: 'rm2', sender: 'ops', content: 'I see the deploy. Monitoring for any issues on the system side.', time: new Date(Date.now() - 40 * 60000).toISOString() },
-        { id: 'rm3', sender: 'coder', content: 'The new rate limiter is capping at 3 req/s as designed. No queue backups so far.', time: new Date(Date.now() - 20 * 60000).toISOString() },
-        { id: 'rm4', sender: 'ops', content: 'CPU is steady at 34%. Memory usage dropped slightly — good sign.', time: new Date(Date.now() - 15 * 60000).toISOString() },
-      ]
-    },
-    {
-      id: 'room_research', name: '🔬 Research Room', agents: ['researcher'],
-      purpose: 'Talk to Researcher about findings', unread: 1,
-      messages: [
-        { id: 'rr1', sender: 'researcher', content: 'Starting the Devin deep-dive. Their agent framework is interesting but opaque.', time: new Date(Date.now() - 120 * 60000).toISOString() },
-        { id: 'rr2', sender: 'researcher', content: "I'll cross-reference with user reports from forums and GitHub issues.", time: new Date(Date.now() - 100 * 60000).toISOString() },
-      ]
-    },
-    {
-      id: 'room_security', name: '🛡️ Security Room', agents: ['devil', 'security'],
-      purpose: "Talk to Devil's Advocate + Security about risks", unread: 0,
-      messages: [
-        { id: 'rs1', sender: 'devil', content: "Q1 audit findings are in. I'd recommend rotating API keys immediately.", time: new Date(Date.now() - 6 * 3600000).toISOString() },
-        { id: 'rs2', sender: 'security', content: 'Agreed on key rotation. Also want to stress-test the new OAuth flow.', time: new Date(Date.now() - 5.5 * 3600000).toISOString() },
-        { id: 'rs3', sender: 'devil', content: "I'll tear apart the OAuth implementation and report back.", time: new Date(Date.now() - 5 * 3600000).toISOString() },
-      ]
-    },
-    {
-      id: 'room_knowledge', name: '🧠 Knowledge Room', agents: ['vault'],
-      purpose: 'Talk to Vault Keeper about vault organization', unread: 2,
-      messages: [
-        { id: 'rk1', sender: 'vault', content: 'Vault cleanup done. 23 notes reorganized, 4 orphans found.', time: new Date(Date.now() - 3 * 3600000).toISOString() },
-        { id: 'rk2', sender: 'vault', content: 'Proposing a weekly knowledge health report. Draft sent to inbox.', time: new Date(Date.now() - 90 * 60000).toISOString() },
-      ]
-    },
-  ];
+// Format relative time
+function roomRelativeTime(isoTime) {
+  if (!isoTime) return '';
+  const diff = Date.now() - new Date(isoTime).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+// Format message content — handle code blocks and file paths
+function roomFormatContent(text) {
+  if (!text) return '';
+  // Escape HTML
+  let safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Code blocks: ```...```
+  safe = safe.replace(/```([\s\S]*?)```/g, '<pre class="rooms-code-block">$1</pre>');
+  // Inline code: `...`
+  safe = safe.replace(/`([^`]+)`/g, '<code class="rooms-inline-code">$1</code>');
+  // File paths: /path/to/file or ~/path/to/file
+  safe = safe.replace(/((?:~\/|\/)[a-zA-Z0-9._\-\/]+\.[a-zA-Z0-9]+)/g, '<span class="rooms-file-path">📄 $1</span>');
+  // Newlines
+  safe = safe.replace(/\n/g, '<br>');
+  return safe;
+}
+
+// Get agent room data with status from AGENTS array + feed
+function getRoomAgentData() {
+  const globalAgents = (typeof AGENTS !== 'undefined' && Array.isArray(AGENTS)) ? AGENTS : [];
+  return ROOM_AGENTS.map(id => {
+    const ag = iga(id);
+    const global = globalAgents.find(g => g.id === id);
+    const messages = getRoomMessages(id);
+    const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+    return {
+      id,
+      emoji: ag.emoji,
+      name: ag.name,
+      color: ag.color,
+      status: global?.status || 'idle',
+      task: global?.task || '',
+      lastMessageTime: lastMsg?.time || null,
+      messageCount: messages.length,
+    };
+  }).sort((a, b) => {
+    // Active first
+    if (a.status === 'active' && b.status !== 'active') return -1;
+    if (b.status === 'active' && a.status !== 'active') return 1;
+    // Then by last message time
+    const aTime = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+    const bTime = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+    return bTime - aTime;
+  });
+}
+
+// Pre-populate messages from feed
+async function roomLoadFeedMessages(agentId) {
+  const messages = getRoomMessages(agentId);
+  if (messages.length > 0) return; // Already have messages, skip
+  try {
+    const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+    const resp = await fetch(baseUrl + '/api/feed?limit=50');
+    if (!resp.ok) return;
+    const feed = await resp.json();
+    const agentEvents = feed.filter(e => e.agent === agentId && e.content);
+    if (agentEvents.length === 0) return;
+    const feedMsgs = agentEvents.slice(0, 10).reverse().map(e => ({
+      id: 'feed_' + (e.id || Date.now() + Math.random()),
+      sender: agentId,
+      content: e.content,
+      time: e.timestamp || new Date().toISOString(),
+      _fromFeed: true,
+    }));
+    saveRoomMessages(agentId, feedMsgs);
+  } catch {}
 }
 
 function initRooms() {
-  if (rooms.length === 0) {
-    const saved = localStorage.getItem('agent-os-rooms');
-    if (saved) {
-      try {
-        rooms = JSON.parse(saved);
-        // Clean up any stale thinking messages from interrupted sessions
-        rooms.forEach(r => { r.messages = r.messages.filter(m => !m._thinking); });
-      } catch { rooms = seedRooms(); }
-    } else {
-      rooms = seedRooms();
-    }
-  }
+  // Pre-populate from feed for agents with no history
+  ROOM_AGENTS.forEach(id => roomLoadFeedMessages(id));
   renderRooms();
-}
-
-function saveRooms() {
-  localStorage.setItem('agent-os-rooms', JSON.stringify(rooms));
 }
 
 function renderRooms() {
@@ -1276,25 +1258,32 @@ function renderRoomList() {
   const container = document.getElementById('rooms-list-panel');
   if (!container) return;
 
+  const agents = getRoomAgentData();
+
   container.innerHTML = `
     <div class="rooms-list-header">
-      <span class="rooms-list-title">Rooms</span>
-      <button class="rooms-new-btn" onclick="openNewRoomModal()">+ New Room</button>
+      <span class="rooms-list-title">Agent Chat</span>
     </div>
     <div class="rooms-list-items">
-      ${rooms.map(room => {
-        const agentEmojis = room.agents.map(a => iga(a).emoji).join(' ');
-        const lastMsg = room.messages.length > 0 ? room.messages[room.messages.length - 1] : null;
-        const lastPreview = lastMsg ? `${iga(lastMsg.sender).name}: ${lastMsg.content.substring(0, 40)}...` : 'No messages yet';
-        const isSelected = room.id === roomsCurrentId;
+      ${agents.map(agent => {
+        const isSelected = agent.id === roomsCurrentId;
+        const statusDot = agent.status === 'active'
+          ? '<span class="rooms-status-dot rooms-status-active"></span>'
+          : '<span class="rooms-status-dot rooms-status-idle"></span>';
+        const lastTime = agent.lastMessageTime ? roomRelativeTime(agent.lastMessageTime) : '';
+        const msgs = getRoomMessages(agent.id);
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const preview = lastMsg
+          ? (lastMsg.sender === 'user' ? 'You: ' : '') + lastMsg.content.substring(0, 50).replace(/\n/g, ' ')
+          : agent.task ? agent.task.substring(0, 50) : 'No messages yet';
         return `
-          <div class="rooms-list-item${isSelected ? ' selected' : ''}" onclick="selectRoom('${room.id}')">
+          <div class="rooms-list-item${isSelected ? ' selected' : ''}" onclick="selectRoom('${agent.id}')">
             <div class="rooms-item-top">
-              <span class="rooms-item-name">${room.name}</span>
-              ${room.unread > 0 ? `<span class="rooms-item-unread">${room.unread}</span>` : ''}
+              <span class="rooms-item-name">${agent.emoji} ${agent.name}</span>
+              <span class="rooms-item-time">${lastTime}</span>
             </div>
-            <div class="rooms-item-agents">${agentEmojis}</div>
-            <div class="rooms-item-preview">${lastPreview}</div>
+            <div class="rooms-item-status">${statusDot} ${agent.status === 'active' ? 'Active' : 'Idle'}${agent.task ? ' — ' + agent.task.substring(0, 30) : ''}</div>
+            <div class="rooms-item-preview">${preview}</div>
           </div>
         `;
       }).join('')}
@@ -1310,54 +1299,64 @@ function renderRoomView() {
     container.innerHTML = `
       <div class="rooms-view-empty">
         <div style="font-size:48px;margin-bottom:12px">💬</div>
-        <div style="font-size:16px;font-weight:600;color:var(--text-dim)">Select a room</div>
-        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Choose a room from the sidebar to start chatting</div>
+        <div style="font-size:16px;font-weight:600;color:var(--text-dim)">Select an agent</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Choose an agent to start chatting</div>
       </div>
     `;
     return;
   }
 
-  const room = rooms.find(r => r.id === roomsCurrentId);
-  if (!room) return;
+  const ag = iga(roomsCurrentId);
+  const messages = getRoomMessages(roomsCurrentId);
+  const globalAgents = (typeof AGENTS !== 'undefined' && Array.isArray(AGENTS)) ? AGENTS : [];
+  const global = globalAgents.find(g => g.id === roomsCurrentId);
+  const statusLabel = global?.status === 'active' ? '🟢 Active' : '⚪ Idle';
+  const taskLabel = global?.task ? ` — ${global.task}` : '';
 
-  const agentRow = room.agents.map(a => {
-    const ag = iga(a);
-    return `<span class="rooms-member-chip" style="color:${ag.color}" title="${ag.name}">${ag.emoji} ${ag.name}</span>`;
-  }).join('');
-
-  const messagesHTML = room.messages.map(msg => {
-    const sender = msg.sender === 'user' ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : iga(msg.sender);
+  const messagesHTML = messages.map(msg => {
     const isUser = msg.sender === 'user';
     const isThinking = msg._thinking;
+    const sender = isUser ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : iga(msg.sender);
+    const statusClass = msg._sent === false ? ' rooms-msg-failed' : (msg._pending ? ' rooms-msg-pending' : '');
     return `
-      <div class="rooms-message${isUser ? ' rooms-msg-user' : ''}${isThinking ? ' rooms-msg-thinking' : ''}">
+      <div class="rooms-message${isUser ? ' rooms-msg-user' : ''}${isThinking ? ' rooms-msg-thinking' : ''}${statusClass}" data-msg-id="${msg.id}">
         <div class="rooms-msg-avatar" style="background:${sender.color}20;border-color:${sender.color}">${sender.emoji}</div>
         <div class="rooms-msg-body">
           <div class="rooms-msg-header">
             <span class="rooms-msg-name" style="color:${sender.color}">${sender.name}</span>
-            <span class="rooms-msg-time">${formatInboxTime(msg.time)}</span>
+            <span class="rooms-msg-time">${roomRelativeTime(msg.time)}</span>
           </div>
-          <div class="rooms-msg-text${isThinking ? ' thinking-text' : ''}">${isThinking ? '<span class="thinking-dots">Thinking<span>.</span><span>.</span><span>.</span></span>' : msg.content}</div>
+          <div class="rooms-msg-text${isThinking ? ' thinking-text' : ''}">${isThinking
+            ? '<span class="thinking-dots">' + sender.emoji + ' ' + sender.name + ' is thinking<span>.</span><span>.</span><span>.</span></span>'
+            : roomFormatContent(msg.content)}</div>
         </div>
       </div>
     `;
   }).join('');
 
+  // Smart suggestions for this agent
+  const suggestions = ROOM_SUGGESTIONS[roomsCurrentId] || ['What are you working on?', 'Show me your latest output'];
+  const suggestionsHTML = suggestions.map(s =>
+    `<button class="rooms-suggestion-btn" onclick="roomUseSuggestion('${s.replace(/'/g, "\\'")}')">${s}</button>`
+  ).join('');
+
   container.innerHTML = `
     <div class="rooms-view-header">
       <div class="rooms-view-header-top">
-        <div class="rooms-view-title">${room.name}</div>
-        <button class="rooms-clear-btn" onclick="clearRoomMessages()" title="Clear messages">🗑️ Clear</button>
+        <div class="rooms-view-title">${ag.emoji} ${ag.name}</div>
+        <button class="rooms-clear-btn" onclick="clearRoomMessages()" title="Clear conversation">🗑️ Clear</button>
       </div>
-      <div class="rooms-view-members">${agentRow}</div>
-      <div class="rooms-view-purpose">${room.purpose}</div>
+      <div class="rooms-view-purpose">${statusLabel}${taskLabel}</div>
     </div>
     <div class="rooms-messages-area" id="rooms-messages-area">
-      ${messagesHTML}
+      ${messagesHTML || '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px">No messages yet. Say hello! 👋</div>'}
+    </div>
+    <div class="rooms-suggestions" id="rooms-suggestions">
+      ${suggestionsHTML}
     </div>
     <div class="rooms-input-bar">
       <textarea class="rooms-input" id="rooms-input" rows="1"
-        placeholder="Message ${room.name}..."
+        placeholder="Message ${ag.name}..."
         onkeydown="handleRoomInputKey(event)"
         oninput="autoResizeRoomInput(this)"></textarea>
       <button class="rooms-send-btn" onclick="sendRoomMessage()">
@@ -1371,12 +1370,6 @@ function renderRoomView() {
     const area = document.getElementById('rooms-messages-area');
     if (area) area.scrollTop = area.scrollHeight;
   }, 50);
-
-  // Clear unread
-  if (room.unread > 0) {
-    room.unread = 0;
-    renderRoomList();
-  }
 }
 
 function handleRoomInputKey(event) {
@@ -1393,116 +1386,172 @@ function autoResizeRoomInput(el) {
 
 function selectRoom(id) {
   roomsCurrentId = id;
+  stopRoomPolling();
   renderRooms();
 }
 
 function clearRoomMessages() {
-  const room = rooms.find(r => r.id === roomsCurrentId);
-  if (!room) return;
-  room.messages = [];
-  saveRooms();
+  if (!roomsCurrentId) return;
+  saveRoomMessages(roomsCurrentId, []);
   renderRoomView();
-  toast('Room messages cleared', 'info');
+  toast('Conversation cleared', 'info');
 }
 
-function sendRoomMessage() {
+function roomUseSuggestion(text) {
+  const input = document.getElementById('rooms-input');
+  if (input) {
+    input.value = text;
+    input.focus();
+  }
+}
+
+// Stop feed polling
+function stopRoomPolling() {
+  if (roomsPollTimer) {
+    clearInterval(roomsPollTimer);
+    roomsPollTimer = null;
+  }
+  roomsPollCount = 0;
+}
+
+// Poll /api/feed for agent response after sending
+function startRoomPolling(agentId, afterTimestamp) {
+  stopRoomPolling();
+  roomsPollCount = 0;
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+
+  roomsPollTimer = setInterval(async () => {
+    roomsPollCount++;
+    if (roomsPollCount >= ROOMS_POLL_MAX) {
+      stopRoomPolling();
+      // Remove thinking indicator
+      removeThinkingMessage(agentId);
+      return;
+    }
+
+    try {
+      const resp = await fetch(baseUrl + '/api/feed?limit=20');
+      if (!resp.ok) return;
+      const feed = await resp.json();
+      // Find any response from this agent after our message
+      const response = feed.find(e =>
+        e.agent === agentId &&
+        e.content &&
+        new Date(e.timestamp).getTime() > afterTimestamp
+      );
+
+      if (response) {
+        stopRoomPolling();
+        const messages = getRoomMessages(agentId);
+        // Remove thinking message
+        const thinkIdx = messages.findIndex(m => m._thinking);
+        if (thinkIdx !== -1) messages.splice(thinkIdx, 1);
+        // Add real response
+        messages.push({
+          id: 'resp_' + Date.now(),
+          sender: agentId,
+          content: response.content,
+          time: response.timestamp || new Date().toISOString(),
+        });
+        saveRoomMessages(agentId, messages);
+        if (roomsCurrentId === agentId) renderRoomView();
+        renderRoomList();
+      }
+    } catch {}
+  }, ROOMS_POLL_INTERVAL);
+}
+
+function removeThinkingMessage(agentId) {
+  const messages = getRoomMessages(agentId);
+  const thinkIdx = messages.findIndex(m => m._thinking);
+  if (thinkIdx !== -1) {
+    messages.splice(thinkIdx, 1);
+    saveRoomMessages(agentId, messages);
+    if (roomsCurrentId === agentId) renderRoomView();
+  }
+}
+
+async function sendRoomMessage() {
   const input = document.getElementById('rooms-input');
   if (!input || !input.value.trim()) return;
-  const text = input.value.trim();
-  const room = rooms.find(r => r.id === roomsCurrentId);
-  if (!room) return;
+  if (!roomsCurrentId) return;
 
-  // Add user message
-  room.messages.push({
-    id: 'rmsg_' + Date.now(),
+  const text = input.value.trim();
+  const agentId = roomsCurrentId;
+  const ag = iga(agentId);
+  const messages = getRoomMessages(agentId);
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  const sendTimestamp = Date.now();
+
+  // Add user message (optimistic)
+  messages.push({
+    id: 'rmsg_' + sendTimestamp,
     sender: 'user',
     content: text,
     time: new Date().toISOString(),
+    _pending: true,
   });
 
-  input.value = '';
-  input.style.height = 'auto';
-  saveRooms();
-  renderRoomView();
-
-  // Pick a responding agent from the room
-  const respondingAgent = room.agents[Math.floor(Math.random() * room.agents.length)];
-
-  // Add "Thinking..." message
-  const thinkingId = 'rmsg_thinking_' + Date.now();
-  room.messages.push({
+  // Add thinking indicator
+  const thinkingId = 'rmsg_thinking_' + sendTimestamp;
+  messages.push({
     id: thinkingId,
-    sender: respondingAgent,
+    sender: agentId,
     content: '',
     time: new Date().toISOString(),
     _thinking: true,
   });
-  saveRooms();
+
+  saveRoomMessages(agentId, messages);
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Hide suggestions after first message
+  const sugEl = document.getElementById('rooms-suggestions');
+  if (sugEl) sugEl.style.display = 'none';
+
   renderRoomView();
 
-  // After 1-2s, replace with real response
-  const delay = 1000 + Math.random() * 1000;
-  setTimeout(() => {
-    const thinkingIdx = room.messages.findIndex(m => m.id === thinkingId);
-    if (thinkingIdx === -1) return;
+  // Send to bridge
+  let sendOk = false;
+  try {
+    const resp = await fetch(`${baseUrl}/api/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, agent: agentId, context: 'rooms-chat', page: 'rooms' }),
+    });
+    sendOk = resp.ok;
+  } catch {}
 
-    const response = getTemplateResponse(room.id, text);
-    room.messages[thinkingIdx] = {
-      id: 'rmsg_' + Date.now(),
-      sender: respondingAgent,
-      content: response,
-      time: new Date().toISOString(),
-    };
-    saveRooms();
-    if (roomsCurrentId === room.id) renderRoomView();
-  }, delay);
+  // Update message status
+  const updatedMsgs = getRoomMessages(agentId);
+  const userMsg = updatedMsgs.find(m => m.id === 'rmsg_' + sendTimestamp);
+  if (userMsg) {
+    delete userMsg._pending;
+    if (!sendOk) {
+      userMsg._sent = false;
+    }
+  }
+  saveRoomMessages(agentId, updatedMsgs);
+
+  if (sendOk) {
+    // Start polling for response
+    startRoomPolling(agentId, sendTimestamp);
+    if (typeof addXP === 'function') addXP(5, 'agent chat');
+  } else {
+    // Remove thinking on failure
+    removeThinkingMessage(agentId);
+    toast('❌ Failed to reach agent', 'error');
+  }
+
+  if (roomsCurrentId === agentId) renderRoomView();
+  renderRoomList();
 }
 
-function openNewRoomModal() {
-  roomsModalOpen = true;
-  const overlay = document.getElementById('rooms-modal-overlay');
-  if (overlay) overlay.classList.remove('hidden');
-}
-
-function closeNewRoomModal() {
-  roomsModalOpen = false;
-  const overlay = document.getElementById('rooms-modal-overlay');
-  if (overlay) overlay.classList.add('hidden');
-  // Reset form
-  const nameInput = document.getElementById('new-room-name');
-  const purposeInput = document.getElementById('new-room-purpose');
-  if (nameInput) nameInput.value = '';
-  if (purposeInput) purposeInput.value = '';
-  document.querySelectorAll('.new-room-agent-cb').forEach(cb => cb.checked = false);
-}
-
-function createRoom() {
-  const nameInput = document.getElementById('new-room-name');
-  const purposeInput = document.getElementById('new-room-purpose');
-  const name = nameInput?.value.trim();
-  const purpose = purposeInput?.value.trim();
-  if (!name) { toast('Room name is required', 'error'); return; }
-
-  const selectedAgents = [];
-  document.querySelectorAll('.new-room-agent-cb:checked').forEach(cb => selectedAgents.push(cb.value));
-  if (selectedAgents.length === 0) { toast('Select at least one agent', 'error'); return; }
-
-  const newRoom = {
-    id: 'room_' + Date.now(),
-    name,
-    agents: selectedAgents,
-    purpose: purpose || '',
-    unread: 0,
-    messages: [],
-  };
-
-  rooms.push(newRoom);
-  saveRooms();
-  closeNewRoomModal();
-  roomsCurrentId = newRoom.id;
-  renderRooms();
-  toast(`Created room: ${name}`, 'success');
-}
+// Legacy compat — openNewRoomModal and createRoom are no longer used
+function openNewRoomModal() { toast('Rooms are auto-created from the agent roster', 'info'); }
+function closeNewRoomModal() {}
+function createRoom() {}
 
 
 

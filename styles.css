@@ -4077,7 +4077,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 2000;
+  z-index: 100000;
   pointer-events: none;
 }
 .toast {
@@ -9700,6 +9700,93 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   0%, 80%, 100% { opacity: 0.3; }
   40% { opacity: 1; }
 }
+
+/* Room status dots */
+.rooms-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.rooms-status-active { background: #a6e3a1; box-shadow: 0 0 4px #a6e3a1; }
+.rooms-status-idle { background: #585b70; }
+
+.rooms-item-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rooms-item-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Smart suggestions */
+.rooms-suggestions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 20px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.rooms-suggestion-btn {
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.rooms-suggestion-btn:hover {
+  background: var(--accent);
+  color: var(--bg-base);
+  border-color: var(--accent);
+}
+
+/* Code blocks in room messages */
+.rooms-code-block {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rooms-inline-code {
+  background: var(--bg-raised);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.rooms-file-path {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+/* Message status indicators */
+.rooms-msg-pending { opacity: 0.6; }
+.rooms-msg-failed .rooms-msg-text { color: var(--red); }
+.rooms-msg-failed .rooms-msg-text::after { content: ' (failed to send)'; font-size: 11px; color: var(--red); font-style: italic; }
 
 /* Textarea input for rooms */
 .rooms-input {

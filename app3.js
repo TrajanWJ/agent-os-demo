@@ -1421,14 +1421,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Start simulation
   startSimulation();
 
-  // Keyboard shortcuts for nav  
-  document.addEventListener('keydown', e => {
-    if (paletteOpen) return;
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-    const map = { '1': 'feed', '2': 'talk', '3': 'queue', '4': 'mind', '5': 'pulse' };
-    if (map[e.key]) { nav(map[e.key]); }
-  });
+  // Keyboard shortcuts for nav — handled by ux.js global handler
+  // (removed duplicate handler that conflicted with ux.js key mappings)
 
   // Init Quick Actions
   updateQuickActions();
