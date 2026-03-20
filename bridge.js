@@ -262,8 +262,22 @@ async function bridgeGoLive() {
   }
 
   // 4) Re-render current view
-  if (currentPage === 'feed') renderFeed();
-  if (currentPage === 'talk') { renderChannelList(); }
+  if (currentPage === 'feed') {
+    if (typeof renderDashboard === 'function') renderDashboard();
+    else renderFeed();
+  }
+  if (currentPage === 'talk') {
+    renderChannelList();
+    // Switch to first real channel if current is a fake ID
+    if (currentChannel && !/^\d+$/.test(currentChannel) && _liveChannelData?.categories?.length) {
+      const firstCh = _liveChannelData.categories[0]?.channels?.[0];
+      if (firstCh) {
+        currentChannel = firstCh.id;
+        renderChannelList(); // Re-render with active highlight
+        loadLiveMessages(firstCh.id);
+      }
+    }
+  }
   if (currentPage === 'queue') renderQueue();
 
   // 5) Wire WebSocket events
@@ -494,8 +508,24 @@ if (typeof window !== 'undefined' && typeof window.nav === 'function') {
     _realNav.call(this, page);
     if (!Bridge.liveMode) return;
     // Refresh live data for the view
-    if (page === 'talk') renderChannelList(); // DC_CHANNELS is already replaced
-    if (page === 'feed') renderFeed();        // feedEvents is already replaced
+    if (page === 'talk') {
+      renderChannelList();
+      // Auto-select first real channel if current is fake
+      if (currentChannel && !/^\d+$/.test(currentChannel) && _liveChannelData?.categories?.length) {
+        const firstCh = _liveChannelData.categories[0]?.channels?.[0];
+        if (firstCh) {
+          currentChannel = firstCh.id;
+          renderChannelList();
+          loadLiveMessages(firstCh.id);
+        }
+      } else if (/^\d+$/.test(currentChannel)) {
+        loadLiveMessages(currentChannel);
+      }
+    }
+    if (page === 'feed') {
+      if (typeof renderDashboard === 'function') renderDashboard();
+      else renderFeed();
+    }
     if (page === 'queue') renderQueue();      // queueCards is already replaced
   };
 }
