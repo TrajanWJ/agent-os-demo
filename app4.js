@@ -774,11 +774,11 @@ const AGENT_CAP_MATRIX = {
 };
 
 const AUTONOMY_LEVELS = [
-  { value: 0, label: 'Observer',  desc: 'Watch only — no actions taken. Agent observes and logs but never acts.', color: '#6c7086' },
-  { value: 1, label: 'Suggest',   desc: 'Propose actions for human review. Agent drafts plans but waits for approval.', color: '#89b4fa' },
-  { value: 2, label: 'Confirm',   desc: 'Execute after confirmation. Agent asks before each action, then proceeds.', color: '#f9e2af' },
-  { value: 3, label: 'Auto',      desc: 'Act independently on safe tasks. Escalate risky or expensive operations.', color: '#fab387' },
-  { value: 4, label: 'Autopilot', desc: 'Full autonomy. Agent handles everything, reports results after the fact.', color: '#a6e3a1' },
+  { value: 0, label: 'Observer',  icon: '👁️', desc: 'Read only, no actions. Agent observes and logs but never acts autonomously.', color: '#6c7086' },
+  { value: 1, label: 'Suggest',   icon: '💡', desc: 'Proposes actions, waits for approval. Agent drafts plans but never executes without sign-off.', color: '#89b4fa' },
+  { value: 2, label: 'Confirm',   icon: '✋', desc: 'Acts on low-risk tasks, asks for high-risk. Balanced autonomy with human oversight on important decisions.', color: '#f9e2af' },
+  { value: 3, label: 'Auto',      icon: '⚡', desc: 'Acts on everything, reports after. Full execution with post-hoc reporting. Escalates only on errors.', color: '#fab387' },
+  { value: 4, label: 'Autopilot', icon: '🚀', desc: 'Full autonomy, minimal reporting. Agent handles everything end-to-end with minimal interruptions.', color: '#a6e3a1' },
 ];
 
 const DEFAULT_OVERRIDES = [
