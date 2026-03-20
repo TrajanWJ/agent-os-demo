@@ -471,18 +471,30 @@ let queueCards = QUEUE_QUESTIONS.map(q => ({ ...q, remaining: q.ttl - q.elapsed 
 let qStats = { answered: 0, autoresolved: 0, expired: 0 };
 let qTimerInterval = null;
 
+let _proposalFilter = 'all';
+function filterProposals(status) {
+  _proposalFilter = status;
+  $$('#queue-filter-tabs .filter-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === status);
+  });
+  renderQueue();
+}
+
 function renderQueue() {
   updateQueueStats();
   const list = $('queue-list');
   list.innerHTML = '';
 
-  if (queueCards.length === 0) {
+  const filtered = _proposalFilter === 'all' ? queueCards
+    : queueCards.filter(q => (q._status || 'pending') === _proposalFilter);
+
+  if (filtered.length === 0) {
     $('queue-empty').classList.remove('hidden');
     return;
   }
   $('queue-empty').classList.add('hidden');
 
-  queueCards.forEach(q => {
+  filtered.forEach(q => {
     list.appendChild(makeQueueCard(q));
   });
 
@@ -564,6 +576,7 @@ function makeQueueCard(q) {
         <div style="font-size:10px;color:var(--text-muted)">${q.type}</div>
       </div>
       <span class="queue-priority-badge">${q._priority || q.priority}</span>
+      ${q._status && q._status !== 'pending' ? `<span style="font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;background:${q._status==='approved'?'#a6e3a122':'#f38ba822'};color:${q._status==='approved'?'#a6e3a1':'#f38ba8'};text-transform:uppercase;font-weight:600;letter-spacing:.5px">${q._status}</span>` : ''}
       ${q._triageVerdict ? `<span style="font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;background:${q._triageVerdict==='escalate'?'#f9e2af33':'#a6e3a133'};color:${q._triageVerdict==='escalate'?'#f9e2af':'#a6e3a1'};">${q._triageVerdict==='escalate'?'⚠️ Needs Review':'✅ Safe'}</span>` : ''}
     </div>
     ${q._source ? `<div style="font-size:10px;color:var(--text-muted);margin:-4px 0 6px 46px;">via ${q._source}${q._type ? ' · ' + q._type : ''}</div>` : ''}

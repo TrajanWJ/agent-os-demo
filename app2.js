@@ -870,182 +870,357 @@ function renderVerticalTimeline(track, sorted) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PULSE PAGE
+// PULSE PAGE — Full Operations Dashboard
 // ═══════════════════════════════════════════════════════════
 
+let _pulseRefreshTimer = null;
+let _currentLogService = 'openclaw-gateway';
+
 function renderPulse() {
-  if (window.innerWidth <= 768) {
-    renderPulseMobileAccordion();
+  // Load live data from bridge if available, else show demo
+  if (Bridge.liveMode) {
+    loadPulseData();
   } else {
-    renderAgentHealth();
-    renderCostChart();
-    renderSystemLoad();
-    renderCrons();
-    renderHooks();
-    renderErrorLog();
+    renderPulseDemo();
+  }
+  // Start auto-refresh every 30s
+  if (_pulseRefreshTimer) clearInterval(_pulseRefreshTimer);
+  _pulseRefreshTimer = setInterval(() => {
+    if (currentPage === 'pulse' && Bridge.liveMode) loadPulseData();
+  }, 30000);
+}
+
+function refreshPulseData() {
+  if (Bridge.liveMode) {
+    loadPulseData();
+    toast('🔄 Refreshing system data...', 'info');
+  } else {
+    toast('Connect bridge first', 'error');
   }
 }
 
-function renderPulseMobileAccordion() {
-  const grid = document.querySelector('.pulse-grid');
+async function loadPulseData() {
+  try {
+    const [overview, services, agents, crons] = await Promise.all([
+      Bridge.getSystemOverview().catch(() => null),
+      Bridge.getSystemServices().catch(() => []),
+      Bridge.getSystemAgents().catch(() => ({})),
+      Bridge.getSystemCrons().catch(() => ({ crons: [], timers: [] })),
+    ]);
+    if (overview) renderMetricsBar(overview);
+    renderServicesPanel(services);
+    renderAgentStatusPanel(agents);
+    renderCronHealthPanel(crons);
+    loadLogPanel(_currentLogService);
+    // Re-init lucide icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (err) {
+    console.error('[pulse] data load error:', err);
+  }
+}
+
+function renderPulseDemo() {
+  // Render static demo data for offline mode
+  const metricsEl = $('pulse-metrics');
+  if (!metricsEl) return;
+
+  // Demo metrics
+  const uptimeCard = $('metric-uptime');
+  if (uptimeCard) {
+    uptimeCard.querySelector('.metric-value').textContent = '4d 7h';
+    uptimeCard.querySelector('.metric-sub').textContent = 'demo data';
+    uptimeCard.querySelector('.metric-value').style.color = '#a6e3a1';
+  }
+  const loadCard = $('metric-load');
+  if (loadCard) {
+    loadCard.querySelector('.metric-value').textContent = '1.2';
+    loadCard.querySelector('.metric-sub').textContent = '1.2 / 0.8 / 0.6';
+  }
+  const memCard = $('metric-memory');
+  if (memCard) {
+    memCard.querySelector('.metric-value').textContent = '6.2 / 14 GB';
+    const memBar = $('mem-bar');
+    if (memBar) { memBar.style.width = '44%'; memBar.style.background = 'linear-gradient(90deg, #a6e3a1, #f9e2af)'; }
+  }
+  const diskCard = $('metric-disk');
+  if (diskCard) {
+    diskCard.querySelector('.metric-value').textContent = '94%';
+    const diskBar = $('disk-bar');
+    if (diskBar) { diskBar.style.width = '94%'; diskBar.style.background = 'linear-gradient(90deg, #f9e2af, #f38ba8)'; }
+  }
+
+  // Demo services
+  const sGrid = $('services-grid');
+  if (sGrid) {
+    sGrid.innerHTML = ['OpenClaw Gateway', 'OAuth Guardian', 'Bridge Server', 'Bridge Sync'].map(name =>
+      `<div class="svc-card"><span class="svc-dot" style="background:#a6e3a1"></span><div class="svc-info"><div class="svc-name">${name}</div><div class="svc-sub">active · demo</div></div></div>`
+    ).join('');
+  }
+
+  // Demo agents
+  const aGrid = $('agent-status-grid');
+  if (aGrid) {
+    aGrid.innerHTML = (typeof AGENTS !== 'undefined' ? AGENTS : []).map(a =>
+      `<div class="agent-card-sys"><div class="agent-card-header-sys"><span>${a.emoji}</span><span class="agent-name-sys">${a.name}</span><span class="agent-status-pill ${a.status === 'active' ? 'pill-active' : 'pill-idle'}">${a.status || 'idle'}</span></div><div class="agent-task-sys">${a.task || 'standing by'}</div></div>`
+    ).join('');
+  }
+
+  // Demo crons
+  const cTable = $('cron-health-table');
+  if (cTable && typeof CRONS !== 'undefined') {
+    cTable.innerHTML = CRONS.map(c =>
+      `<div class="cron-row-sys"><span class="svc-dot" style="background:${c.ok ? '#a6e3a1' : '#f38ba8'}"></span><span class="cron-name-sys">${c.n}</span><span class="cron-sched-sys">${c.s}</span></div>`
+    ).join('');
+  }
+
+  // Demo logs
+  const logViewer = $('log-viewer');
+  if (logViewer) {
+    logViewer.innerHTML = '<div class="log-placeholder">Connect bridge to view live logs</div>';
+  }
+}
+
+// ── Metrics Bar ───────────────────────────────────────────
+
+function renderMetricsBar(data) {
+  // Uptime
+  const uptimeCard = $('metric-uptime');
+  if (uptimeCard) {
+    const upStr = data.uptime || 'unknown';
+    uptimeCard.querySelector('.metric-value').textContent = upStr;
+    // Color: parse hours
+    const hourMatch = upStr.match(/(\d+)\s*day/);
+    const days = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const hasHours = upStr.match(/(\d+)\s*hour/);
+    const hours = hasHours ? parseInt(hasHours[1]) : 0;
+    const totalHours = days * 24 + hours;
+    const upColor = totalHours >= 24 ? '#a6e3a1' : totalHours >= 1 ? '#f9e2af' : '#f38ba8';
+    uptimeCard.querySelector('.metric-value').style.color = upColor;
+    uptimeCard.querySelector('.metric-sub').textContent = totalHours >= 24 ? 'healthy' : 'recently restarted';
+  }
+
+  // Load
+  const loadCard = $('metric-load');
+  if (loadCard && data.load) {
+    const l1 = data.load.avg1;
+    loadCard.querySelector('.metric-value').textContent = l1.toFixed(2);
+    loadCard.querySelector('.metric-value').style.color = l1 < 2 ? '#a6e3a1' : l1 < 4 ? '#f9e2af' : '#f38ba8';
+    loadCard.querySelector('.metric-sub').textContent = `${l1.toFixed(1)} / ${data.load.avg5.toFixed(1)} / ${data.load.avg15.toFixed(1)}`;
+  }
+
+  // Memory
+  const memCard = $('metric-memory');
+  if (memCard && data.memory) {
+    const usedGB = (data.memory.used / 1024).toFixed(1);
+    const totalGB = (data.memory.total / 1024).toFixed(1);
+    const pct = Math.round((data.memory.used / data.memory.total) * 100);
+    memCard.querySelector('.metric-value').textContent = `${usedGB} / ${totalGB} GB`;
+    const memBar = $('mem-bar');
+    if (memBar) {
+      memBar.style.width = pct + '%';
+      memBar.style.background = pct > 85 ? 'linear-gradient(90deg, #f9e2af, #f38ba8)' : 'linear-gradient(90deg, #a6e3a1, #89dceb)';
+    }
+  }
+
+  // Disk
+  const diskCard = $('metric-disk');
+  if (diskCard && data.disk) {
+    const pctStr = data.disk.percent || '0%';
+    const pct = parseInt(pctStr);
+    diskCard.querySelector('.metric-value').textContent = `${data.disk.used} / ${data.disk.total}`;
+    diskCard.querySelector('.metric-value').style.color = pct > 85 ? '#f38ba8' : pct > 70 ? '#f9e2af' : '#a6e3a1';
+    const diskBar = $('disk-bar');
+    if (diskBar) {
+      diskBar.style.width = pct + '%';
+      diskBar.style.background = pct > 85 ? 'linear-gradient(90deg, #f9e2af, #f38ba8)' : 'linear-gradient(90deg, #a6e3a1, #89dceb)';
+    }
+  }
+}
+
+// ── Services Panel ────────────────────────────────────────
+
+function renderServicesPanel(services) {
+  const grid = $('services-grid');
   if (!grid) return;
 
-  // Render content into temporary containers
-  renderAgentHealth();
-  renderCostChart();
-  renderSystemLoad();
-  renderCrons();
-  renderHooks();
-  renderErrorLog();
+  const friendlyNames = {
+    'openclaw-gateway': 'OpenClaw Gateway',
+    'oauth-guardian': 'OAuth Guardian',
+    'agent-os-bridge': 'Bridge Server',
+    'bridge-sync': 'Bridge Sync',
+  };
 
-  const sections = [
-    { icon: '\u{1F916}', title: 'Agent Health', contentId: 'agent-health-table' },
-    { icon: '\u{1F4B0}', title: 'Cost (7 days)', contentId: 'cost-chart', isParent: '.cost-chart-container' },
-    { icon: '\u{1F4CA}', title: 'System Load', contentId: 'system-load' },
-    { icon: '\u23F0', title: 'Cron Jobs', contentId: 'cron-status' },
-    { icon: '\u{1F517}', title: 'Webhooks', contentId: 'hook-status' },
-    { icon: '\u{1F6A8}', title: 'Recent Errors', contentId: 'error-log' },
-  ];
+  grid.innerHTML = services.map(svc => {
+    const isActive = svc.active === 'active';
+    const dotColor = isActive ? '#a6e3a1' : '#f38ba8';
+    const name = friendlyNames[svc.name] || svc.name;
+    const since = svc.since ? timeSince(new Date(svc.since)) : 'unknown';
+    const glowClass = isActive ? 'svc-glow' : '';
 
-  // Wrap each pulse-section in accordion markup
-  const pulseSections = grid.querySelectorAll('.pulse-section');
-  sections.forEach((sec, i) => {
-    const psEl = pulseSections[i];
-    if (!psEl || psEl.dataset.accordion === 'done') return;
-
-    psEl.dataset.accordion = 'done';
-    const title = psEl.querySelector('.section-title');
-    if (!title) return;
-
-    // Wrap children (except title) in accordion-body
-    const body = document.createElement('div');
-    body.className = 'accordion-body';
-    const children = [...psEl.children].filter(c => c !== title);
-    children.forEach(c => body.appendChild(c));
-
-    // Create accordion header
-    const header = document.createElement('div');
-    header.className = 'accordion-header';
-    header.innerHTML = `<span>${sec.icon} ${sec.title}</span><span class="accordion-arrow">\u25B6</span>`;
-    header.onclick = function() { toggleAccordion(this); };
-
-    psEl.innerHTML = '';
-    psEl.classList.add('accordion-section');
-    if (i === 0) psEl.classList.add('open');
-    psEl.appendChild(header);
-    psEl.appendChild(body);
-  });
-}
-
-function toggleAccordion(header) {
-  const section = header.parentElement;
-  section.classList.toggle('open');
-}
-
-function renderAgentHealth() {
-  const c = $('agent-health-table');
-  c.innerHTML = '';
-  AGENTS.forEach(a => {
-    const statusClr = a.status === 'active' ? 'var(--green)' : 'var(--text-muted)';
-    const fitClr = a.fitness > 0.8 ? 'var(--green)' : a.fitness > 0.6 ? 'var(--yellow)' : 'var(--red)';
-    const row = document.createElement('div');
-    row.className = 'health-row';
-    row.innerHTML = `
-      <div class="health-agent"><span class="health-status-dot" style="background:${statusClr}"></span>${a.emoji} ${a.name}</div>
-      <div class="health-task">${a.task || a.role}</div>
-      <div class="health-bar-outer"><div class="health-bar-inner" style="width:${a.fitness * 100}%;background:${fitClr}"></div></div>
-      <div class="health-tokens">${(a.tokens / 1000).toFixed(1)}K</div>
-    `;
-    c.appendChild(row);
-  });
-}
-
-function renderCostChart() {
-  const svg = $('cost-chart');
-  if (!svg) return;
-  const W = svg.parentElement.clientWidth || 400;
-  const H = 160;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.innerHTML = '';
-  const agents = ['righthand', 'researcher', 'coder', 'vault', 'other'];
-  const colors = { righthand: '#D4A574', researcher: '#5B8AF0', coder: '#4CAF50', vault: '#D4A574', other: '#1ABC9C' };
-  const barW = (W - 60) / COST_DATA.length;
-  const maxT = Math.max(...COST_DATA.map(d => agents.reduce((s, a) => s + (d[a] || 0), 0)));
-
-  COST_DATA.forEach((d, i) => {
-    let y = H - 20;
-    agents.forEach(agent => {
-      const val = d[agent] || 0;
-      const bH = (val / maxT) * (H - 30);
-      y -= bH;
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', 30 + i * barW + 4);
-      rect.setAttribute('y', y);
-      rect.setAttribute('width', barW - 8);
-      rect.setAttribute('height', bH);
-      rect.setAttribute('fill', colors[agent] || '#1ABC9C');
-      rect.setAttribute('rx', '2');
-      svg.appendChild(rect);
-    });
-    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    txt.setAttribute('x', 30 + (i + 0.5) * barW);
-    txt.setAttribute('y', H - 4);
-    txt.setAttribute('text-anchor', 'middle');
-    txt.setAttribute('fill', '#6c7086');
-    txt.setAttribute('font-size', '10');
-    txt.textContent = d.day;
-    svg.appendChild(txt);
-  });
-}
-
-function renderSystemLoad() {
-  const loads = [
-    { label: 'CPU', val: 34, color: 'var(--accent)' },
-    { label: 'Mem', val: 67, color: 'var(--accent2)' },
-    { label: 'Disk', val: 94, color: 'var(--red)' },
-    { label: 'Net', val: 12, color: 'var(--green)' },
-  ];
-  $('system-load').innerHTML = loads.map(l => `
-    <div class="load-row">
-      <span class="load-label">${l.label}</span>
-      <div class="load-bar-outer"><div class="load-bar-inner" style="width:${l.val}%;background:${l.color}"></div></div>
-      <span class="load-value">${l.val}%</span>
-    </div>
-  `).join('');
-}
-
-function renderCrons() {
-  $('cron-status').innerHTML = CRONS.map(c => `
-    <div class="cron-row">
-      <span class="status-dot ${c.ok ? 'status-ok' : 'status-fail'}"></span>
-      <span class="cron-name">${c.n}</span>
-      <span class="cron-schedule">${c.s}</span>
-    </div>
-  `).join('');
-}
-
-function renderHooks() {
-  $('hook-status').innerHTML = HOOKS.map(h => `
-    <div class="hook-row">
-      <span class="status-dot ${h.s === 'ok' ? 'status-ok' : h.s === 'warn' ? 'status-warn' : 'status-fail'}"></span>
-      <span class="hook-name">${h.n}</span>
-      <span class="hook-latency">${h.l}</span>
-    </div>
-  `).join('');
-}
-
-function renderErrorLog() {
-  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn' || e.level === 'info').slice(0, 8);
-  $('error-log').innerHTML = errors.map(e => {
-    const agent = ga(e.agent) || { emoji: '❓' };
-    const levelClass = e.level === 'error' ? 'error' : e.level === 'warn' ? 'warn' : 'info';
-    return `
-      <div class="error-item error-line ${levelClass}">
-        <span class="error-time">${e.time}</span>
-        <span class="error-agent">${agent.emoji}</span>
-        <span class="error-text">${e.text}</span>
-      </div>`;
+    return `<div class="svc-card ${glowClass}" onclick="showServiceLogs('${svc.name}','${name}')">
+      <span class="svc-dot" style="background:${dotColor}"></span>
+      <div class="svc-info">
+        <div class="svc-name">${name}</div>
+        <div class="svc-sub">${svc.active}${svc.sub !== 'unknown' ? ' · ' + svc.sub : ''} · ${since}</div>
+      </div>
+      <span class="svc-pid">${svc.pid ? 'PID ' + svc.pid : ''}</span>
+    </div>`;
   }).join('');
+}
+
+function timeSince(date) {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 60) return secs + 's';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h';
+  return Math.floor(secs / 86400) + 'd';
+}
+
+function showServiceLogs(svcId, svcName) {
+  const slideout = $('service-log-slideout');
+  const title = $('slideout-title');
+  const viewer = $('slideout-log-viewer');
+  if (!slideout || !viewer) return;
+  title.textContent = svcName + ' Logs';
+  slideout.classList.remove('hidden');
+  viewer.innerHTML = '<div class="log-placeholder">Loading...</div>';
+  Bridge.getSystemLogs(svcId, 100).then(data => {
+    renderLogLines(viewer, data.lines || []);
+  }).catch(err => {
+    viewer.innerHTML = `<div class="log-placeholder" style="color:#f38ba8">Error: ${err.message}</div>`;
+  });
+}
+
+function closeServiceSlideout() {
+  const slideout = $('service-log-slideout');
+  if (slideout) slideout.classList.add('hidden');
+}
+
+// ── Agent Status Panel ────────────────────────────────────
+
+function renderAgentStatusPanel(agentData) {
+  const grid = $('agent-status-grid');
+  if (!grid) return;
+
+  // Merge AGENTS roster with live dispatch data
+  const roster = typeof AGENTS !== 'undefined' ? AGENTS : [];
+  grid.innerHTML = roster.map(a => {
+    const liveData = agentData[a.id] || agentData[a.name?.toLowerCase()] || {};
+    const queuedTasks = liveData.queued || [];
+    const doneCount = liveData.doneCount || 0;
+    const isActive = queuedTasks.length > 0 || a.status === 'active';
+    const currentTask = queuedTasks.length > 0 ? queuedTasks[0].title : (a.task || 'standing by');
+    const statusPill = isActive ? 'pill-active' : 'pill-idle';
+
+    return `<div class="agent-card-sys ${isActive ? 'agent-active-glow' : ''}">
+      <div class="agent-card-header-sys">
+        <span class="agent-emoji-sys">${a.emoji}</span>
+        <span class="agent-name-sys">${a.name}</span>
+        <span class="agent-status-pill ${statusPill}">${isActive ? 'active' : 'idle'}</span>
+      </div>
+      <div class="agent-task-sys">${currentTask}</div>
+      <div class="agent-stats-sys">
+        <span class="agent-stat-item">📋 ${queuedTasks.length} queued</span>
+        <span class="agent-stat-item">✅ ${doneCount} done</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Cron Health Panel ─────────────────────────────────────
+
+function renderCronHealthPanel(cronData) {
+  const table = $('cron-health-table');
+  if (!table) return;
+
+  let rows = '';
+
+  // Crontab entries
+  (cronData.crons || []).forEach(c => {
+    const schedHuman = cronToHuman(c.schedule);
+    rows += `<div class="cron-row-sys">
+      <span class="svc-dot" style="background:#a6e3a1"></span>
+      <span class="cron-name-sys" title="${c.command}">${c.command.substring(0, 40)}</span>
+      <span class="cron-sched-sys">${schedHuman}</span>
+      <span class="cron-type-badge">crontab</span>
+    </div>`;
+  });
+
+  // Systemd timers
+  (cronData.timers || []).forEach(t => {
+    const name = t.unit || t.activates || 'timer';
+    const isOverdue = t.left && t.left.includes('ago');
+    const dotColor = isOverdue ? '#f9e2af' : '#a6e3a1';
+    rows += `<div class="cron-row-sys">
+      <span class="svc-dot" style="background:${dotColor}"></span>
+      <span class="cron-name-sys">${name}</span>
+      <span class="cron-sched-sys">${t.left || 'unknown'}</span>
+      <span class="cron-type-badge type-systemd">systemd</span>
+    </div>`;
+  });
+
+  if (!rows) {
+    rows = '<div class="log-placeholder">No cron jobs found</div>';
+  }
+  table.innerHTML = rows;
+}
+
+function cronToHuman(sched) {
+  if (!sched) return '';
+  const parts = sched.split(/\s+/);
+  if (parts.length < 5) return sched;
+  const [min, hr, dom, mon, dow] = parts;
+  if (min === '*' && hr === '*') return 'every minute';
+  if (min !== '*' && hr === '*') return `every hour at :${min.padStart(2,'0')}`;
+  if (min === '0' && hr === '*') return 'every hour';
+  if (min === '*/5') return 'every 5 min';
+  if (min === '*/10') return 'every 10 min';
+  if (min === '*/15') return 'every 15 min';
+  if (min === '*/30' || (min === '0' && hr === '*/2')) return 'every 30 min';
+  if (dom === '*' && mon === '*' && dow === '*') return `daily at ${hr}:${min.padStart(2,'0')}`;
+  return sched;
+}
+
+// ── Live Logs Panel ───────────────────────────────────────
+
+function switchLogTab(svc, btn) {
+  _currentLogService = svc;
+  document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadLogPanel(svc);
+}
+
+async function loadLogPanel(svc) {
+  const viewer = $('log-viewer');
+  if (!viewer) return;
+  if (!Bridge.liveMode) {
+    viewer.innerHTML = '<div class="log-placeholder">Connect bridge to view live logs</div>';
+    return;
+  }
+  viewer.innerHTML = '<div class="log-placeholder">Loading...</div>';
+  try {
+    const data = await Bridge.getSystemLogs(svc, 50);
+    renderLogLines(viewer, data.lines || []);
+  } catch (err) {
+    viewer.innerHTML = `<div class="log-placeholder" style="color:#f38ba8">Error: ${err.message}</div>`;
+  }
+}
+
+function renderLogLines(container, lines) {
+  if (!lines.length) {
+    container.innerHTML = '<div class="log-placeholder">No log entries</div>';
+    return;
+  }
+  container.innerHTML = lines.map(l => {
+    const text = l.text || '';
+    let severity = 'info';
+    if (/error|fail|fatal|panic/i.test(text)) severity = 'error';
+    else if (/warn/i.test(text)) severity = 'warn';
+    const ts = l.ts ? `<span class="log-ts">${l.ts.substring(11, 19) || l.ts}</span>` : '';
+    return `<div class="log-line log-${severity}">${ts}<span class="log-text">${escHtml(text)}</span></div>`;
+  }).join('');
+  // Auto-scroll to bottom
+  container.scrollTop = container.scrollHeight;
 }
 
 function quickAction(action) {
@@ -1056,7 +1231,7 @@ function quickAction(action) {
     'health-check':    '🩺 Running health check...',
   };
   toast(msgs[action] || action, 'success');
-  addXP(5, 'quick action');
+  if (typeof addXP === 'function') addXP(5, 'quick action');
 }
 
 // ═══════════════════════════════════════════════════════════

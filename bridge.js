@@ -547,8 +547,8 @@ let _proposalRefreshTimer = null;
 async function loadLiveProposals() {
   if (!Bridge.liveMode) return;
   try {
-    const proposals = await Bridge.getProposals('pending');
-    // Convert to queueCards format
+    const proposals = await Bridge.getProposals('all');
+    // Convert to queueCards format — show all, with status indicator
     const converted = proposals.map(p => ({
       id: p.id,
       agent: p.source || 'righthand',
@@ -564,6 +564,7 @@ async function loadLiveProposals() {
       _priority: p.priority || 'P3',
       _source: p.source || 'unknown',
       _type: p.type || 'idea',
+      _status: p.status || 'pending',
       _createdAt: p.created_at,
       _triageVerdict: p.triage_verdict || null,
       _triageReason: p.triage_reason || null,
