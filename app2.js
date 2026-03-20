@@ -72,9 +72,36 @@ function _renderDashboardHeader() {
         cpu = Math.round(data.cpu);
         cpuAvg = data.loadavg || cpuAvg;
       }
-      if (data.memory !== undefined) mem = Math.round(data.memory);
-      if (data.disk !== undefined) disk = Math.round(data.disk);
-      if (data.uptime !== undefined) uptime = data.uptime;
+      if (data.load) {
+        cpuAvg = { m1: data.load.avg1 || 0, m5: data.load.avg5 || 0, m15: data.load.avg15 || 0 };
+        // Estimate CPU% from load avg if cpu not provided directly
+        if (data.cpu === undefined) cpu = Math.min(100, Math.round((data.load.avg1 / 6) * 100)); // 6 vCPUs
+      }
+      if (data.memory !== undefined) {
+        if (typeof data.memory === 'object' && data.memory.total) {
+          mem = Math.round((data.memory.used / data.memory.total) * 100);
+        } else {
+          mem = Math.round(data.memory);
+        }
+      }
+      if (data.disk !== undefined) {
+        if (typeof data.disk === 'object' && data.disk.percent) {
+          disk = parseInt(String(data.disk.percent).replace('%', ''), 10) || 0;
+        } else {
+          disk = Math.round(data.disk);
+        }
+      }
+      if (data.uptime !== undefined) {
+        if (typeof data.uptime === 'string') {
+          // Parse "X days, Y hours, Z minutes" to seconds
+          const d = data.uptime.match(/(\d+)\s*day/);
+          const h = data.uptime.match(/(\d+)\s*hour/);
+          const m = data.uptime.match(/(\d+)\s*min/);
+          uptime = ((d ? +d[1] : 0) * 86400) + ((h ? +h[1] : 0) * 3600) + ((m ? +m[1] : 0) * 60);
+        } else {
+          uptime = data.uptime;
+        }
+      }
       _pushMetricHistory('cpu', cpu);
       _pushMetricHistory('mem', mem);
       _pushMetricHistory('disk', disk);
