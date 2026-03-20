@@ -685,7 +685,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
    PROPOSALS — Daily Brief Redesign
 ═══════════════════════════════════════════════════════════ */
 
-.proposals-view {
+.proposals-view.active {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
