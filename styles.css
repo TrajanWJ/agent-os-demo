@@ -6637,6 +6637,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 .rooms-layout {
   flex-direction: row !important;
   overflow: hidden;
+  height: 100%;
 }
 .rooms-layout.active { display: flex; }
 
