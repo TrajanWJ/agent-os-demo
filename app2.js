@@ -2,7 +2,7 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
-// MIND PAGE
+// MIND PAGE — Vault Integration
 // ═══════════════════════════════════════════════════════════
 
 let mindMode = 'cards'; // default to cards (most usable on mobile)
@@ -17,10 +17,24 @@ let selectedNode = null;
 let draggingNode = null;
 let graphAnimId = null;
 
-const MIND_TYPES = ['all','Research','Architecture','Vision','Operations','Report','Code'];
+// Live vault data caches
+let _vaultSearchResults = [];
+let _vaultRecentNotes = [];
+let _vaultStats = null;
+let _vaultGraphData = null;
+let _vaultSearchDebounce = null;
+
+const MIND_TYPES = ['all','Research','Architecture','Vision','Operations','Report','Code',
+  'Projects','Security','Tools','System','Agents','Skills','Decisions','Reference','Templates'];
 const TYPE_COLORS = {
   Research:'#5B8AF0', Architecture:'#D4A574', Vision:'#D4A574',
-  Operations:'#F39C12', Report:'#E74C3C', Code:'#4CAF50'
+  Operations:'#F39C12', Report:'#E74C3C', Code:'#4CAF50',
+  Projects:'#9B59B6', Security:'#E74C3C', Tools:'#1ABC9C',
+  System:'#95A5A6', Agents:'#E8A838', Skills:'#2ECC71',
+  Decisions:'#F1C40F', Reference:'#3498DB', Templates:'#BDC3C7',
+  'Agent Knowledge':'#E8A838', 'Claude-Code-Memory':'#D4A574',
+  'Claude-Code-Bot':'#D4A574', 'Daily Notes':'#95A5A6', Inbox:'#F39C12',
+  Reports:'#E74C3C', Trajan:'#9B59B6'
 };
 
 function initMind() {
@@ -30,6 +44,11 @@ function initMind() {
   }
   renderMindFilterPills();
   setMindMode(mindMode);
+  // Load live vault data if bridge is connected
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    loadVaultRecent();
+    loadVaultStats();
+  }
 }
 
 function renderMindFilterPills() {
@@ -108,7 +127,7 @@ function setMindMode(mode) {
 }
 
 // ── Force-Directed Graph ──────────────────────────────────
-function initGraph() {
+async function initGraph() {
   graphCanvas = $('graph-canvas');
   if (!graphCanvas) return;
   graphCtx = graphCanvas.getContext('2d');
@@ -120,14 +139,54 @@ function initGraph() {
   const W = graphCanvas.width;
   const H = graphCanvas.height;
 
-  graphNodes = GNODES.map(n => ({
-    ...n,
-    x: W / 2 + (Math.random() - 0.5) * 200,
-    y: H / 2 + (Math.random() - 0.5) * 150,
-    vx: 0, vy: 0,
-    r: n.size || 12,
-  }));
-  graphEdges = GEDGES.map(([a, b]) => ({ source: a, target: b }));
+  // Try to load live graph data from vault
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && !_vaultGraphData) {
+    try {
+      _vaultGraphData = await Bridge.vaultGraph(100);
+    } catch (err) {
+      console.error('[mind] graph load error:', err);
+    }
+  }
+
+  if (_vaultGraphData && _vaultGraphData.nodes.length > 0) {
+    // Use live vault data
+    const nodeIndex = new Map();
+    _vaultGraphData.nodes.forEach((n, i) => nodeIndex.set(n.id, i));
+    graphNodes = _vaultGraphData.nodes.map((n, i) => ({
+      id: i,
+      label: n.title || n.id.split('/').pop().replace('.md', ''),
+      type: n.category || 'root',
+      hex: TYPE_COLORS[n.category] || '#D4A574',
+      vaultPath: n.id,
+      x: W / 2 + (Math.random() - 0.5) * 200,
+      y: H / 2 + (Math.random() - 0.5) * 150,
+      vx: 0, vy: 0,
+      r: 10,
+    }));
+    graphEdges = _vaultGraphData.edges
+      .map(e => ({ source: nodeIndex.get(e.source), target: nodeIndex.get(e.target) }))
+      .filter(e => e.source !== undefined && e.target !== undefined);
+
+    // Size nodes by connection count
+    const connCount = new Map();
+    graphEdges.forEach(e => {
+      connCount.set(e.source, (connCount.get(e.source) || 0) + 1);
+      connCount.set(e.target, (connCount.get(e.target) || 0) + 1);
+    });
+    graphNodes.forEach((n, i) => {
+      n.r = Math.max(6, Math.min(20, 8 + (connCount.get(i) || 0) * 2));
+    });
+  } else {
+    // Fall back to demo data
+    graphNodes = GNODES.map(n => ({
+      ...n,
+      x: W / 2 + (Math.random() - 0.5) * 200,
+      y: H / 2 + (Math.random() - 0.5) * 150,
+      vx: 0, vy: 0,
+      r: n.size || 12,
+    }));
+    graphEdges = GEDGES.map(([a, b]) => ({ source: a, target: b }));
+  }
 
   graphCanvas.onmousemove = graphMouseMove;
   graphCanvas.onmousedown = graphMouseDown;
@@ -319,21 +378,28 @@ function graphClick(e) {
 
 function showGraphDetail(node) {
   const panel = $('graph-detail');
-  const note = GNOTES_MAP[node.id];
-  const conns = graphEdges.filter(e => e.source === node.id || e.target === node.id)
-    .map(e => graphNodes[e.source === node.id ? e.target : e.source]?.label)
+  const nodeIdx = graphNodes.indexOf(node);
+  const conns = graphEdges.filter(e => e.source === nodeIdx || e.target === nodeIdx)
+    .map(e => graphNodes[e.source === nodeIdx ? e.target : e.source]?.label)
     .filter(Boolean);
+
+  // If this is a live vault node, offer to open it
+  const openBtn = node.vaultPath ?
+    `<button onclick="openLiveVaultNote('${node.vaultPath.replace(/'/g, "\\'")}')" style="margin-top:8px;padding:4px 12px;background:var(--accent);border:none;border-radius:6px;color:var(--bg-base);cursor:pointer;font-size:11px;font-weight:600">Open Note</button>` : '';
+
+  const note = typeof GNOTES_MAP !== 'undefined' ? GNOTES_MAP[node.id] : null;
 
   panel.innerHTML = `
     <button class="graph-detail-close" onclick="$('graph-detail').classList.add('hidden');selectedNode=null">✕</button>
-    <div class="graph-detail-title" style="color:${node.hex}">${node.label}</div>
+    <div class="graph-detail-title" style="color:${node.hex}">${escHtml(node.label)}</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${node.type} · ${conns.length} connections</div>
-    <div class="graph-detail-body">${note || 'Click a node to see details.'}</div>
+    <div class="graph-detail-body">${note || (node.vaultPath ? node.vaultPath : 'Click a node to see details.')}</div>
     ${conns.length ? `
       <div style="margin-top:10px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Connected to</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">${conns.slice(0, 8).map(c => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">${c}</span>`).join('')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${conns.slice(0, 8).map(c => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">${escHtml(c)}</span>`).join('')}</div>
       </div>` : ''}
+    ${openBtn}
   `;
   panel.classList.remove('hidden');
 }
@@ -439,8 +505,248 @@ function closeModal() { $('card-modal').classList.add('hidden'); }
 function closeModalIfOutside(e) { if (e.target === $('card-modal')) closeModal(); }
 
 function searchMind(query) {
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && query.trim().length >= 2) {
+    // Live search with debounce
+    clearTimeout(_vaultSearchDebounce);
+    _vaultSearchDebounce = setTimeout(() => liveVaultSearch(query.trim()), 300);
+    return;
+  }
+  // Fall back to demo data filter
   if (mindMode === 'cards') renderVaultCards();
   else if (mindMode === 'timeline') renderTimeline();
+}
+
+// ── Live Vault API Functions ──────────────────────────────
+
+async function liveVaultSearch(query) {
+  try {
+    const results = await Bridge.vaultSearch(query, 20);
+    _vaultSearchResults = results;
+    renderLiveSearchResults(results);
+  } catch (err) {
+    console.error('[mind] vault search error:', err);
+  }
+}
+
+function renderLiveSearchResults(results) {
+  const grid = $('vault-cards-grid');
+  if (!grid) return;
+
+  // Switch to cards mode to show results
+  if (mindMode !== 'cards') setMindMode('cards');
+
+  grid.innerHTML = '';
+  updateNoteCount(results.length);
+
+  if (results.length === 0) {
+    grid.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;">No vault notes found</div>';
+    return;
+  }
+
+  results.forEach(r => {
+    const category = r.path.split('/')[0] || 'root';
+    const typeColor = TYPE_COLORS[category] || 'var(--text-dim)';
+    const title = r.title || r.path.split('/').pop().replace('.md', '');
+    const snippet = (r.snippet || '').replace(/@@ .* @@\n?/, '').substring(0, 120);
+
+    const card = document.createElement('div');
+    card.className = 'vault-card';
+    card.onclick = () => openLiveVaultNote(r.path);
+    card.innerHTML = `
+      <div class="vault-card-header">
+        <div class="vault-card-title">${escHtml(title)}</div>
+        <span class="vault-card-type" style="color:${typeColor};border-color:${typeColor}40">${category}</span>
+      </div>
+      <div class="vault-card-summary">${escHtml(snippet)}</div>
+      <div class="vault-card-meta">
+        <span class="vault-card-path" style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${escHtml(r.path)}</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function openLiveVaultNote(path) {
+  try {
+    const note = await Bridge.vaultNote(path);
+    const category = path.split('/')[0] || 'root';
+    const typeColor = TYPE_COLORS[category] || 'var(--text-dim)';
+    const title = note.frontmatter?.title || path.split('/').pop().replace('.md', '');
+
+    // Render markdown-ish content (basic)
+    const rendered = renderMarkdown(note.content);
+
+    if (window.innerWidth <= 768) {
+      const detail = $('mind-note-detail');
+      detail.innerHTML = renderLiveNoteDetail(title, category, typeColor, path, note, rendered, true);
+      detail.classList.remove('hidden');
+    } else {
+      const modal = $('card-modal-content');
+      modal.innerHTML = renderLiveNoteDetail(title, category, typeColor, path, note, rendered, false);
+      $('card-modal').classList.remove('hidden');
+    }
+  } catch (err) {
+    console.error('[mind] load note error:', err);
+  }
+}
+
+function renderLiveNoteDetail(title, category, typeColor, path, note, rendered, isMobile) {
+  const closeAction = isMobile ? 'closeMobileNoteDetail()' : 'closeModal()';
+  const fm = note.frontmatter || {};
+  const metaParts = [];
+  if (fm.created) metaParts.push(fm.created);
+  if (fm.updated) metaParts.push('updated ' + fm.updated);
+  if (fm.confidence) metaParts.push('confidence: ' + fm.confidence);
+
+  return `
+    <div class="note-detail-header">
+      <button class="note-detail-back" onclick="${closeAction}">${isMobile ? '← Back' : '✕'}</button>
+    </div>
+    <div class="note-detail-body">
+      <div class="note-detail-type-badge" style="color:${typeColor};border-color:${typeColor}">${category}</div>
+      <h2 class="note-detail-title">${escHtml(title)}</h2>
+      <div class="note-detail-meta-row">
+        <span style="color:var(--text-muted);font-size:11px">${escHtml(path)}</span>
+        ${metaParts.length ? '<span>·</span><span>' + metaParts.join(' · ') + '</span>' : ''}
+      </div>
+      ${fm.tags ? `<div class="note-detail-tags">${String(fm.tags).split(',').map(t => `<span class="note-tag">#${t.trim()}</span>`).join('')}</div>` : ''}
+      <div class="note-detail-content" style="white-space:pre-wrap;font-family:var(--font-mono,monospace);font-size:13px;line-height:1.6;max-height:60vh;overflow-y:auto">${rendered}</div>
+    </div>
+  `;
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  // Basic markdown rendering — headers, bold, italic, code, links, lists
+  return escHtml(text)
+    .replace(/^### (.+)$/gm, '<h3 style="color:var(--accent);margin:12px 0 4px">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="color:var(--accent);margin:16px 0 6px">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 style="color:var(--accent);margin:20px 0 8px">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code style="background:var(--bg-raised);padding:1px 4px;border-radius:3px">$1</code>')
+    .replace(/\[\[([^\]]+)\]\]/g, '<a style="color:var(--accent);cursor:pointer" onclick="searchAndOpen(\'$1\')">$1</a>')
+    .replace(/^- (.+)$/gm, '<div style="padding-left:16px">• $1</div>')
+    .replace(/\n/g, '<br>');
+}
+
+function searchAndOpen(term) {
+  const input = $('mind-search');
+  if (input) input.value = term;
+  liveVaultSearch(term);
+}
+
+async function loadVaultRecent() {
+  try {
+    _vaultRecentNotes = await Bridge.vaultRecent(20);
+    renderRecentSidebar();
+  } catch (err) {
+    console.error('[mind] recent notes error:', err);
+  }
+}
+
+function renderRecentSidebar() {
+  let sidebar = $('vault-recent-sidebar');
+  if (!sidebar) {
+    // Create sidebar element after mind-toolbar
+    const toolbar = document.querySelector('.mind-toolbar');
+    if (!toolbar) return;
+    sidebar = document.createElement('div');
+    sidebar.id = 'vault-recent-sidebar';
+    sidebar.className = 'vault-recent-sidebar';
+    toolbar.parentElement.insertBefore(sidebar, toolbar.nextSibling);
+  }
+
+  if (!_vaultRecentNotes.length) {
+    sidebar.innerHTML = '<div style="color:var(--text-muted);padding:8px;font-size:12px">No recent notes</div>';
+    return;
+  }
+
+  sidebar.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Recent Notes</span>
+      ${_vaultStats ? `<span style="font-size:11px;color:var(--text-muted)">${_vaultStats.totalNotes} total</span>` : ''}
+    </div>
+    <div class="vault-recent-list" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin">
+      ${_vaultRecentNotes.slice(0, 12).map(n => {
+        const name = n.path.split('/').pop().replace('.md', '');
+        const cat = n.path.split('/')[0] || 'root';
+        const color = TYPE_COLORS[cat] || 'var(--text-dim)';
+        const ago = relativeTime(n.modified);
+        return `<div class="vault-recent-chip" onclick="openLiveVaultNote('${n.path.replace(/'/g, "\\'")}')"
+          style="flex-shrink:0;background:var(--bg-raised);padding:6px 10px;border-radius:8px;cursor:pointer;border-left:3px solid ${color};min-width:120px;max-width:200px">
+          <div style="font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(name)}</div>
+          <div style="font-size:10px;color:var(--text-muted)">${cat} · ${ago}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function relativeTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+async function loadVaultStats() {
+  try {
+    _vaultStats = await Bridge.vaultStats();
+    renderVaultStatsPanel();
+    // Update mind-badge with total count
+    const badge = $('mind-badge');
+    if (badge) badge.textContent = _vaultStats.totalNotes;
+  } catch (err) {
+    console.error('[mind] stats error:', err);
+  }
+}
+
+function renderVaultStatsPanel() {
+  let panel = $('vault-stats-panel');
+  if (!panel) {
+    const filters = $('mind-filters');
+    if (!filters) return;
+    panel = document.createElement('div');
+    panel.id = 'vault-stats-panel';
+    panel.className = 'vault-stats-panel';
+    filters.parentElement.insertBefore(panel, filters);
+  }
+
+  if (!_vaultStats) return;
+  const s = _vaultStats;
+  const sizeStr = s.totalSize > 1024*1024 ? (s.totalSize / (1024*1024)).toFixed(1) + ' MB' : (s.totalSize / 1024).toFixed(0) + ' KB';
+  const cats = Object.entries(s.categories).sort((a,b) => b[1] - a[1]).slice(0, 8);
+
+  panel.innerHTML = `
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:8px 0">
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span style="font-size:22px;font-weight:700;color:var(--accent)">${s.totalNotes}</span>
+        <span style="font-size:11px;color:var(--text-muted)">notes</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span style="font-size:16px;font-weight:600;color:var(--text-bright)">${sizeStr}</span>
+        <span style="font-size:11px;color:var(--text-muted)">total</span>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${cats.map(([cat, count]) => {
+          const color = TYPE_COLORS[cat] || 'var(--text-dim)';
+          return `<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${color}20;color:${color};cursor:pointer"
+            onclick="setMindFilter('${cat}')">${cat} ${count}</span>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
 }
 
 // ── Timeline ──────────────────────────────────────────────

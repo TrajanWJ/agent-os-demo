@@ -54,8 +54,25 @@ const Bridge = {
     return this.apiFetch(`/api/queue/${id}/resolve`, { method:'POST', body:JSON.stringify({status,resolution}) });
   },
 
+  // ── Vault ────────────────────────────────────────────────
+  async vaultSearch(q, limit=10) { return this.apiFetch(`/api/vault/search?q=${encodeURIComponent(q)}&limit=${limit}`); },
+  async vaultNote(path) { return this.apiFetch(`/api/vault/note?path=${encodeURIComponent(path)}`); },
+  async vaultRecent(limit=20) { return this.apiFetch(`/api/vault/recent?limit=${limit}`); },
+  async vaultStats() { return this.apiFetch('/api/vault/stats'); },
+  async vaultGraph(limit=100) { return this.apiFetch(`/api/vault/graph?limit=${limit}`); },
+
   // ── Feed ────────────────────────────────────────────────
   async getFeed(limit=50) { return this.apiFetch(`/api/feed?limit=${limit}`); },
+
+  // ── Missions ────────────────────────────────────────────
+  async getMissionsGoals()        { return this.apiFetch('/api/missions/goals'); },
+  async getMissionsGoalsArchive() { return this.apiFetch('/api/missions/goals/archive'); },
+  async getMissionsQueue()        { return this.apiFetch('/api/missions/queue'); },
+  async getMissionsDone(limit=20) { return this.apiFetch(`/api/missions/done?limit=${limit}`); },
+  async getMissionsFailed()       { return this.apiFetch('/api/missions/failed'); },
+  async getMissionsSchedule()     { return this.apiFetch('/api/missions/schedule'); },
+  async getMissionsFeed(limit=50) { return this.apiFetch(`/api/missions/feed?limit=${limit}`); },
+  async getMissionsStats()        { return this.apiFetch('/api/missions/stats'); },
 
   // ── WebSocket ───────────────────────────────────────────
   connect() {
@@ -352,30 +369,7 @@ async function bridgeGoLive() {
 // HOOK: Talk view — Load real messages when channel is selected
 // ═══════════════════════════════════════════════════════════
 
-// Store original switchChannel to chain
-const _origSwitchChannel = typeof switchChannel === 'function' ? switchChannel : null;
-
-// Override switchChannel to load real messages
-if (typeof window !== 'undefined') {
-  const _realSwitchChannel = window.switchChannel;
-  window.switchChannel = function(chId) {
-    // Call original to handle UI state (active classes, header, etc.)
-    if (_realSwitchChannel) _realSwitchChannel.call(this, chId);
-    
-    // Always try to load real messages for numeric channel IDs
-    // (Bridge auto-connects on page load if configured, and channels are real IDs now)
-    if (/^\d+$/.test(chId)) {
-      if (Bridge.liveMode) {
-        loadLiveMessages(chId);
-      } else if (Bridge.isConfigured()) {
-        // Try connecting first, then load
-        Bridge.checkHealth().then(ok => {
-          if (ok) { Bridge.connect(); bridgeGoLive(); }
-        });
-      }
-    }
-  };
-}
+// switchChannel hook is now in app.js directly (calls loadLiveMessages when Bridge.liveMode)
 
 async function loadLiveMessages(channelId) {
   const container = document.getElementById('messages-list');
@@ -457,20 +451,7 @@ function bridgeMsgToLocal(msg) {
 // HOOK: Send message — Use bridge when live
 // ═══════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════
-// HOOK: Switch channel — Load live messages when bridge is active
-// ═══════════════════════════════════════════════════════════
-
-if (typeof window !== 'undefined' && typeof window.switchChannel === 'function') {
-  const _realSwitchChannel = window.switchChannel;
-  window.switchChannel = function(chId) {
-    _realSwitchChannel.call(this, chId);
-    // After mock render, overlay with live data if bridge is active
-    if (Bridge.liveMode && /^\d+$/.test(chId)) {
-      loadLiveMessages(chId);
-    }
-  };
-}
+// (switchChannel hook removed — now native in app.js)
 
 const _origSendMessage = typeof sendMessage === 'function' ? sendMessage : null;
 

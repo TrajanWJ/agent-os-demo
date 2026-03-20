@@ -997,6 +997,11 @@ function switchChannel(chId) {
 
   renderMessages(chId);
   renderPinnedMessages(chId);
+
+  // Bridge: load real Discord messages when live
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && /^\d+$/.test(chId) && typeof loadLiveMessages === 'function') {
+    loadLiveMessages(chId);
+  }
 }
 
 function selectDM(agentId) {
