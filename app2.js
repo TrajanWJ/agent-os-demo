@@ -102,10 +102,20 @@ function _renderDashboardHeader() {
           uptime = data.uptime;
         }
       }
+      // Store real totals for display
+      const meta = {};
+      if (typeof data.memory === 'object' && data.memory.total) {
+        meta.memTotalGB = (data.memory.total / 1024).toFixed(0);
+        meta.memUsedGB = (data.memory.used / 1024).toFixed(1);
+      }
+      if (typeof data.disk === 'object' && data.disk.total) {
+        meta.diskTotal = data.disk.total;
+        meta.diskUsed = data.disk.used;
+      }
       _pushMetricHistory('cpu', cpu);
       _pushMetricHistory('mem', mem);
       _pushMetricHistory('disk', disk);
-      _updateDashCards(cpu, mem, disk, uptime, cpuAvg);
+      _updateDashCards(cpu, mem, disk, uptime, cpuAvg, meta);
     }).catch(() => {
       _pushMetricHistory('cpu', cpu);
       _pushMetricHistory('mem', mem);
@@ -120,7 +130,8 @@ function _renderDashboardHeader() {
   }
 }
 
-function _updateDashCards(cpu, mem, disk, uptime, cpuAvg) {
+function _updateDashCards(cpu, mem, disk, uptime, cpuAvg, meta) {
+  meta = meta || {};
   const el = $('sys-dashboard-header');
   if (!el) return;
 
@@ -148,7 +159,7 @@ function _updateDashCards(cpu, mem, disk, uptime, cpuAvg) {
         <span class="sys-card-trend">${memTrend}</span>
       </div>
       <div class="sys-card-value">${mem}%</div>
-      <div class="sys-card-sub">${((mem / 100) * 14).toFixed(1)} / 14 GB</div>
+      <div class="sys-card-sub">${meta.memUsedGB || ((mem / 100) * 14).toFixed(1)} / ${meta.memTotalGB || 14} GB</div>
       <div class="sys-card-spark">${_miniSparkline(memHist, 80, 24, '#89b4fa')}</div>
     </div>
     <div class="sys-stat-card ${diskClass}">
@@ -157,7 +168,7 @@ function _updateDashCards(cpu, mem, disk, uptime, cpuAvg) {
         <span class="sys-card-trend">${disk > 85 ? '⚠' : ''}</span>
       </div>
       <div class="sys-card-value">${disk}%</div>
-      <div class="sys-card-sub">${((disk / 100) * 200).toFixed(0)} / 200 GB</div>
+      <div class="sys-card-sub">${meta.diskUsed || (((disk / 100) * 200).toFixed(0) + ' GB')} / ${meta.diskTotal || '200 GB'}</div>
       <div class="sys-card-spark">${_miniSparkline(diskHist, 80, 24, disk > 85 ? '#f38ba8' : disk > 75 ? '#fab387' : '#a6e3a1')}</div>
     </div>
     <div class="sys-stat-card">
