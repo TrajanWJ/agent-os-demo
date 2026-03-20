@@ -992,16 +992,19 @@ function renderAgentDetail(agentId) {
   if (!agent) { panel.innerHTML = '<div class="acenter-empty">Select an agent</div>'; return; }
 
   const config = getAgentConfig(agentId);
-  const tabs = ['overview', 'capabilities', 'autonomy', 'history'];
+  const tabs = ['overview', 'capabilities', 'autonomy', 'history', 'orgchart'];
+  const tabLabels = {
+    overview: '📊 Overview',
+    capabilities: '🔑 Capabilities',
+    autonomy: '🎚️ Autonomy',
+    history: '📜 History',
+    orgchart: '🏢 Org Chart',
+  };
 
   panel.innerHTML = `
     <div class="acenter-tabs">
       ${tabs.map(t => `
-        <button class="acenter-tab${activeAgentTab === t ? ' active' : ''}" onclick="setAgentTab('${t}')">${
-          t === 'overview' ? '📊 Overview' :
-          t === 'capabilities' ? '🔑 Capabilities' :
-          t === 'autonomy' ? '🎚️ Autonomy' : '📜 History'
-        }</button>
+        <button class="acenter-tab${activeAgentTab === t ? ' active' : ''}" onclick="setAgentTab('${t}')">${tabLabels[t]}</button>
       `).join('')}
     </div>
     <div class="acenter-tab-content" id="acenter-tab-content"></div>
@@ -1012,6 +1015,7 @@ function renderAgentDetail(agentId) {
   else if (activeAgentTab === 'capabilities') renderCapabilitiesTab(content, agent, config);
   else if (activeAgentTab === 'autonomy') renderAutonomyTab(content, agent, config);
   else if (activeAgentTab === 'history') renderHistoryTab(content, agent);
+  else if (activeAgentTab === 'orgchart') renderOrgChartTab(content);
 }
 
 function renderOverviewTab(el, agent, config) {
