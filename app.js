@@ -2480,7 +2480,7 @@ function renderMemberList() {
         <div class="member-task">${agent.task || agent.role}</div>
       </div>
     `;
-    item.onclick = () => selectDM(agent.id);
+    item.onclick = (e) => { e.stopPropagation(); e.preventDefault(); selectDM(agent.id); };
     content.appendChild(item);
   });
 }

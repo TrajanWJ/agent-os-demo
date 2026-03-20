@@ -404,21 +404,21 @@ function renderTaskPipeline(body) {
   if (liveQueue || liveActive || liveDone) {
     (liveQueue || []).forEach(t => {
       stageCards.inbox.push({
-        id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+        id: t.id, title: t.title || t.task || t.description || 'Untitled', agent: t.agent || '',
         priority: t.priority || 'P3', tags: [], _raw: t,
         _timeInStage: timeAgoShort(t.created_at || t.created),
       });
     });
     (liveActive || []).forEach(t => {
       stageCards.inprogress.push({
-        id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+        id: t.id, title: t.title || t.task || t.description || 'Untitled', agent: t.agent || '',
         priority: t.priority || 'P3', tags: [], progress: t.progress, _raw: t,
         _timeInStage: timeAgoShort(t.started_at || t.created_at || t.created),
       });
     });
     (liveDone || []).slice(0, 10).forEach(t => {
       stageCards.done.push({
-        id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+        id: t.id, title: t.title || t.task || t.description || 'Untitled', agent: t.agent || '',
         priority: t.priority || 'P3', tags: [], _raw: t,
         _timeInStage: timeAgoShort(t.completed_at || t.created_at),
       });
@@ -435,7 +435,7 @@ function renderTaskPipeline(body) {
   }
 
   const failedCards = (liveFailed || []).map(t => ({
-    id: t.id, title: t.title || t.task || 'Untitled', agent: t.agent || '',
+    id: t.id, title: t.title || t.task || t.description || 'Untitled', agent: t.agent || '',
     priority: t.priority || 'P3', tags: [], _raw: t, _failed: true,
     _timeInStage: timeAgoShort(t.failed_at || t.created_at),
   }));
@@ -477,7 +477,7 @@ function renderTaskPipeline(body) {
               <div class="pipeline-card-title" style="color:var(--red)">${c.title}</div>
               <div class="pipeline-card-meta">
                 ${(() => { const ag = ga(c.agent) || { emoji: '⬜', color: '#6c7086', name: c.agent || 'unknown' }; return `<span class="pipeline-card-agent" style="border-color:${ag.color}">${ag.emoji}</span><span style="font-size:11px;color:var(--text-dim)">${ag.name || c.agent}</span>`; })()}
-                <span class="pipeline-card-priority ${(c.priority || 'P3').toLowerCase()}">${c.priority || 'P3'}</span>
+                <span class="pipeline-card-priority ${String(c.priority || 'P3').toLowerCase()}">${c.priority || 'P3'}</span>
                 ${c._timeInStage ? `<span style="font-size:10px;color:var(--text-muted);margin-left:auto">${c._timeInStage}</span>` : ''}
               </div>
             </div>
@@ -710,7 +710,7 @@ function renderCapacityPipeline(body) {
             </div>
             <div class="capacity-utilization" style="color:${barColor}">${utilization}% utilized</div>
             <div class="capacity-tasks">
-              ${assignedTasks.slice(0, 3).map(t => `<div class="capacity-task-item">${(t.title || t.task || 'Untitled').substring(0, 30)}</div>`).join('')}
+              ${assignedTasks.slice(0, 3).map(t => `<div class="capacity-task-item">${(t.title || t.task || t.description || 'Untitled').substring(0, 30)}</div>`).join('')}
               ${assignedTasks.length > 3 ? `<div class="capacity-task-more">+${assignedTasks.length - 3} more</div>` : ''}
               ${assignedTasks.length === 0 ? '<div class="capacity-task-empty">No tasks assigned</div>' : ''}
             </div>

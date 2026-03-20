@@ -1594,20 +1594,27 @@ let currentPage = 'dashboard';
 function navigate(page) {
   if (currentPage === page) return;
   const oldPage = document.getElementById('page-' + currentPage);
-  if (oldPage) { oldPage.style.opacity = '0'; oldPage.style.transform = 'translateY(6px)'; }
+  if (oldPage) { oldPage.style.opacity = '0'; oldPage.style.transform = 'translateY(8px)'; }
 
   currentPage = page;
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pageEl = document.getElementById('page-' + page);
   const navEl = document.querySelector(`.nav-item[data-page="${page}"]`);
 
   setTimeout(() => {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     if (pageEl) {
+      pageEl.style.opacity = '0';
+      pageEl.style.transform = 'translateY(8px)';
       pageEl.classList.add('active');
       // Force reflow then animate in
       void pageEl.offsetHeight;
-      requestAnimationFrame(() => { pageEl.style.opacity = '1'; pageEl.style.transform = 'translateY(0)'; });
+      requestAnimationFrame(() => {
+        pageEl.style.opacity = '1';
+        pageEl.style.transform = 'translateY(0)';
+      });
+      // Scroll to top
+      document.querySelector('.main').scrollTo(0, 0);
     }
     if (navEl) navEl.classList.add('active');
     const renderers = {
@@ -1618,7 +1625,7 @@ function navigate(page) {
       notes: renderNotes, interview: renderInterview,
     };
     if (renderers[page]) renderers[page]();
-  }, 100);
+  }, 120);
 }
 
 // ═══════════════════════════════════════════════════

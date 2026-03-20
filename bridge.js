@@ -560,7 +560,7 @@ async function loadLiveProposals() {
       id: p.id,
       agent: p.source || 'righthand',
       type: p.type === 'research' ? 'choice' : p.type === 'dispatch' ? 'approval' : 'freetext',
-      priority: (p.priority || 'P3').toLowerCase().replace('p','') <= 2 ? 'urgent' : 'normal',
+      priority: String(p.priority || 'P3').toLowerCase().replace('p','') <= 2 ? 'urgent' : 'normal',
       ttl: 86400, // 24h
       elapsed: Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000),
       remaining: Math.max(0, 86400 - Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000)),
