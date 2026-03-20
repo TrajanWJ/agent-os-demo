@@ -364,12 +364,24 @@
                 </div>
                 <span class="msg-channel-hash">#</span>
                 <span class="msg-channel-name" id="current-channel-name" onclick="openMobileChannelDrawer()">bridge</span>
-                <span class="channel-topic" id="channel-topic" style="display:none"></span>
+                <span class="channel-topic" id="channel-topic" style="display:none" onclick="expandChannelTopic()" title="Click to expand"></span>
               </div>
               <div class="message-topbar-actions">
+                <button class="msg-action-btn" onclick="toggleChannelInfo()" title="Channel Info">ℹ️</button>
                 <button class="msg-action-btn" onclick="togglePinned()" title="Pinned">📌</button>
                 <button class="msg-action-btn" onclick="toggleMemberList()" title="Members">👥</button>
                 <button class="msg-action-btn" onclick="toggleThreadPanel()" title="Threads">🧵</button>
+              </div>
+            </div>
+
+            <!-- Channel Info Sidebar -->
+            <div class="channel-info-panel hidden" id="channel-info-panel">
+              <div class="channel-info-header">
+                <span>Channel Info</span>
+                <button class="channel-info-close" onclick="toggleChannelInfo()">✕</button>
+              </div>
+              <div id="channel-info-content">
+                <div style="padding:16px;text-align:center;color:var(--text-muted)">Loading...</div>
               </div>
             </div>
 

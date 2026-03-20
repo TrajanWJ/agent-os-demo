@@ -30,12 +30,12 @@ function iga(id) { return INBOX_AGENTS[id] || ga(id) || { emoji: '🤖', name: i
 // ═══════════════════════════════════════════════════════════
 
 const INBOX_CATEGORIES = [
-  { id: 'all',       label: 'All',          icon: '',   key: '1' },
-  { id: 'urgent',    label: '🔴 Urgent',    icon: '🔴', key: '2' },
-  { id: 'proposals', label: '📋 Proposals', icon: '📋', key: '3' },
-  { id: 'questions', label: '❓ Questions', icon: '❓', key: '4' },
-  { id: 'reports',   label: '📊 Reports',   icon: '📊', key: '5' },
-  { id: 'done',      label: '✅ Done',      icon: '✅', key: '6' },
+  { id: 'all',       label: '📥 All',           icon: '📥', key: '1' },
+  { id: 'proposals', label: '📋 Proposals',     icon: '📋', key: '2' },
+  { id: 'questions', label: '❓ Questions',     icon: '❓', key: '3' },
+  { id: 'errors',    label: '⚠️ Errors',        icon: '⚠️', key: '4' },
+  { id: 'failed',    label: '💀 Failed Tasks',  icon: '💀', key: '5' },
+  { id: 'done',      label: '✅ Done',          icon: '✅', key: '6' },
 ];
 
 let inboxItems = [];
@@ -43,7 +43,7 @@ let inboxFilter = 'all';
 let inboxSelectedId = null;
 let inboxFocusIdx = -1;
 let inboxSearchQuery = '';
-let inboxSortMode = 'newest';
+let inboxSortMode = 'priority';
 let inboxSelectedIds = new Set();
 let inboxContextVisible = true;
 let inboxLabels = {};   // id -> [label strings]
@@ -64,10 +64,14 @@ function getItemPriority(item) {
 }
 
 function getCategoryForItem(item) {
-  if (item.category === 'urgent') return 'urgent';
-  if (item.category === 'proposals' || item._type === 'proposal') return 'proposals';
-  if (item.category === 'questions' || item._type === 'feed_question') return 'questions';
-  if (item.category === 'reports') return 'reports';
+  if (item._type === 'proposal') return 'proposals';
+  if (item._type === 'feed_question') return 'questions';
+  if (item._type === 'feed_error') return 'errors';
+  if (item._type === 'failed_task') return 'failed';
+  if (item.category === 'proposals') return 'proposals';
+  if (item.category === 'questions') return 'questions';
+  if (item.category === 'errors') return 'errors';
+  if (item.category === 'failed') return 'failed';
   return item.category || 'proposals';
 }
 
@@ -186,79 +190,154 @@ let inboxPollTimer = null;
 async function fetchRealInboxItems() {
   const items = [];
   const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  const seenIds = new Set();
+  function addItem(item) {
+    if (seenIds.has(item.id)) return;
+    seenIds.add(item.id);
+    items.push(item);
+  }
+
   try {
+    // 1. Pending proposals → "Decide: [title]"
     const proposals = await fetch(`${baseUrl}/api/proposals?status=pending`).then(r => r.ok ? r.json() : []).catch(() => []);
-    proposals.forEach(p => {
-      items.push({
-        id: p.id || 'prop_' + Date.now(),
+    (Array.isArray(proposals) ? proposals : []).forEach(p => {
+      addItem({
+        id: p.id || 'prop_' + Math.random().toString(36).slice(2),
         agent: p.source || p.source_agent || 'righthand',
         category: 'proposals',
-        priority: (p.priority || 'P3') <= 'P2' ? 'urgent' : 'normal',
-        _priority: p.priority || 'P3',
+        priority: 'normal',
+        _priority: p.priority || 'P2',
         unread: true,
-        subject: p.title || 'Proposal',
-        preview: (p.body || p.description || '').substring(0, 100),
+        subject: `📋 Decide: ${p.title || 'Untitled proposal'}`,
+        preview: (p.body || p.description || '').substring(0, 120),
         body: p.body || p.description || '',
-        time: p.created_at || new Date().toISOString(),
-        mission: null,
+        time: p.created_at || p.timestamp || new Date().toISOString(),
+        mission: p.mission || null,
         thread: [],
         _proposalId: p.id,
         _type: 'proposal',
+        _actions: ['approve', 'dismiss', 'snooze'],
         confidence: p.confidence || null,
       });
     });
-    const tasks = await fetch(`${baseUrl}/api/tasks/active`).then(r => r.ok ? r.json() : []).catch(() => []);
-    tasks.forEach(t => {
-      items.push({
-        id: t.id || 'task_' + Date.now(),
-        agent: t.agent || 'coder',
-        category: 'proposals',
-        priority: (t.priority || 'P3') <= 'P2' ? 'urgent' : 'normal',
-        _priority: t.priority || 'P3',
-        unread: true,
-        subject: `Active: ${t.title || t.task || 'Task'}`,
-        preview: (t.description || t.context || '').substring(0, 100),
-        body: t.description || t.context || `Task ${t.id} is currently active.`,
-        time: t.created_at || t.created || new Date().toISOString(),
-        mission: null,
-        thread: [],
-        _taskId: t.id,
-        _type: 'task',
-      });
-    });
-    const feed = await fetch(`${baseUrl}/api/feed?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []);
-    feed.forEach(f => {
-      if (f.type === 'error' || f.type === 'system_alert') {
-        items.push({
-          id: f.id || 'feed_' + Date.now(), agent: f.agent || 'ops', category: 'urgent',
-          priority: 'urgent', _priority: 'P0', unread: true,
-          subject: `⚠️ ${f.content || f.summary || 'System Alert'}`,
-          preview: (f.detail || f.content || '').substring(0, 100),
+
+    // 2. Feed events — questions & errors
+    const feed = await fetch(`${baseUrl}/api/feed?limit=30`).then(r => r.ok ? r.json() : []).catch(() => []);
+    (Array.isArray(feed) ? feed : []).forEach(f => {
+      if (f.type === 'question_asked' || f.type === 'queue_item_created') {
+        addItem({
+          id: f.id || 'fq_' + Math.random().toString(36).slice(2),
+          agent: f.agent || 'righthand',
+          category: 'questions',
+          priority: 'normal',
+          _priority: 'P2',
+          unread: true,
+          subject: `❓ ${f.content || f.summary || 'Agent question'}`,
+          preview: (f.detail || f.content || '').substring(0, 120),
           body: f.detail || f.content || '',
           time: f.timestamp || new Date().toISOString(),
-          mission: null, thread: [], _feedId: f.id, _type: 'feed_error',
+          mission: null, thread: [],
+          _feedId: f.id,
+          _type: 'feed_question',
+          _actions: ['answer', 'dismiss', 'snooze'],
         });
-      } else if (f.type === 'question_asked' || f.type === 'queue_item_created') {
-        items.push({
-          id: f.id || 'feed_' + Date.now(), agent: f.agent || 'righthand', category: 'questions',
-          priority: 'normal', _priority: 'P2', unread: true,
-          subject: f.content || f.summary || 'Question',
-          preview: (f.detail || f.content || '').substring(0, 100),
+      } else if (f.type === 'error' || f.type === 'system_alert') {
+        addItem({
+          id: f.id || 'fe_' + Math.random().toString(36).slice(2),
+          agent: f.agent || 'ops',
+          category: 'errors',
+          priority: 'urgent',
+          _priority: 'P1',
+          unread: true,
+          subject: `⚠️ ${f.content || f.summary || 'Agent error'}`,
+          preview: (f.detail || f.content || '').substring(0, 120),
           body: f.detail || f.content || '',
           time: f.timestamp || new Date().toISOString(),
-          mission: null, thread: [], _feedId: f.id, _type: 'feed_question',
+          mission: null, thread: [],
+          _feedId: f.id,
+          _type: 'feed_error',
+          _actions: ['acknowledge', 'investigate', 'snooze'],
         });
       }
     });
+
+    // 3. Failed tasks → from /api/tasks/all with status 'failed'
+    const allTasks = await fetch(`${baseUrl}/api/tasks/all`).then(r => r.ok ? r.json() : []).catch(() => []);
+    (Array.isArray(allTasks) ? allTasks : []).forEach(t => {
+      if (t.status === 'failed') {
+        addItem({
+          id: t.id || 'ft_' + Math.random().toString(36).slice(2),
+          agent: t.agent || 'coder',
+          category: 'failed',
+          priority: 'urgent',
+          _priority: t.priority || 'P1',
+          unread: true,
+          subject: `💀 Failed: ${t.title || t.task || 'Task'}`,
+          preview: (t.error || t.description || t.context || '').substring(0, 120),
+          body: t.error || t.description || t.context || `Task ${t.id} failed.`,
+          time: t.failed_at || t.updated_at || t.created_at || t.created || new Date().toISOString(),
+          mission: t.mission || null,
+          thread: [],
+          _taskId: t.id,
+          _type: 'failed_task',
+          _actions: ['retry', 'delete', 'snooze'],
+        });
+      }
+    });
+
+    // 4. Overdue goals from missions
+    try {
+      const goals = await fetch(`${baseUrl}/api/missions/goals`).then(r => r.ok ? r.json() : []).catch(() => []);
+      const now = new Date();
+      (Array.isArray(goals) ? goals : []).forEach(g => {
+        if (g.deadline && new Date(g.deadline) < now && g.status !== 'done' && g.status !== 'completed' && g.status !== 'archived') {
+          addItem({
+            id: 'overdue_' + (g.id || Math.random().toString(36).slice(2)),
+            agent: g.agent || 'righthand',
+            category: 'failed',
+            priority: 'urgent',
+            _priority: 'P1',
+            unread: true,
+            subject: `⏰ Overdue: ${g.title || g.name || 'Goal'}`,
+            preview: `Deadline was ${new Date(g.deadline).toLocaleDateString()}. Status: ${g.status || 'unknown'}`,
+            body: g.description || `Goal "${g.title || g.name}" is past its deadline of ${g.deadline}.`,
+            time: g.deadline,
+            mission: g.mission || null,
+            thread: [],
+            _goalId: g.id,
+            _type: 'overdue_goal',
+            _actions: ['acknowledge', 'snooze', 'dismiss'],
+          });
+        }
+      });
+    } catch {}
+
+    // Sort by priority (P0 > P1 > P2 > P3), then by time
     items.sort((a, b) => {
-      if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
-      if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+      const pa = (a._priority || 'P3').charCodeAt(1);
+      const pb = (b._priority || 'P3').charCodeAt(1);
+      if (pa !== pb) return pa - pb;
       return new Date(b.time) - new Date(a.time);
     });
+
     return items;
   } catch (e) {
     console.error('[Inbox] Failed to fetch real data:', e);
     return null;
+  }
+}
+
+// ── Update sidebar badge count ─────────────────────────────
+function updateInboxBadge() {
+  const badge = document.getElementById('inbox-badge');
+  if (!badge) return;
+  const count = inboxItems.filter(i => i.unread).length;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = '';
+  } else {
+    badge.textContent = '';
+    badge.style.display = 'none';
   }
 }
 
@@ -335,6 +414,7 @@ async function initInbox() {
   if (localStorage.getItem('inbox-cleared')) {
     inboxItems = [];
     renderInbox();
+    updateInboxBadge();
     return;
   }
   // Load labels from localStorage
@@ -355,20 +435,23 @@ async function initInbox() {
 
   renderInbox();
   renderInboxContext();
+  updateInboxBadge();
 
+  // Auto-refresh every 20s
   if (!inboxPollTimer) {
     inboxPollTimer = setInterval(async () => {
-      if (!shouldPoll()) return;
+      if (typeof shouldPoll === 'function' && !shouldPoll()) return;
       if (currentPage !== 'inbox') return;
       const updated = await fetchRealInboxItems();
-      if (updated && updated.length > 0) {
+      if (updated) {
         const readIds = new Set(inboxItems.filter(i => !i.unread).map(i => i.id));
         const snoozedNow = JSON.parse(localStorage.getItem('inbox-snoozed') || '{}');
         updated.forEach(item => { if (readIds.has(item.id)) item.unread = false; });
         inboxItems = updated.filter(i => !snoozedNow[i.id] || Date.now() >= snoozedNow[i.id]);
         renderInboxList();
+        updateInboxBadge();
       }
-    }, 15000);
+    }, 20000);
   }
 }
 
@@ -455,7 +538,7 @@ function renderInboxList() {
       ? { icon: '🔍', title: 'No results', desc: `No items matching "${inboxSearchQuery}". Try a different search.` }
       : isDone
         ? { icon: '📭', title: 'No completed items', desc: 'Items you approve or dismiss will appear here.' }
-        : { icon: '🎉', title: 'All caught up!', desc: 'Your agents are handling everything.' };
+        : { icon: '🎉', title: 'Inbox Zero!', desc: 'All caught up. Your agents are handling everything. 🥳', celebration: true };
 
     container.innerHTML = `
       <div class="inbox-empty-state">

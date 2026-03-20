@@ -3799,10 +3799,12 @@ function toggleLevelFilter(level, btn) {
 const _origNavHash = nav;
 nav = function(page) {
   _origNavHash(page);
-  if (page && page !== 'feed') {
-    history.replaceState(null, '', '#' + page);
-  } else {
-    history.replaceState(null, '', location.pathname);
+  if (!window._suppressHashWrite) {
+    if (page && page !== 'feed') {
+      history.replaceState(null, '', '#' + page);
+    } else {
+      history.replaceState(null, '', location.pathname);
+    }
   }
 };
 
@@ -3819,9 +3821,13 @@ nav = function(page) {
 window.addEventListener('hashchange', () => {
   const hash = location.hash.replace('#', '');
   if (hash && PAGE_TITLES[hash] && hash !== currentPage) {
-    // Use _origNavHash to avoid pushing another hash
-    _origNavHash(hash);
+    // Use window.nav (which includes all wrappers) but suppress hash write
+    window._suppressHashWrite = true;
+    window.nav(hash);
+    window._suppressHashWrite = false;
   } else if (!hash && currentPage !== 'feed') {
-    _origNavHash('feed');
+    window._suppressHashWrite = true;
+    window.nav('feed');
+    window._suppressHashWrite = false;
   }
 });
