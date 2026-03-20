@@ -309,9 +309,7 @@ async function bridgeGoLive() {
     if (currentChannel && !/^\d+$/.test(currentChannel) && _liveChannelData?.categories?.length) {
       const firstCh = _liveChannelData.categories[0]?.channels?.[0];
       if (firstCh) {
-        currentChannel = firstCh.id;
-        renderChannelList(); // Re-render with active highlight
-        loadLiveMessages(firstCh.id);
+        switchChannel(firstCh.id);
       }
     }
   }
@@ -791,11 +789,7 @@ if (typeof window !== 'undefined' && typeof window.nav === 'function') {
       // Auto-select first real channel if current is fake
       if (currentChannel && !/^\d+$/.test(currentChannel) && _liveChannelData?.categories?.length) {
         const firstCh = _liveChannelData.categories[0]?.channels?.[0];
-        if (firstCh) {
-          currentChannel = firstCh.id;
-          renderChannelList();
-          loadLiveMessages(firstCh.id);
-        }
+        if (firstCh) switchChannel(firstCh.id);
       } else if (/^\d+$/.test(currentChannel)) {
         loadLiveMessages(currentChannel);
       }

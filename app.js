@@ -14,15 +14,20 @@ let notifications = [];
 
 // Page titles
 const PAGE_TITLES = {
-  feed: 'Home', queue: 'Queue', talk: 'Talk',
+  feed: 'Stream', queue: 'Proposals', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
-  schedule: 'Schedule', missions: 'Missions', explore: 'Explore',
-  plans: 'Plans'
+  schedule: 'Briefing', missions: 'Missions', explore: 'Mind',
+  plans: 'Missions', briefing: 'Briefing', inbox: 'Inbox',
+  rooms: 'Rooms', pipelines: 'Pipelines', roles: 'Roles',
+  records: 'Records'
 };
 
 // ── Navigation ────────────────────────────────────────────
 function nav(page) {
+  // Redirect removed pages
+  const redirects = { plans: 'missions', schedule: 'briefing', explore: 'mind', board: 'feed', config: 'feed', command: 'feed' };
+  if (redirects[page]) page = redirects[page];
   if (currentPage === page) return;
 
   // Deactivate old
@@ -577,17 +582,34 @@ function filterFeed(type) {
   filterStream2(map[type] || 'all');
 }
 
-function streamAction(itemId, action) {
+async function streamAction(itemId, action) {
   const item = streamItems.find(i => i.id === itemId);
   if (!item) return;
   const agent = ga(item.agent) || { name: item.agent || 'Agent' };
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
-  // POST to bridge
-  fetch('/api/stream/' + itemId + '/action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, value: null }),
-  }).catch(() => {});
+  // If this is a proposal, resolve via the proposals API
+  if (item.type === 'proposal' && (action === 'approve' || action === 'reject' || action === 'defer')) {
+    const proposalId = item.id.startsWith('prop-') ? item.id : item.id;
+    const apiAction = action === 'reject' ? 'dismiss' : action === 'defer' ? 'dismiss' : 'approve';
+    try {
+      await fetch(`${baseUrl}/api/proposals/${proposalId}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: apiAction }),
+      });
+    } catch (e) {
+      toast(`❌ Action failed: ${e.message}`, 'error');
+      return;
+    }
+  } else {
+    // POST generic stream action
+    fetch(`${baseUrl}/api/stream/${itemId}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, value: null }),
+    }).catch(() => {});
+  }
 
   switch (action) {
     case 'approve':
@@ -666,28 +688,39 @@ function streamReply(itemId, text) {
   streamSendReply(itemId, text);
 }
 
-function streamSendReply(itemId, text) {
+async function streamSendReply(itemId, text) {
   if (!text || !text.trim()) return;
   const item = streamItems.find(i => i.id === itemId);
   if (!item) return;
   const agent = ga(item.agent) || { name: item.agent || 'Agent' };
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
-  // Post to agent message endpoint
-  fetch('/api/agent/message', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text.trim(), agent: item.agent, context: 'stream-reply', streamItemId: itemId }),
-  }).catch(() => {});
+  try {
+    // Post to agent chat endpoint for real dispatch
+    await fetch(`${baseUrl}/api/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text.trim(),
+        agent: item.agent,
+        context: `stream-reply:${itemId}`,
+        page: 'feed',
+      }),
+    });
 
-  // Also post as stream action
-  fetch('/api/stream/' + itemId + '/action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'reply', value: text.trim() }),
-  }).catch(() => {});
+    // Also post as stream action
+    fetch(`${baseUrl}/api/stream/${itemId}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reply', value: text.trim() }),
+    }).catch(() => {});
 
-  toast(`💬 Reply sent to ${agent.name}`, 'success');
-  addXP(5, 'replied');
+    toast(`💬 Reply sent to ${agent.name}`, 'success');
+    addXP(5, 'replied');
+  } catch (e) {
+    toast(`❌ Reply failed: ${e.message}`, 'error');
+  }
+
   markStreamRead(itemId);
 
   // Clear input
@@ -966,7 +999,7 @@ function renderQueue() {
 
   // Update nav badges
   const count = pending.length;
-  const badge = document.getElementById('queue-badge');
+  const badge = document.getElementById('proposals-badge');
   if (badge) { badge.textContent = count || ''; badge.style.display = count > 0 ? '' : 'none'; }
   const mobileBadge = document.getElementById('queue-mobile-badge');
   if (mobileBadge) mobileBadge.textContent = count || '';
@@ -1481,7 +1514,7 @@ function updateQueueStats() {
 
   // Update badges
   const count = queueCards.length;
-  const badge = document.getElementById('queue-badge');
+  const badge = document.getElementById('proposals-badge');
   if (badge) { badge.textContent = count || ''; badge.style.display = count > 0 ? '' : 'none'; }
   const mobileBadge = document.getElementById('queue-mobile-badge');
   if (mobileBadge) mobileBadge.textContent = count || '';
@@ -2679,6 +2712,38 @@ renderFeed = function() {
 // Update page title for Home/Stream
 PAGE_TITLES.feed = 'The Stream';
 
+// ── Badge Polling ─────────────────────────────────────────
+// Poll /api/proposals?status=pending every 30s to update inbox-badge and proposals-badge
+let badgePollTimer = null;
+
+function pollBadges() {
+  fetch('/api/proposals?status=pending')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      const count = Array.isArray(data) ? data.length : (data.count || 0);
+      const inboxBadge = $('inbox-badge');
+      const proposalsBadge = $('proposals-badge');
+      if (inboxBadge) {
+        inboxBadge.textContent = count || '';
+      }
+      if (proposalsBadge) {
+        proposalsBadge.textContent = count || '';
+      }
+    })
+    .catch(() => {/* bridge may be down */});
+}
+
+function startBadgePolling() {
+  if (!badgePollTimer) {
+    pollBadges(); // initial poll
+    badgePollTimer = setInterval(pollBadges, 30000);
+  }
+}
+
+// Start badge polling on load
+startBadgePolling();
+
 // ═══════════════════════════════════════════════════════════
 // AGENT DRAWER — Live Activity Windows
 // ═══════════════════════════════════════════════════════════
@@ -3053,7 +3118,7 @@ function handleOmnibusKey(e) {
   }
 }
 
-function submitOmnibus() {
+async function submitOmnibus() {
   const input = $('omnibus-input');
   const text = input.value.trim();
   if (!text) return;
@@ -3062,6 +3127,74 @@ function submitOmnibus() {
   input.value = '';
   $('omnibus-route-preview').classList.add('hidden');
   input.blur();
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  const lower = text.toLowerCase();
+
+  // Detect "search vault for X" pattern
+  if (lower.includes('search vault') || lower.includes('search mind') || lower.startsWith('vault ')) {
+    const query = text.replace(/^.*(?:search\s+(?:vault|mind)\s+(?:for\s+)?|vault\s+)/i, '').trim();
+    nav('mind');
+    setTimeout(() => {
+      const searchInput = $('mind-search-input') || $('mind-search');
+      if (searchInput) {
+        searchInput.value = query;
+        if (typeof doMindSearch === 'function') doMindSearch();
+        else if (typeof searchMind === 'function') searchMind(query);
+      }
+    }, 300);
+    toast(`🔍 Searching vault: "${query}"`, 'info', 2000);
+    addXP(5, 'omnibus search');
+    return;
+  }
+
+  // Detect "dispatch task: Y" pattern
+  if (lower.startsWith('dispatch') || lower.includes('dispatch task')) {
+    const title = text.replace(/^.*dispatch\s*(?:task)?:?\s*/i, '').trim() || text;
+    try {
+      const resp = await fetch(`${bridgeUrl}/api/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, priority: 'P2', description: '' }),
+      });
+      if (resp.ok) {
+        toast(`🚀 Dispatched: "${title}"`, 'success', 2500);
+      } else {
+        toast(`❌ Dispatch failed`, 'error');
+      }
+    } catch (e) {
+      toast(`❌ Dispatch failed: ${e.message}`, 'error');
+    }
+    addXP(5, 'omnibus dispatch');
+    return;
+  }
+
+  // Detect "send message: Z" pattern
+  if (lower.startsWith('send') || lower.includes('send message')) {
+    const msg = text.replace(/^.*(?:send\s+(?:message)?:?\s*)/i, '').trim();
+    if (msg) {
+      try {
+        await fetch(`${bridgeUrl}/api/agent/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg, agent: 'righthand', context: 'omnibus', page: currentPage }),
+        });
+        toast(`📨 Message sent`, 'success', 2500);
+      } catch (e) {
+        toast(`❌ Send failed: ${e.message}`, 'error');
+      }
+    }
+    addXP(5, 'omnibus send');
+    return;
+  }
+
+  // Detect "check system" pattern
+  if (lower.includes('check system') || lower.includes('system status')) {
+    nav('pulse');
+    toast(`⚙️ Opening System page`, 'info', 2000);
+    addXP(5, 'omnibus navigate');
+    return;
+  }
 
   switch (route.id) {
     case 'navigate':
@@ -3073,25 +3206,29 @@ function submitOmnibus() {
       const query = text.replace(/^\??\s*(search|find)\s*/i, '');
       nav('mind');
       setTimeout(() => {
-        const searchInput = $('mind-search');
+        const searchInput = $('mind-search-input') || $('mind-search');
         if (searchInput) {
           searchInput.value = query;
-          searchMind(query);
+          if (typeof doMindSearch === 'function') doMindSearch();
+          else if (typeof searchMind === 'function') searchMind(query);
         }
-      }, 200);
+      }, 300);
       toast(`🔍 Searching vault: "${query}"`, 'info', 2000);
       break;
     }
 
     case 'task': {
       const title = text.replace(/^(task|todo|create|assign|add)\s*/i, '').trim() || text;
-      const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-      fetch(`${bridgeUrl}/api/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, priority: 'P2', description: '' }),
-      }).catch(() => {});
-      toast(`📋 Created task: "${title}"`, 'success', 2500);
+      try {
+        await fetch(`${bridgeUrl}/api/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, priority: 'P2', description: '' }),
+        });
+        toast(`📋 Created task: "${title}"`, 'success', 2500);
+      } catch (e) {
+        toast(`❌ Task creation failed: ${e.message}`, 'error');
+      }
       break;
     }
 
@@ -3099,13 +3236,16 @@ function submitOmnibus() {
     case 'researcher':
     case 'ops':
     case 'righthand': {
-      const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-      fetch(`${bridgeUrl}/api/agent/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId: route.id === 'righthand' ? 'righthand' : route.id, message: text }),
-      }).catch(() => {});
-      toast(`${route.emoji} Sent to ${route.name}`, 'success', 2500);
+      try {
+        await fetch(`${bridgeUrl}/api/agent/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, agent: route.id, context: 'omnibus', page: currentPage }),
+        });
+        toast(`${route.emoji} Sent to ${route.name}`, 'success', 2500);
+      } catch (e) {
+        toast(`❌ Send failed: ${e.message}`, 'error');
+      }
       break;
     }
 

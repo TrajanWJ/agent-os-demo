@@ -779,18 +779,29 @@
       </button>
     </div>
     <div class="mobile-menu-items">
-      <button class="mobile-menu-item" onclick="nav('pulse');toggleMobileMenu()"><i data-lucide="activity" class="menu-item-icon"></i> System</button>
-      <button class="mobile-menu-item" onclick="nav('board');toggleMobileMenu()"><i data-lucide="kanban" class="menu-item-icon"></i> Board</button>
-      <button class="mobile-menu-item" onclick="nav('schedule');toggleMobileMenu()"><i data-lucide="calendar" class="menu-item-icon"></i> Schedule</button>
-      <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()"><i data-lucide="trophy" class="menu-item-icon"></i> Missions</button>
-      <button class="mobile-menu-item" onclick="nav('explore');toggleMobileMenu()"><i data-lucide="search" class="menu-item-icon"></i> Explore</button>
-      <button class="mobile-menu-item" onclick="nav('records');toggleMobileMenu()"><i data-lucide="database" class="menu-item-icon"></i> Records</button>
-      <button class="mobile-menu-item" onclick="nav('pipelines');toggleMobileMenu()"><i data-lucide="git-branch" class="menu-item-icon"></i> Pipelines</button>
-      <button class="mobile-menu-item" onclick="nav('roles');toggleMobileMenu()"><i data-lucide="shield" class="menu-item-icon"></i> Roles</button>
+      <div class="mobile-menu-group-label">⚡ OPERATE</div>
+      <button class="mobile-menu-item" onclick="nav('feed');toggleMobileMenu()">📡 Stream</button>
+      <button class="mobile-menu-item" onclick="nav('inbox');toggleMobileMenu()">📬 Inbox</button>
+      <button class="mobile-menu-item" onclick="nav('briefing');toggleMobileMenu()">📜 Briefing</button>
       <div class="mobile-menu-divider"></div>
-      <button class="mobile-menu-item" onclick="nav('stream');toggleMobileMenu()"><i data-lucide="terminal" class="menu-item-icon"></i> Stream</button>
-      <button class="mobile-menu-item" onclick="nav('command');toggleMobileMenu()"><i data-lucide="command" class="menu-item-icon"></i> Command</button>
-      <button class="mobile-menu-item" onclick="nav('config');toggleMobileMenu()"><i data-lucide="settings" class="menu-item-icon"></i> Config</button>
+      <div class="mobile-menu-group-label">💬 COMMUNICATE</div>
+      <button class="mobile-menu-item" onclick="nav('talk');toggleMobileMenu()">💬 Talk</button>
+      <button class="mobile-menu-item" onclick="nav('rooms');toggleMobileMenu()">🏠 Rooms</button>
+      <div class="mobile-menu-divider"></div>
+      <div class="mobile-menu-group-label">🎯 DIRECT</div>
+      <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()">🎯 Missions</button>
+      <button class="mobile-menu-item" onclick="nav('pipelines');toggleMobileMenu()">🔀 Pipelines</button>
+      <button class="mobile-menu-item" onclick="nav('queue');toggleMobileMenu()">📋 Proposals</button>
+      <div class="mobile-menu-divider"></div>
+      <div class="mobile-menu-group-label">🧠 KNOW</div>
+      <button class="mobile-menu-item" onclick="nav('mind');toggleMobileMenu()">🧠 Mind</button>
+      <div class="mobile-menu-divider"></div>
+      <div class="mobile-menu-group-label">⚙️ CONFIGURE</div>
+      <button class="mobile-menu-item" onclick="nav('roles');toggleMobileMenu()">🛡️ Roles</button>
+      <button class="mobile-menu-item" onclick="nav('records');toggleMobileMenu()">📊 Records</button>
+      <button class="mobile-menu-item" onclick="nav('pulse');toggleMobileMenu()">⚙️ System</button>
+      <div class="mobile-menu-divider"></div>
+      <a class="mobile-menu-item" href="life.html" target="_blank" onclick="toggleMobileMenu()">🌿 Life OS ↗</a>
     </div>
   </div>
 
@@ -886,5 +897,6 @@
   <script src="app6.js?v=1773993468"></script>
   <script src="bridge.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
+  <script src="help.js?v=1773994100"></script>
 </body>
 </html>

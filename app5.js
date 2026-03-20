@@ -886,13 +886,15 @@ function selectRoom(id) {
   renderRooms();
 }
 
-function sendRoomMessage() {
+async function sendRoomMessage() {
   const input = document.getElementById('rooms-input');
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
   const room = rooms.find(r => r.id === roomsCurrentId);
   if (!room) return;
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
+  // Add user message immediately (optimistic)
   room.messages.push({
     id: 'rmsg_' + Date.now(),
     sender: 'user',
@@ -904,44 +906,64 @@ function sendRoomMessage() {
   saveRooms();
   renderRoomView();
 
-  // Simulate agent response
-  setTimeout(() => {
+  // Try to send to a real Discord channel via Bridge
+  let sentToDiscord = false;
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && room._channelId) {
+    try {
+      await Bridge.sendMessage(room._channelId, text);
+      sentToDiscord = true;
+      toast('📨 Sent to Discord', 'success');
+    } catch (e) {
+      toast(`⚠️ Discord send failed: ${e.message}`, 'error');
+    }
+  }
+
+  // Dispatch to agent for real processing
+  try {
+    const agentList = room.agents.join(', ');
+    await fetch(`${baseUrl}/api/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        agent: room.agents[0] || 'righthand',
+        context: `room:${room.id}:${room.name} agents:[${agentList}]`,
+        page: 'rooms',
+      }),
+    });
+    
+    // Show dispatch confirmation instead of fake response
     const respondingAgent = room.agents[Math.floor(Math.random() * room.agents.length)];
     const ag = iga(respondingAgent);
-    const lowerText = text.toLowerCase();
-
-    let responsePool;
-    if (lowerText.includes('status') || lowerText.includes('update')) {
-      responsePool = [
-        `Current progress is on track. No blockers.`,
-        `Working through the queue. Should have results in ~20 minutes.`,
-        `All clear on my end. Let me pull up the latest metrics.`,
-      ];
-    } else if (lowerText.includes('?')) {
-      responsePool = [
-        `Good question. Let me check and get back to you.`,
-        `I have some thoughts on this — give me a moment to organize them.`,
-        `That depends on a few factors. Let me analyze.`,
-      ];
-    } else {
-      responsePool = [
-        `Understood. I'll incorporate that.`,
-        `On it. Will update when there's progress.`,
-        `Noted. Adjusting my approach.`,
-        `Got it. That aligns with what I was thinking.`,
-        `Acknowledged. Let me factor this in.`,
-      ];
-    }
-
     room.messages.push({
       id: 'rmsg_' + Date.now(),
       sender: respondingAgent,
-      content: responsePool[Math.floor(Math.random() * responsePool.length)],
+      content: `🔄 Dispatched to ${ag.name}. Response will appear in the feed.`,
       time: new Date().toISOString(),
     });
     saveRooms();
     if (roomsCurrentId === room.id) renderRoomView();
-  }, 1000 + Math.random() * 2000);
+    if (!sentToDiscord) toast(`🔄 Dispatched to agents`, 'success');
+  } catch {
+    // Fallback: simulated agent response
+    setTimeout(() => {
+      const respondingAgent = room.agents[Math.floor(Math.random() * room.agents.length)];
+      const responsePool = [
+        `Understood. I'll incorporate that.`,
+        `On it. Will update when there's progress.`,
+        `Noted. Adjusting my approach.`,
+        `Got it. That aligns with what I was thinking.`,
+      ];
+      room.messages.push({
+        id: 'rmsg_' + Date.now(),
+        sender: respondingAgent,
+        content: responsePool[Math.floor(Math.random() * responsePool.length)],
+        time: new Date().toISOString(),
+      });
+      saveRooms();
+      if (roomsCurrentId === room.id) renderRoomView();
+    }, 1000 + Math.random() * 2000);
+  }
 }
 
 function openNewRoomModal() {
@@ -1002,22 +1024,24 @@ function initBriefing() {
 }
 
 async function fetchBriefingData() {
+  const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
   const fetchJSON = async (url) => {
     try {
-      const r = await fetch(url);
+      const r = await fetch(baseUrl + url);
       if (r.ok) return await r.json();
     } catch {}
     return null;
   };
 
-  const [feedData, proposalsData, systemData, agentsData] = await Promise.all([
-    fetchJSON('/api/feed?limit=50').catch(() => null),
-    fetchJSON('/api/proposals').catch(() => null),
-    fetchJSON('/api/system').catch(() => null),
-    fetchJSON('/api/agents').catch(() => null),
+  const [feedData, proposalsData, systemData, tasksData, vaultData] = await Promise.all([
+    fetchJSON('/api/feed?limit=50'),
+    fetchJSON('/api/proposals?status=all'),
+    fetchJSON('/api/system/overview'),
+    fetchJSON('/api/tasks/all'),
+    fetchJSON('/api/vault/stats'),
   ]);
 
-  return { feed: feedData, proposals: proposalsData, system: systemData, agents: agentsData };
+  return { feed: feedData, proposals: proposalsData, system: systemData, tasks: tasksData, vault: vaultData };
 }
 
 async function renderBriefingDocument() {
@@ -1159,7 +1183,20 @@ function renderBriefingMissions() {
 
 function refreshBriefing() {
   toast('🔄 Refreshing briefing...', 'info', 1500);
+  // Reset cached data and re-fetch
+  briefingLastData = {};
   renderBriefingDocument();
+}
+
+function dismissBriefingItem(elementId) {
+  const el = document.getElementById(elementId);
+  if (el) {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(100%)';
+    el.style.transition = 'all 0.3s ease';
+    setTimeout(() => el.remove(), 300);
+    toast('Dismissed', 'info');
+  }
 }
 
 

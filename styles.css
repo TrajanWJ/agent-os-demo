@@ -149,10 +149,26 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 }
 .nav-badge:empty { display: none; }
 
+.nav-group { margin-bottom: 4px; }
+.nav-group-label {
+  padding: 12px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #6c7086; /* overlay0 */
+  user-select: none;
+}
 .nav-divider {
   height: 1px;
-  background: var(--border);
-  margin: 8px 0;
+  background: #313244; /* surface0 */
+  margin: 8px 12px;
+}
+.nav-external {
+  color: var(--text-dim);
+}
+.nav-external:hover {
+  color: var(--text);
 }
 
 .sidebar-footer {
@@ -3780,6 +3796,15 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   height: 1px;
   background: var(--border);
   margin: 8px 0;
+}
+.mobile-menu-group-label {
+  padding: 12px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #6c7086;
+  user-select: none;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -7893,4 +7918,225 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   .mind-reader-sidebar { width: 100%; min-width: unset; border-left: none; border-top: 1px solid var(--border); }
   .mind-insights-stats { grid-template-columns: repeat(3, 1fr); }
   .mind-graph-toolbar { flex-wrap: wrap; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HELP SYSTEM — Tooltips + Tutorial
+═══════════════════════════════════════════════════════════ */
+
+/* Help icon */
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  margin-left: 6px;
+  opacity: 0.35;
+  cursor: help;
+  transition: opacity var(--transition);
+  vertical-align: middle;
+  position: relative;
+  flex-shrink: 0;
+}
+.help-icon:hover { opacity: 1; }
+
+/* Tooltip via data-tooltip */
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #cdd6f4;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  max-width: 300px;
+  min-width: 160px;
+  width: max-content;
+  white-space: normal;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  animation: tooltipFadeIn 0.15s ease;
+}
+[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1a1a2e;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+@keyframes tooltipFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Page subtitle injected into dash-grid */
+.page-subtitle-injected {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 0 0 4px;
+  font-style: italic;
+}
+
+.view-subtitle-help {
+  font-style: italic;
+}
+
+/* Help empty hint */
+.help-empty-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* Tutorial overlay */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.4s ease;
+}
+
+.tutorial-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 32px;
+  max-width: 480px;
+  width: 90%;
+  animation: slideInDown 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+
+.tutorial-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.tutorial-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 8px 0 4px;
+}
+.tutorial-header p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.tutorial-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.tutorial-highlight {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-raised);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.tutorial-highlight-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tutorial-highlight strong {
+  display: block;
+  font-size: 14px;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.tutorial-highlight p {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.tutorial-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 10px 12px;
+  background: rgba(203,166,247,0.06);
+  border-radius: var(--radius);
+  border: 1px solid rgba(203,166,247,0.15);
+}
+
+.tutorial-tip {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.tutorial-tip kbd {
+  background: var(--bg-raised);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  font-family: monospace;
+}
+
+.tutorial-dismiss {
+  width: 100%;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #cba6f7 0%, #89b4fa 100%);
+  color: var(--bg-base);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition);
+}
+.tutorial-dismiss:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Inbox keyboard legend */
+.inbox-kb-legend kbd {
+  background: var(--bg-raised);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 767px) {
+  .tutorial-card { padding: 24px 20px; }
+  .tutorial-header h2 { font-size: 18px; }
+  .help-icon { font-size: 11px; }
+  [data-tooltip]:hover::after { max-width: 220px; min-width: 120px; font-size: 11px; }
 }
