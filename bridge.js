@@ -570,6 +570,81 @@ if (typeof window !== 'undefined') {
 }
 
 // ═══════════════════════════════════════════════════════════
+// New Proposal Modal
+// ═══════════════════════════════════════════════════════════
+
+function showNewProposalModal() {
+  const m = document.createElement('div');
+  m.id = 'new-proposal-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  m.innerHTML = `
+    <div style="background:var(--bg-secondary,#1e1e2e);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:480px;">
+      <h3 style="margin:0 0 16px;color:var(--text);font-size:16px;">New Proposal</h3>
+      <select id="np-type" style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;">
+        <option value="idea">💡 Idea</option>
+        <option value="dispatch">🚀 Dispatch</option>
+        <option value="research">🔬 Research</option>
+        <option value="build">🔨 Build</option>
+        <option value="question">❓ Question</option>
+      </select>
+      <select id="np-priority" style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;">
+        <option value="P1">P1 — Urgent</option>
+        <option value="P2">P2 — High</option>
+        <option value="P3" selected>P3 — Normal</option>
+        <option value="P4">P4 — Low</option>
+      </select>
+      <input id="np-title" placeholder="Proposal title..." style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;box-sizing:border-box;" />
+      <textarea id="np-body" placeholder="Details, context, rationale..." rows="4" style="width:100%;padding:8px 12px;margin-bottom:16px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;resize:vertical;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('new-proposal-modal').remove()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;">Cancel</button>
+        <button onclick="submitNewProposal()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#000;font-weight:600;cursor:pointer;">Create</button>
+      </div>
+      <div id="np-status" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
+    </div>
+  `;
+  m.onclick = (e) => { if (e.target === m) m.remove(); };
+  document.body.appendChild(m);
+  setTimeout(() => document.getElementById('np-title')?.focus(), 100);
+}
+
+async function submitNewProposal() {
+  const type = document.getElementById('np-type').value;
+  const priority = document.getElementById('np-priority').value;
+  const title = document.getElementById('np-title').value.trim();
+  const body = document.getElementById('np-body').value.trim();
+  const status = document.getElementById('np-status');
+  
+  if (!title) { status.textContent = '❌ Title required'; return; }
+  
+  status.textContent = '⏳ Creating...';
+  
+  try {
+    if (Bridge.liveMode) {
+      await Bridge.apiFetch('/api/proposals', {
+        method: 'POST',
+        body: JSON.stringify({ type, priority, title, body, source: 'webui' }),
+      });
+    } else {
+      // Offline: add to local queueCards
+      const id = 'local-' + Date.now();
+      queueCards.unshift({
+        id, agent: 'user', type: 'approval', priority: priority <= 'P2' ? 'urgent' : 'normal',
+        ttl: 86400, elapsed: 0, remaining: 86400,
+        question: title, context: body, options: null,
+      });
+    }
+    
+    status.textContent = '✅ Created!';
+    setTimeout(() => {
+      document.getElementById('new-proposal-modal')?.remove();
+      loadLiveProposals();
+    }, 500);
+  } catch (e) {
+    status.textContent = '❌ ' + e.message;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // HOOK: Nav — Refresh live data on view switch
 // ═══════════════════════════════════════════════════════════
 
