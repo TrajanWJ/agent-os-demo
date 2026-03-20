@@ -588,6 +588,36 @@ if (typeof window !== 'undefined') {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Auto-Generate Proposals
+// ═══════════════════════════════════════════════════════════
+
+async function autoGenerateProposal() {
+  const btn = document.getElementById('auto-gen-btn');
+  if (!btn) return;
+  
+  const origText = btn.textContent;
+  btn.textContent = '⚡ Generating...';
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  
+  try {
+    if (Bridge.liveMode) {
+      const result = await Bridge.apiFetch('/api/proposals/generate', { method: 'POST' });
+      toast(`⚡ Generated ${result.created} new proposals`, 'success');
+      await loadLiveProposals();
+    } else {
+      toast('⚡ Connect bridge first to generate proposals', 'error');
+    }
+  } catch (e) {
+    toast('Generation failed: ' + e.message, 'error');
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // New Proposal Modal
 // ═══════════════════════════════════════════════════════════
 

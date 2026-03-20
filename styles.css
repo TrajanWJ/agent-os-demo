@@ -3550,3 +3550,129 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
     min-width: 120px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PLANS / KANBAN BOARD
+   ═══════════════════════════════════════════════════════════ */
+
+.plans-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:60vh; gap:12px; color:var(--text-muted); }
+.plans-empty .empty-icon { font-size:48px; }
+.plans-empty .empty-title { font-size:18px; font-weight:600; color:var(--text); }
+.plans-empty .empty-desc { font-size:13px; }
+.plans-loading { display:flex; align-items:center; justify-content:center; height:60vh; gap:10px; color:var(--text-muted); font-size:14px; }
+.plans-spinner { width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Top bar */
+.plans-topbar { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.plans-tabs { display:flex; gap:4px; flex-wrap:wrap; flex:1; }
+.plans-tab { background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); padding:6px 14px; font-size:13px; font-weight:500; color:var(--text-muted); cursor:pointer; transition:var(--transition); display:flex; align-items:center; gap:6px; }
+.plans-tab:hover { color:var(--text); border-color:var(--accent); }
+.plans-tab.active { background:var(--accent); color:var(--bg-base); border-color:var(--accent); font-weight:600; }
+.plan-status-dot { width:6px; height:6px; border-radius:50%; display:inline-block; }
+.plan-status-dot.active { background:#a6e3a1; }
+.plan-status-dot.paused { background:#f9e2af; }
+.plan-status-dot.completed { background:#89b4fa; }
+.plans-new-btn { background:var(--accent); color:var(--bg-base); border:none; border-radius:var(--radius); padding:6px 14px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:var(--transition); }
+.plans-new-btn:hover { filter:brightness(1.1); }
+
+/* Plan info bar */
+.plan-info-bar { display:flex; align-items:center; gap:10px; padding:8px 16px; font-size:12px; color:var(--text-muted); }
+.plan-status-badge { padding:3px 10px; border-radius:99px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.plan-status-badge.active { background:rgba(166,227,161,0.15); color:#a6e3a1; }
+.plan-status-badge.paused { background:rgba(249,226,175,0.15); color:#f9e2af; }
+.plan-status-badge.completed { background:rgba(137,180,250,0.15); color:#89b4fa; }
+.plan-desc { color:var(--text-dim); }
+
+/* Kanban container */
+.kanban-container { display:flex; gap:12px; padding:12px 16px; overflow-x:auto; flex:1; align-items:flex-start; min-height:0; }
+.kanban-container::-webkit-scrollbar { height:6px; }
+.kanban-container::-webkit-scrollbar-track { background:transparent; }
+.kanban-container::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* Kanban column */
+.kanban-column { width:300px; min-width:280px; max-width:320px; flex-shrink:0; background:var(--bg-surface); border-radius:var(--radius-lg); display:flex; flex-direction:column; max-height:calc(100vh - 220px); }
+.kanban-col-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:var(--radius-lg) var(--radius-lg) 0 0; }
+.kanban-col-title { font-size:13px; font-weight:600; color:var(--text); }
+.kanban-col-count { background:var(--bg-raised); color:var(--text-muted); font-size:11px; font-weight:600; padding:2px 8px; border-radius:99px; }
+.kanban-col-body { flex:1; overflow-y:auto; padding:6px 8px; display:flex; flex-direction:column; gap:8px; }
+.kanban-col-body::-webkit-scrollbar { width:4px; }
+.kanban-col-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+/* Kanban card */
+.kanban-card { background:var(--bg-overlay); border-radius:var(--radius); padding:10px 12px; cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease; }
+.kanban-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.3); }
+.kanban-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.kanban-card-agent { font-size:11px; color:var(--text-muted); }
+.kanban-card-prio { font-size:10px; font-weight:700; color:#fff; padding:2px 6px; border-radius:var(--radius-sm); }
+.kanban-card-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px; line-height:1.35; }
+.kanban-card-labels { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+.kanban-label { background:var(--bg-raised); color:var(--text-dim); font-size:10px; padding:2px 8px; border-radius:99px; }
+.kanban-label.removable { cursor:pointer; }
+.kanban-label.removable:hover { background:#f38ba8; color:#fff; }
+.kanban-card-time { font-size:10px; color:var(--text-muted); }
+
+/* Add button in column */
+.kanban-add-btn { background:none; border:1px dashed var(--border); border-radius:var(--radius); padding:8px; margin:6px 8px 8px; font-size:12px; color:var(--text-muted); cursor:pointer; transition:var(--transition); }
+.kanban-add-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+/* Quick create form */
+.kanban-quick-create { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin:0 8px 4px; display:flex; flex-direction:column; gap:8px; }
+.qc-title { background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text); font-size:13px; outline:none; }
+.qc-title:focus { border-color:var(--accent); }
+.qc-priority { background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 8px; color:var(--text); font-size:12px; }
+.qc-actions { display:flex; gap:6px; }
+.qc-create-btn { background:var(--accent); color:var(--bg-base); border:none; border-radius:var(--radius-sm); padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; }
+.qc-create-btn:hover { filter:brightness(1.1); }
+.qc-cancel-btn { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px; padding:4px 8px; }
+
+/* Task detail modal */
+.task-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; animation:fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+.task-modal { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-xl); width:90%; max-width:700px; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; }
+.task-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+.task-modal-title { background:none; border:1px solid transparent; border-radius:var(--radius-sm); padding:4px 8px; font-size:16px; font-weight:600; color:var(--text); flex:1; outline:none; }
+.task-modal-title:focus { border-color:var(--accent); }
+.task-modal-close { background:none; border:none; color:var(--text-muted); font-size:18px; cursor:pointer; padding:4px 8px; }
+.task-modal-close:hover { color:var(--text); }
+.task-modal-body { display:flex; gap:20px; padding:20px; flex:1; }
+.task-modal-main { flex:1; display:flex; flex-direction:column; gap:16px; }
+.task-modal-sidebar { width:180px; flex-shrink:0; display:flex; flex-direction:column; gap:14px; }
+.task-field-group { display:flex; flex-direction:column; gap:4px; }
+.task-field-group label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); }
+.task-modal-desc { background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; color:var(--text); font-size:13px; resize:vertical; outline:none; font-family:inherit; }
+.task-modal-desc:focus { border-color:var(--accent); }
+.task-select { background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text); font-size:13px; outline:none; }
+.task-select:focus { border-color:var(--accent); }
+
+/* Labels row */
+.task-labels-row { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.task-label-input { background:none; border:1px dashed var(--border); border-radius:99px; padding:2px 10px; font-size:11px; color:var(--text-muted); outline:none; width:90px; }
+.task-label-input:focus { border-color:var(--accent); color:var(--text); }
+
+/* Comments */
+.task-comments-list { display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; }
+.task-comment { background:var(--bg-raised); border-radius:var(--radius); padding:8px 10px; }
+.task-comment-author { font-size:12px; font-weight:600; color:var(--accent); margin-right:6px; }
+.task-comment-time { font-size:10px; color:var(--text-muted); }
+.task-comment p { font-size:13px; color:var(--text); margin-top:4px; }
+.task-no-comments { font-size:12px; color:var(--text-muted); font-style:italic; }
+.task-comment-input-row { display:flex; gap:6px; }
+.task-comment-input { flex:1; background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text); font-size:13px; outline:none; }
+.task-comment-input:focus { border-color:var(--accent); }
+.task-comment-send { background:var(--accent); color:var(--bg-base); border:none; border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; }
+
+/* Delete danger zone */
+.task-danger-zone { margin-top:auto; padding-top:14px; border-top:1px solid var(--border); }
+.task-delete-btn { background:rgba(243,139,168,0.1); border:1px solid rgba(243,139,168,0.3); border-radius:var(--radius); padding:8px; width:100%; font-size:12px; color:#f38ba8; cursor:pointer; transition:var(--transition); }
+.task-delete-btn:hover { background:rgba(243,139,168,0.2); border-color:#f38ba8; }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .kanban-column { width:260px; min-width:240px; }
+  .task-modal { width:95%; max-width:100%; }
+  .task-modal-body { flex-direction:column; }
+  .task-modal-sidebar { width:100%; flex-direction:row; flex-wrap:wrap; gap:10px; }
+  .task-modal-sidebar .task-field-group { flex:1; min-width:120px; }
+  .plans-topbar { padding:8px 12px; }
+}

@@ -919,3 +919,420 @@ function addStreamEvent(event) {
   streamEvents.unshift(event);
   if (currentPage === 'stream') renderStreamLog();
 }
+
+// ═══════════════════════════════════════════════════════════
+// PLANS PAGE — Kanban Board
+// ═══════════════════════════════════════════════════════════
+
+let plansData = [];
+let currentPlanId = null;
+let plansLoaded = false;
+
+const PLAN_PRIORITY_COLORS = {P1:'#f38ba8', P2:'#fab387', P3:'#89b4fa', P4:'#6c7086'};
+const DEFAULT_COLUMNS = ['Backlog','In Progress','Review','Done'];
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+async function renderPlans() {
+  const v = $('view-plans');
+  if (!v) return;
+
+  if (!Bridge.liveMode) {
+    v.innerHTML = `<div class="plans-empty"><div class="empty-icon">📋</div><div class="empty-title">Connect bridge to view plans</div><div class="empty-desc">Configure bridge connection to load your Kanban boards</div></div>`;
+    return;
+  }
+
+  v.innerHTML = `<div class="plans-loading"><span class="plans-spinner"></span> Loading plans...</div>`;
+
+  try {
+    plansData = await Bridge.getPlans();
+    if (!Array.isArray(plansData)) plansData = plansData.plans || [];
+    plansLoaded = true;
+    if (!currentPlanId && plansData.length > 0) currentPlanId = plansData[0].id;
+    renderPlansUI();
+  } catch (e) {
+    v.innerHTML = `<div class="plans-empty"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load plans</div><div class="empty-desc">${e.message}</div></div>`;
+  }
+}
+
+function renderPlansUI() {
+  const v = $('view-plans');
+  if (!v) return;
+
+  const plan = plansData.find(p => p.id === currentPlanId);
+
+  // Top bar: plan tabs + new plan button
+  let html = `<div class="plans-topbar">
+    <div class="plans-tabs">`;
+  plansData.forEach(p => {
+    const active = p.id === currentPlanId ? ' active' : '';
+    const statusCls = p.status || 'active';
+    html += `<button class="plans-tab${active}" onclick="switchPlan('${p.id}')">${p.name || 'Untitled'}<span class="plan-status-dot ${statusCls}"></span></button>`;
+  });
+  html += `</div>
+    <button class="plans-new-btn" onclick="showNewPlanModal()">+ New Plan</button>
+  </div>`;
+
+  if (!plan) {
+    html += `<div class="plans-empty"><div class="empty-icon">📋</div><div class="empty-title">No plans yet</div><div class="empty-desc">Create your first plan to get started</div></div>`;
+    v.innerHTML = html;
+    lucide.createIcons();
+    return;
+  }
+
+  // Status badge
+  const statusLabel = plan.status || 'active';
+  html += `<div class="plan-info-bar"><span class="plan-status-badge ${statusLabel}">${statusLabel.charAt(0).toUpperCase()+statusLabel.slice(1)}</span>`;
+  if (plan.description) html += `<span class="plan-desc">${plan.description}</span>`;
+  html += `</div>`;
+
+  // Kanban columns
+  const columns = plan.columns || DEFAULT_COLUMNS;
+  const tasks = plan.tasks || [];
+
+  html += `<div class="kanban-container">`;
+  columns.forEach((col, ci) => {
+    const colTasks = tasks.filter(t => t.column === col || t.status === col);
+    const colColors = ['#89b4fa','#fab387','#cba6f7','#a6e3a1'];
+    const colColor = colColors[ci % colColors.length];
+
+    html += `<div class="kanban-column" data-col="${col}">
+      <div class="kanban-col-header" style="border-top:3px solid ${colColor}">
+        <span class="kanban-col-title">${col}</span>
+        <span class="kanban-col-count">${colTasks.length}</span>
+      </div>
+      <div class="kanban-col-body">`;
+
+    colTasks.forEach(task => {
+      const agent = ga(task.agent);
+      const agentColor = agent ? agent.color : '#6c7086';
+      const agentEmoji = agent ? agent.emoji : '🤖';
+      const agentName = agent ? agent.name : (task.agent || 'Unassigned');
+      const prio = task.priority || 'P3';
+      const prioColor = PLAN_PRIORITY_COLORS[prio] || '#6c7086';
+      const labels = task.labels || [];
+
+      html += `<div class="kanban-card" style="border-left:3px solid ${agentColor}" onclick="openTaskDetail('${plan.id}','${task.id}')">
+        <div class="kanban-card-top">
+          <span class="kanban-card-agent">${agentEmoji} ${agentName}</span>
+          <span class="kanban-card-prio" style="background:${prioColor}">${prio}</span>
+        </div>
+        <div class="kanban-card-title">${task.title || 'Untitled'}</div>`;
+      if (labels.length) {
+        html += `<div class="kanban-card-labels">${labels.map(l => `<span class="kanban-label">${l}</span>`).join('')}</div>`;
+      }
+      html += `<div class="kanban-card-time">${timeAgo(task.updated_at || task.created_at)}</div>
+      </div>`;
+    });
+
+    html += `</div>
+      <button class="kanban-add-btn" onclick="showQuickCreate('${plan.id}','${col}',this)">+ Add task</button>
+    </div>`;
+  });
+  html += `</div>`;
+
+  v.innerHTML = html;
+  lucide.createIcons();
+}
+
+function switchPlan(id) {
+  currentPlanId = id;
+  renderPlansUI();
+}
+
+// ── Quick Create (inline) ──────────────────────────────────
+
+function showQuickCreate(planId, col, btn) {
+  // Remove any existing quick-create
+  document.querySelectorAll('.kanban-quick-create').forEach(e => e.remove());
+
+  const form = document.createElement('div');
+  form.className = 'kanban-quick-create';
+  form.innerHTML = `
+    <input type="text" class="qc-title" placeholder="Task title..." autofocus />
+    <select class="qc-priority">
+      <option value="P1">P1</option><option value="P2">P2</option>
+      <option value="P3" selected>P3</option><option value="P4">P4</option>
+    </select>
+    <div class="qc-actions">
+      <button class="qc-create-btn" onclick="submitQuickCreate('${planId}','${col}',this)">Create</button>
+      <button class="qc-cancel-btn" onclick="this.closest('.kanban-quick-create').remove()">✕</button>
+    </div>`;
+  btn.parentElement.insertBefore(form, btn);
+  form.querySelector('.qc-title').focus();
+  form.querySelector('.qc-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitQuickCreate(planId, col, form.querySelector('.qc-create-btn'));
+    if (e.key === 'Escape') form.remove();
+  });
+}
+
+async function submitQuickCreate(planId, col, btn) {
+  const form = btn.closest('.kanban-quick-create');
+  const title = form.querySelector('.qc-title').value.trim();
+  const priority = form.querySelector('.qc-priority').value;
+  if (!title) return;
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    await Bridge.createTask(planId, { title, priority, column: col });
+    form.remove();
+    toast('Task created', 'success');
+    // Reload plan
+    const updated = await Bridge.getPlan(planId);
+    const idx = plansData.findIndex(p => p.id === planId);
+    if (idx >= 0) plansData[idx] = updated;
+    renderPlansUI();
+  } catch (e) {
+    toast('Failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Create';
+  }
+}
+
+// ── Task Detail Modal ──────────────────────────────────────
+
+function openTaskDetail(planId, taskId) {
+  const plan = plansData.find(p => p.id === planId);
+  if (!plan) return;
+  const task = (plan.tasks || []).find(t => t.id === taskId);
+  if (!task) return;
+
+  const agent = ga(task.agent);
+  const columns = plan.columns || DEFAULT_COLUMNS;
+  const prio = task.priority || 'P3';
+  const labels = task.labels || [];
+  const comments = task.comments || [];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'task-modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `<div class="task-modal">
+    <div class="task-modal-header">
+      <input class="task-modal-title" value="${(task.title||'').replace(/"/g,'&quot;')}" 
+        onchange="updateTaskField('${planId}','${taskId}','title',this.value)" />
+      <button class="task-modal-close" onclick="this.closest('.task-modal-overlay').remove()">✕</button>
+    </div>
+    <div class="task-modal-body">
+      <div class="task-modal-main">
+        <div class="task-field-group">
+          <label>Description</label>
+          <textarea class="task-modal-desc" rows="4" placeholder="Add a description..."
+            onchange="updateTaskField('${planId}','${taskId}','description',this.value)">${task.description || ''}</textarea>
+        </div>
+        <div class="task-field-group">
+          <label>Labels</label>
+          <div class="task-labels-row">
+            ${labels.map(l => `<span class="kanban-label removable" onclick="removeLabel('${planId}','${taskId}','${l}',this)">${l} ✕</span>`).join('')}
+            <input class="task-label-input" placeholder="+ Add label" onkeydown="addLabelKey(event,'${planId}','${taskId}')" />
+          </div>
+        </div>
+        <div class="task-field-group">
+          <label>Comments</label>
+          <div class="task-comments-list">
+            ${comments.map(c => `<div class="task-comment"><span class="task-comment-author">${c.author || 'Unknown'}</span><span class="task-comment-time">${timeAgo(c.created_at)}</span><p>${c.text || ''}</p></div>`).join('')}
+            ${comments.length === 0 ? '<div class="task-no-comments">No comments yet</div>' : ''}
+          </div>
+          <div class="task-comment-input-row">
+            <input class="task-comment-input" placeholder="Add a comment..." id="task-comment-input-${taskId}" onkeydown="if(event.key==='Enter')submitComment('${planId}','${taskId}')" />
+            <button class="task-comment-send" onclick="submitComment('${planId}','${taskId}')">Send</button>
+          </div>
+        </div>
+      </div>
+      <div class="task-modal-sidebar">
+        <div class="task-field-group">
+          <label>Agent</label>
+          <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','agent',this.value)">
+            <option value="">Unassigned</option>
+            ${AGENTS.map(a => `<option value="${a.id}" ${a.id===task.agent?'selected':''}>${a.emoji} ${a.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="task-field-group">
+          <label>Column</label>
+          <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','column',this.value)">
+            ${columns.map(c => `<option value="${c}" ${c===task.column||c===task.status?'selected':''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="task-field-group">
+          <label>Priority</label>
+          <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','priority',this.value)">
+            ${['P1','P2','P3','P4'].map(p => `<option value="${p}" ${p===prio?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div class="task-field-group task-danger-zone">
+          <button class="task-delete-btn" onclick="confirmDeleteTask('${planId}','${taskId}')">🗑️ Delete Task</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.appendChild(overlay);
+}
+
+async function updateTaskField(planId, taskId, field, value) {
+  try {
+    await Bridge.updateTask(planId, taskId, { [field]: value });
+    // Update local data
+    const plan = plansData.find(p => p.id === planId);
+    if (plan) {
+      const task = (plan.tasks || []).find(t => t.id === taskId);
+      if (task) task[field] = value;
+    }
+    if (field === 'column' || field === 'agent' || field === 'priority') {
+      document.querySelector('.task-modal-overlay')?.remove();
+      renderPlansUI();
+    }
+  } catch (e) {
+    toast('Update failed: ' + e.message, 'error');
+  }
+}
+
+async function addLabelKey(event, planId, taskId) {
+  if (event.key !== 'Enter') return;
+  const input = event.target;
+  const label = input.value.trim();
+  if (!label) return;
+
+  const plan = plansData.find(p => p.id === planId);
+  if (!plan) return;
+  const task = (plan.tasks || []).find(t => t.id === taskId);
+  if (!task) return;
+
+  const labels = task.labels || [];
+  if (labels.includes(label)) { input.value = ''; return; }
+  labels.push(label);
+  task.labels = labels;
+  input.value = '';
+
+  try {
+    await Bridge.updateTask(planId, taskId, { labels });
+    // Re-render the labels row
+    const row = input.closest('.task-labels-row');
+    const pill = document.createElement('span');
+    pill.className = 'kanban-label removable';
+    pill.textContent = label + ' ✕';
+    pill.onclick = () => removeLabel(planId, taskId, label, pill);
+    row.insertBefore(pill, input);
+  } catch (e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function removeLabel(planId, taskId, label, el) {
+  const plan = plansData.find(p => p.id === planId);
+  if (!plan) return;
+  const task = (plan.tasks || []).find(t => t.id === taskId);
+  if (!task) return;
+
+  task.labels = (task.labels || []).filter(l => l !== label);
+  el.remove();
+  try {
+    await Bridge.updateTask(planId, taskId, { labels: task.labels });
+  } catch (e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function submitComment(planId, taskId) {
+  const input = document.getElementById(`task-comment-input-${taskId}`);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  try {
+    await Bridge.updateTask(planId, taskId, { comment: text });
+    // Reload and reopen
+    const updated = await Bridge.getPlan(planId);
+    const idx = plansData.findIndex(p => p.id === planId);
+    if (idx >= 0) plansData[idx] = updated;
+    document.querySelector('.task-modal-overlay')?.remove();
+    openTaskDetail(planId, taskId);
+  } catch (e) {
+    toast('Comment failed: ' + e.message, 'error');
+  }
+}
+
+function confirmDeleteTask(planId, taskId) {
+  if (!confirm('Delete this task? This cannot be undone.')) return;
+  deleteTask(planId, taskId);
+}
+
+async function deleteTask(planId, taskId) {
+  try {
+    await Bridge.deleteTask(planId, taskId);
+    toast('Task deleted', 'success');
+    document.querySelector('.task-modal-overlay')?.remove();
+    const updated = await Bridge.getPlan(planId);
+    const idx = plansData.findIndex(p => p.id === planId);
+    if (idx >= 0) plansData[idx] = updated;
+    renderPlansUI();
+  } catch (e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+// ── New Plan Modal ─────────────────────────────────────────
+
+function showNewPlanModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'task-modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `<div class="task-modal" style="max-width:480px">
+    <div class="task-modal-header">
+      <h3 style="margin:0;font-size:16px;color:var(--text)">New Plan</h3>
+      <button class="task-modal-close" onclick="this.closest('.task-modal-overlay').remove()">✕</button>
+    </div>
+    <div class="task-modal-body" style="flex-direction:column;gap:12px;">
+      <div class="task-field-group">
+        <label>Name</label>
+        <input class="task-modal-title" id="new-plan-name" placeholder="Plan name..." />
+      </div>
+      <div class="task-field-group">
+        <label>Description</label>
+        <textarea class="task-modal-desc" id="new-plan-desc" rows="3" placeholder="What is this plan for?"></textarea>
+      </div>
+      <div class="task-field-group">
+        <label>Columns</label>
+        <div style="color:var(--text-muted);font-size:12px;margin-bottom:4px">Default: Backlog, In Progress, Review, Done</div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="qc-cancel-btn" onclick="this.closest('.task-modal-overlay').remove()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer">Cancel</button>
+        <button class="qc-create-btn" onclick="submitNewPlan()" style="padding:8px 16px">Create Plan</button>
+      </div>
+      <div id="new-plan-status" style="font-size:12px;color:var(--text-muted)"></div>
+    </div>
+  </div>`;
+
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('new-plan-name')?.focus(), 100);
+}
+
+async function submitNewPlan() {
+  const name = document.getElementById('new-plan-name')?.value.trim();
+  const description = document.getElementById('new-plan-desc')?.value.trim();
+  const status = document.getElementById('new-plan-status');
+
+  if (!name) { if (status) status.textContent = '❌ Name is required'; return; }
+  if (status) status.textContent = '⏳ Creating...';
+
+  try {
+    const plan = await Bridge.createPlan({ name, description, columns: DEFAULT_COLUMNS });
+    plansData.push(plan);
+    currentPlanId = plan.id;
+    document.querySelector('.task-modal-overlay')?.remove();
+    toast('Plan created!', 'success');
+    renderPlansUI();
+  } catch (e) {
+    if (status) status.textContent = '❌ ' + e.message;
+  }
+}
