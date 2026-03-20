@@ -946,7 +946,7 @@ function renderAgentList() {
         `;
       }).join('')}
     </div>
-    <button class="acenter-add-btn" onclick="showToast('Agent creation coming soon','info')">+ Add Agent</button>
+    <button class="acenter-add-btn" onclick="toast('Agent creation coming soon','info')">+ Add Agent</button>
   `;
 }
 

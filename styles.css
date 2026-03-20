@@ -2550,7 +2550,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   cursor: pointer;
 }
-.vault-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.vault-card:hover { border-color: #45475a; transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
 .vault-card-header {
   display: flex;
   align-items: flex-start;
@@ -4680,9 +4680,9 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   gap: 16px;
 }
 .mc-overview-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 8px;
   padding: 16px;
   cursor: pointer;
   transition: all var(--transition);
@@ -5114,10 +5114,10 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   gap: 14px;
 }
 .mc-mission-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 18px;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  padding: 16px;
   cursor: pointer;
   transition: all var(--transition);
   position: relative;
@@ -11114,9 +11114,12 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 .mc-overview-card:hover, .vault-card:hover,
 .board-card:hover, .pipeline-card:hover,
 .capacity-card:hover, .explore-result:hover,
-.rooms-list-item:hover, .records-row:hover {
+.rooms-list-item:hover, .records-row:hover,
+.project-card:hover, .mc-mission-card:hover,
+.metric-card:hover, .mind-search-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  border-color: #45475a;
 }
 
 /* Smooth page transitions */
