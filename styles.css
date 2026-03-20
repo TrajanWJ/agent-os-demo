@@ -3254,9 +3254,11 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 .dash-agents-bar {
   display: flex;
   gap: 10px;
-  padding: 0 0 16px;
+  padding: 16px 16px 16px;
   overflow-x: auto;
+  overflow-y: visible;
   scrollbar-width: none;
+  flex-shrink: 0;
 }
 .dash-agents-bar::-webkit-scrollbar { display: none; }
 
@@ -3325,7 +3327,9 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   display: grid;
   grid-template-columns: 3fr 2fr;
   gap: 16px;
+  padding: 0 16px;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .dash-metrics {
@@ -3457,6 +3461,9 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 /* ── Activity Feed Section ───────────────────────────────── */
 .dash-feed-section {
   margin-top: 4px;
+  padding: 0 16px;
+  flex: 1;
+  min-height: 0;
 }
 .dash-feed-header {
   display: flex;
