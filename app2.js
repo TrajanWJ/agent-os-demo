@@ -407,6 +407,42 @@ function showGraphDetail(node) {
 // ── Vault Cards ───────────────────────────────────────────
 function renderVaultCards() {
   const grid = $('vault-cards-grid');
+  if (!grid) return;
+
+  // If we have live search results, show those
+  if (_vaultSearchResults.length > 0) {
+    renderLiveSearchResults(_vaultSearchResults);
+    return;
+  }
+
+  // If bridge is live and we have recent notes but no search, show recent
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && _vaultRecentNotes.length > 0) {
+    grid.innerHTML = '';
+    updateNoteCount(_vaultRecentNotes.length);
+    _vaultRecentNotes.forEach(n => {
+      const name = n.path.split('/').pop().replace('.md', '');
+      const cat = n.path.split('/')[0] || 'root';
+      const typeColor = TYPE_COLORS[cat] || 'var(--text-dim)';
+      const ago = relativeTime(n.modified);
+      const card = document.createElement('div');
+      card.className = 'vault-card';
+      card.onclick = () => openLiveVaultNote(n.path);
+      card.innerHTML = `
+        <div class="vault-card-header">
+          <div class="vault-card-title">${escHtml(name)}</div>
+          <span class="vault-card-type" style="color:${typeColor};border-color:${typeColor}40">${cat}</span>
+        </div>
+        <div class="vault-card-summary" style="color:var(--text-muted);font-size:12px">${escHtml(n.path)}</div>
+        <div class="vault-card-meta">
+          <span class="vault-date">${ago}</span>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+    return;
+  }
+
+  // Fall back to demo data
   const list = getFilteredNotes();
   grid.innerHTML = '';
   updateNoteCount(list.length);

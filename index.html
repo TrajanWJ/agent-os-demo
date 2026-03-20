@@ -372,61 +372,60 @@
 
         <!-- PULSE VIEW -->
         <div id="view-pulse" class="view">
+          <!-- Top Metrics Bar -->
           <div class="pulse-metrics" id="pulse-metrics">
-            <div class="metric-card">
-              <div class="metric-value" id="metric-cost">$3.10</div>
-              <div class="metric-label">Cost today</div>
-              <div class="metric-sub">↑ $0.40/hr</div>
+            <div class="metric-card" id="metric-uptime">
+              <div class="metric-value">—</div>
+              <div class="metric-label">Uptime</div>
+              <div class="metric-sub">loading...</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-value" id="metric-agents">2</div>
-              <div class="metric-label">Active agents</div>
-              <div class="metric-sub">8 total</div>
+            <div class="metric-card" id="metric-load">
+              <div class="metric-value">—</div>
+              <div class="metric-label">Load Avg</div>
+              <div class="metric-sub">1 / 5 / 15 min</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-value" id="metric-tasks">14</div>
-              <div class="metric-label">Tasks done</div>
-              <div class="metric-sub">today</div>
+            <div class="metric-card" id="metric-memory">
+              <div class="metric-value">—</div>
+              <div class="metric-label">Memory</div>
+              <div class="metric-sub"><div class="sys-progress-bar"><div class="sys-progress-fill" id="mem-bar"></div></div></div>
+            </div>
+            <div class="metric-card" id="metric-disk">
+              <div class="metric-value">—</div>
+              <div class="metric-label">Disk</div>
+              <div class="metric-sub"><div class="sys-progress-bar"><div class="sys-progress-fill" id="disk-bar"></div></div></div>
             </div>
           </div>
 
-          <div class="pulse-grid">
-            <!-- Agent Health -->
-            <div class="pulse-section">
-              <div class="section-title">Agent Health</div>
-              <div id="agent-health-table"></div>
+          <!-- 2x2 Dashboard Grid -->
+          <div class="pulse-grid pulse-grid-2x2">
+            <!-- Panel 1: Services Grid -->
+            <div class="pulse-section" id="panel-services">
+              <div class="section-title"><i data-lucide="server"></i> Services</div>
+              <div id="services-grid"></div>
             </div>
 
-            <!-- Cost Chart -->
-            <div class="pulse-section">
-              <div class="section-title">Cost (7 days)</div>
-              <div class="cost-chart-container">
-                <svg id="cost-chart" class="cost-chart"></svg>
+            <!-- Panel 2: Agent Status -->
+            <div class="pulse-section" id="panel-agents">
+              <div class="section-title"><i data-lucide="users"></i> Agent Status</div>
+              <div id="agent-status-grid"></div>
+            </div>
+
+            <!-- Panel 3: Cron Health -->
+            <div class="pulse-section" id="panel-crons">
+              <div class="section-title"><i data-lucide="clock"></i> Cron Health</div>
+              <div id="cron-health-table"></div>
+            </div>
+
+            <!-- Panel 4: Live Logs -->
+            <div class="pulse-section" id="panel-logs">
+              <div class="section-title"><i data-lucide="terminal"></i> Live Logs</div>
+              <div class="log-tabs" id="log-tabs">
+                <button class="log-tab active" data-svc="openclaw-gateway" onclick="switchLogTab('openclaw-gateway',this)">Gateway</button>
+                <button class="log-tab" data-svc="oauth-guardian" onclick="switchLogTab('oauth-guardian',this)">OAuth</button>
+                <button class="log-tab" data-svc="agent-os-bridge" onclick="switchLogTab('agent-os-bridge',this)">Bridge</button>
+                <button class="log-tab" data-svc="bridge-sync" onclick="switchLogTab('bridge-sync',this)">Sync</button>
               </div>
-            </div>
-
-            <!-- System Load -->
-            <div class="pulse-section">
-              <div class="section-title">System Load</div>
-              <div id="system-load"></div>
-            </div>
-
-            <!-- Cron Status -->
-            <div class="pulse-section">
-              <div class="section-title">Cron Jobs</div>
-              <div id="cron-status"></div>
-            </div>
-
-            <!-- Webhook Status -->
-            <div class="pulse-section">
-              <div class="section-title">Webhooks</div>
-              <div id="hook-status"></div>
-            </div>
-
-            <!-- Error Log -->
-            <div class="pulse-section pulse-section-wide">
-              <div class="section-title">Recent Errors</div>
-              <div id="error-log"></div>
+              <div class="log-viewer" id="log-viewer"></div>
             </div>
           </div>
 
@@ -435,7 +434,16 @@
             <button class="quick-btn" onclick="quickAction('restart-gateway')">🔄 Restart Gateway</button>
             <button class="quick-btn" onclick="quickAction('clear-queue')">🗑️ Clear Proposals</button>
             <button class="quick-btn" onclick="quickAction('reindex')">📚 Reindex Vault</button>
-            <button class="quick-btn" onclick="quickAction('health-check')">🩺 Health Check</button>
+            <button class="quick-btn" onclick="refreshPulseData()">🔄 Refresh</button>
+          </div>
+
+          <!-- Service Log Slide-out -->
+          <div class="service-log-slideout hidden" id="service-log-slideout">
+            <div class="slideout-header">
+              <span id="slideout-title">Service Logs</span>
+              <button onclick="closeServiceSlideout()">✕</button>
+            </div>
+            <div class="log-viewer" id="slideout-log-viewer"></div>
           </div>
         </div>
 
@@ -526,7 +534,7 @@
 
         <!-- Missions View -->
         <div id="view-missions" class="view hidden">
-          <div class="view-header"><h2>🏆 Missions</h2><span class="view-subtitle">Goals, streaks & achievements</span></div>
+          <div class="view-header"><h2>🎯 Missions</h2><span class="view-subtitle">Goal tracking & dispatch operations</span></div>
           <div class="missions-content" id="missions-content"></div>
         </div>
 

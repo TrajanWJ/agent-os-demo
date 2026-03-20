@@ -1129,63 +1129,331 @@ function renderSchedule() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// MISSIONS VIEW
+// MISSIONS VIEW — Goal Tracking + Dispatch Operations Center
 // ═══════════════════════════════════════════════════════════
 
-const MISSIONS_DATA = [
-  { id:'m1', icon:'🎯', title:'Competitive Dominance', desc:'Complete analysis of all 60+ competitors', progress:73, status:'active',
-    milestones:['Surface scan ✓','Deep dive: 3/13','Final report'] },
-  { id:'m2', icon:'🏗️', title:'Frontend Vision', desc:'Build the Agent OS cockpit — replace Discord', progress:35, status:'active',
-    milestones:['Design spec ✓','Demo v6 ✓','Mobile QA','Deploy live'] },
-  { id:'m3', icon:'💰', title:'Wilson Premier Revenue', desc:'Ship Phase 0 feasibility for Wilson Premier', progress:15, status:'active',
-    milestones:['Research','Architecture','Prototype','Pitch deck'] },
-  { id:'m4', icon:'🧠', title:'Vault Mastery', desc:'500 vault notes, all cross-linked, confidence calibrated', progress:88, status:'active',
-    milestones:['100 notes ✓','250 notes ✓','Backlinks ✓','500 notes'] },
-  { id:'m5', icon:'🔒', title:'Zero Security Criticals', desc:'Clear all security audit findings', progress:100, status:'completed',
-    milestones:['Port scan ✓','SSH hardened ✓','Firewall ✓','All clear ✓'] },
-];
+const PRIORITY_COLORS = { 0:'#f38ba8', 1:'#fab387', 2:'#f9e2af', 3:'#89b4fa', 4:'#6c7086' };
+const PRIORITY_LABELS = { 0:'P0', 1:'P1', 2:'P2', 3:'P3', 4:'P4' };
+const STEP_STATUS_DOTS = { done:'#a6e3a1', active:'#f9e2af', blocked:'#f38ba8', pending:'#6c7086' };
 
-const STREAKS_DATA = [
-  { icon:'🔥', number:14, label:'Days uptime' },
-  { icon:'⚡', number:847, label:'Tasks dispatched' },
-  { icon:'🧠', number:312, label:'Vault notes' },
-  { icon:'🎯', number:23, label:'Day streak' },
-];
+let _missionsData = { goals:[], archive:[], queue:[], done:[], failed:[], feed:[], schedule:[], stats:{} };
+let _missionsExpandedGoals = new Set();
+let _missionsShowArchive = false;
+let _missionsShowDone = false;
+let _missionsShowFailed = false;
+let _missionsFeedFilter = 'all';
 
-function renderMissions() {
+function _agentEmoji(agentId) {
+  const a = AGENTS.find(ag => ag.id === agentId || ag.name?.toLowerCase() === agentId);
+  return a ? a.emoji : '🤖';
+}
+function _agentColor(agentId) {
+  const a = AGENTS.find(ag => ag.id === agentId || ag.name?.toLowerCase() === agentId);
+  return a ? a.color : '#6c7086';
+}
+
+function _relTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+  return Math.floor(diff/86400000) + 'd ago';
+}
+
+function _countdown(deadline) {
+  if (!deadline) return '';
+  const diff = new Date(deadline).getTime() - Date.now();
+  if (diff <= 0) return '<span style="color:#f38ba8">overdue</span>';
+  if (diff < 86400000) return '<span style="color:#fab387">' + Math.floor(diff/3600000) + 'h left</span>';
+  return Math.floor(diff/86400000) + 'd left';
+}
+
+async function renderMissions() {
   const el = $('missions-content');
   if (!el) return;
+
+  // Show loading
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading missions data…</div>';
+
+  // Fetch all data in parallel
+  if (Bridge.isConfigured()) {
+    try {
+      const [goals, archive, queue, done, failed, feed, schedule, stats] = await Promise.all([
+        Bridge.getMissionsGoals().catch(() => []),
+        Bridge.getMissionsGoalsArchive().catch(() => []),
+        Bridge.getMissionsQueue().catch(() => []),
+        Bridge.getMissionsDone(20).catch(() => []),
+        Bridge.getMissionsFailed().catch(() => []),
+        Bridge.getMissionsFeed(50).catch(() => []),
+        Bridge.getMissionsSchedule().catch(() => []),
+        Bridge.getMissionsStats().catch(() => ({})),
+      ]);
+      _missionsData = { goals, archive, queue, done, failed, feed, schedule, stats };
+    } catch (e) {
+      console.warn('[missions] Bridge fetch failed:', e.message);
+    }
+  }
+
+  _renderMissionsUI();
+}
+
+function _renderMissionsUI() {
+  const el = $('missions-content');
+  if (!el) return;
+
   el.innerHTML = `
-    <div class="streaks-row">
-      ${STREAKS_DATA.map(s => `
-        <div class="streak-card">
-          <div class="streak-icon">${s.icon}</div>
-          <div class="streak-number">${s.number}</div>
-          <div class="streak-label">${s.label}</div>
+    <div class="missions-layout">
+      <div class="missions-panel missions-goals-panel">
+        <div class="missions-panel-header">
+          <span class="missions-panel-icon">🎯</span>
+          <span class="missions-panel-title">Goal Tracker</span>
+          <span class="missions-panel-count">${_missionsData.goals.length} active</span>
         </div>
-      `).join('')}
+        <div id="missions-goals-list" class="missions-panel-body">${_renderGoals()}</div>
+      </div>
+      <div class="missions-panel missions-ops-panel">
+        <div class="missions-panel-header">
+          <span class="missions-panel-icon">⚡</span>
+          <span class="missions-panel-title">Operations Board</span>
+        </div>
+        <div class="missions-stats-bar" id="missions-stats-bar">${_renderStatsBar()}</div>
+        <div id="missions-ops-list" class="missions-panel-body">${_renderOps()}</div>
+      </div>
+      <div class="missions-panel missions-feed-panel">
+        <div class="missions-panel-header">
+          <span class="missions-panel-icon">📡</span>
+          <span class="missions-panel-title">Activity Stream</span>
+          <span class="missions-panel-count">${_missionsData.feed.length} events</span>
+        </div>
+        <div class="missions-feed-filters">${_renderFeedFilters()}</div>
+        <div id="missions-feed-list" class="missions-panel-body missions-feed-scroll">${_renderFeed()}</div>
+      </div>
     </div>
-    ${MISSIONS_DATA.map(m => {
-      const progressColor = m.progress >= 100 ? 'var(--accent)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
-      return `
-        <div class="mission-card">
-          <div class="mission-header">
-            <span class="mission-icon">${m.icon}</span>
-            <span class="mission-title">${m.title}</span>
-            <span class="mission-status ${m.status === 'completed' ? 'mission-completed' : 'mission-active'}">${m.status === 'completed' ? '✓ Done' : `${m.progress}%`}</span>
-          </div>
-          <div class="mission-progress-bar">
-            <div class="mission-progress-fill" style="width:${m.progress}%;background:${progressColor}"></div>
-          </div>
-          <div class="mission-detail">${m.desc}</div>
-          <div class="mission-milestones">
-            ${m.milestones.map(ms => `<span class="milestone-badge${ms.includes('✓')?' earned':''}">${ms}</span>`).join('')}
-          </div>
-        </div>
-      `;
-    }).join('')}
   `;
 }
+
+// ── Goal Tracker ──────────────────────────────────────────
+function _renderGoals() {
+  const { goals, archive } = _missionsData;
+  if (!goals.length && !archive.length) {
+    return `<div class="missions-empty">
+      <div style="font-size:32px;margin-bottom:8px">🎯</div>
+      <div style="font-weight:600">No active goals</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Goals are structured objects in ~/dispatch/goals/ with decomposed steps auto-dispatched to agents.</div>
+    </div>`;
+  }
+
+  let html = '';
+  for (const g of goals) {
+    const steps = g.steps || [];
+    const doneSteps = steps.filter(s => s.status === 'done').length;
+    const pct = steps.length ? Math.round((doneSteps / steps.length) * 100) : 0;
+    const expanded = _missionsExpandedGoals.has(g.id);
+    const pctColor = pct >= 100 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#fab387';
+
+    html += `
+      <div class="missions-goal-card" onclick="_toggleGoal('${g.id}')">
+        <div class="missions-goal-top">
+          <div class="missions-goal-desc">${_esc(g.description || g.id)}</div>
+          <div class="missions-goal-meta">
+            ${g.deadline ? `<span class="missions-deadline">${_countdown(g.deadline)}</span>` : ''}
+            <span class="missions-pct" style="color:${pctColor}">${pct}%</span>
+          </div>
+        </div>
+        <div class="missions-progress-bar"><div class="missions-progress-fill" style="width:${pct}%;background:${pctColor}"></div></div>
+        ${expanded ? `<div class="missions-steps">${steps.map(s => `
+          <div class="missions-step">
+            <span class="missions-step-dot" style="background:${STEP_STATUS_DOTS[s.status] || '#6c7086'}"></span>
+            <span class="missions-step-agent">${_agentEmoji(s.agent)}</span>
+            <span class="missions-step-desc">${_esc(s.description)}</span>
+            <span class="missions-step-status">${s.status}</span>
+          </div>
+        `).join('')}</div>` : `<div class="missions-expand-hint">${steps.length} steps — click to expand</div>`}
+      </div>
+    `;
+  }
+
+  if (archive.length) {
+    html += `
+      <div class="missions-archive-toggle" onclick="_toggleArchive()">
+        <span>${_missionsShowArchive ? '▼' : '▶'} Archived Goals (${archive.length})</span>
+      </div>
+    `;
+    if (_missionsShowArchive) {
+      for (const g of archive) {
+        const steps = g.steps || [];
+        const doneSteps = steps.filter(s => s.status === 'done').length;
+        const pct = steps.length ? Math.round((doneSteps / steps.length) * 100) : 0;
+        html += `
+          <div class="missions-goal-card missions-archived">
+            <div class="missions-goal-top">
+              <div class="missions-goal-desc" style="opacity:0.7">${_esc(g.description || g.id)}</div>
+              <span class="missions-pct" style="color:var(--text-muted)">${pct}%</span>
+            </div>
+            <div class="missions-progress-bar"><div class="missions-progress-fill" style="width:${pct}%;background:var(--text-muted)"></div></div>
+          </div>
+        `;
+      }
+    }
+  }
+
+  return html;
+}
+
+function _toggleGoal(id) {
+  if (_missionsExpandedGoals.has(id)) _missionsExpandedGoals.delete(id);
+  else _missionsExpandedGoals.add(id);
+  const el = $('missions-goals-list');
+  if (el) el.innerHTML = _renderGoals();
+}
+
+function _toggleArchive() {
+  _missionsShowArchive = !_missionsShowArchive;
+  const el = $('missions-goals-list');
+  if (el) el.innerHTML = _renderGoals();
+}
+
+// ── Stats Bar ─────────────────────────────────────────────
+function _renderStatsBar() {
+  const s = _missionsData.stats;
+  return `
+    <div class="missions-stat"><span class="missions-stat-val">${s.queueDepth ?? '—'}</span><span class="missions-stat-lbl">Queue</span></div>
+    <div class="missions-stat"><span class="missions-stat-val">${s.doneToday ?? '—'}</span><span class="missions-stat-lbl">Done Today</span></div>
+    <div class="missions-stat"><span class="missions-stat-val" style="color:${(s.failedToday||0)>0?'#f38ba8':'inherit'}">${s.failedToday ?? '—'}</span><span class="missions-stat-lbl">Failed</span></div>
+    <div class="missions-stat"><span class="missions-stat-val">${s.completionRate ?? '—'}%</span><span class="missions-stat-lbl">Rate</span></div>
+  `;
+}
+
+// ── Operations Board ──────────────────────────────────────
+function _renderOps() {
+  const { queue, done, failed } = _missionsData;
+  let html = '';
+
+  // Queue
+  if (queue.length) {
+    html += '<div class="missions-section-label">📋 Queue</div>';
+    for (const t of queue) {
+      const p = t.priority ?? 4;
+      const pColor = PRIORITY_COLORS[p] || '#6c7086';
+      html += `
+        <div class="missions-task-card" style="border-left:3px solid ${pColor}">
+          <div class="missions-task-top">
+            <span class="missions-priority-badge" style="background:${pColor}">${PRIORITY_LABELS[p]}</span>
+            <span class="missions-task-agent">${_agentEmoji(t.agent)}</span>
+            <span class="missions-task-desc">${_esc((t.description || t.title || t.id).slice(0, 80))}</span>
+          </div>
+          <div class="missions-task-meta">${_relTime(t.created || t.created_at)}</div>
+        </div>
+      `;
+    }
+  } else {
+    html += '<div class="missions-empty-small">Queue empty — all clear ✓</div>';
+  }
+
+  // Done (collapsed)
+  if (done.length) {
+    html += `
+      <div class="missions-section-toggle" onclick="_toggleDone()">
+        <span>${_missionsShowDone ? '▼' : '▶'} Completed (${done.length})</span>
+      </div>
+    `;
+    if (_missionsShowDone) {
+      for (const t of done.slice(0, 10)) {
+        html += `
+          <div class="missions-task-card missions-task-done">
+            <div class="missions-task-top">
+              <span class="missions-task-agent">${_agentEmoji(t.agent)}</span>
+              <span class="missions-task-desc" style="opacity:0.7">${_esc((t.description || t.title || t.id).slice(0, 80))}</span>
+              <span style="color:#a6e3a1;font-size:11px">✓</span>
+            </div>
+            <div class="missions-task-meta">${_relTime(t.completed_at)}</div>
+          </div>
+        `;
+      }
+    }
+  }
+
+  // Failed (collapsed)
+  if (failed.length) {
+    html += `
+      <div class="missions-section-toggle" onclick="_toggleFailed()">
+        <span style="color:#f38ba8">${_missionsShowFailed ? '▼' : '▶'} Failed (${failed.length})</span>
+      </div>
+    `;
+    if (_missionsShowFailed) {
+      for (const t of failed) {
+        html += `
+          <div class="missions-task-card missions-task-failed" style="border-left:3px solid #f38ba8">
+            <div class="missions-task-top">
+              <span class="missions-task-agent">${_agentEmoji(t.agent)}</span>
+              <span class="missions-task-desc">${_esc((t.description || t.title || t.id).slice(0, 80))}</span>
+              <span style="color:#f38ba8;font-size:11px">✗</span>
+            </div>
+            <div class="missions-task-meta" style="color:#f38ba8">${_esc((t.error || '').slice(0, 60))}</div>
+          </div>
+        `;
+      }
+    }
+  }
+
+  return html;
+}
+
+function _toggleDone() {
+  _missionsShowDone = !_missionsShowDone;
+  const el = $('missions-ops-list');
+  if (el) el.innerHTML = _renderOps();
+}
+
+function _toggleFailed() {
+  _missionsShowFailed = !_missionsShowFailed;
+  const el = $('missions-ops-list');
+  if (el) el.innerHTML = _renderOps();
+}
+
+// ── Activity Feed ─────────────────────────────────────────
+function _renderFeedFilters() {
+  const filters = ['all','tasks','errors','pipelines'];
+  return filters.map(f => `
+    <button class="missions-feed-chip${_missionsFeedFilter===f?' active':''}"
+      onclick="_setFeedFilter('${f}')">${f}</button>
+  `).join('');
+}
+
+function _setFeedFilter(f) {
+  _missionsFeedFilter = f;
+  const filtersEl = document.querySelector('.missions-feed-filters');
+  if (filtersEl) filtersEl.innerHTML = _renderFeedFilters();
+  const el = $('missions-feed-list');
+  if (el) el.innerHTML = _renderFeed();
+}
+
+function _renderFeed() {
+  let feed = _missionsData.feed || [];
+  if (_missionsFeedFilter === 'tasks') feed = feed.filter(e => e.type?.includes('task'));
+  else if (_missionsFeedFilter === 'errors') feed = feed.filter(e => e.type === 'error' || e.urgent);
+  else if (_missionsFeedFilter === 'pipelines') feed = feed.filter(e => e.type === 'pipeline' || e.type?.includes('pipeline'));
+
+  if (!feed.length) {
+    return '<div class="missions-empty-small">No activity yet</div>';
+  }
+
+  return feed.map(e => {
+    const isUrgent = e.urgent || e.type === 'error';
+    const typeBadgeColor = e.type === 'error' ? '#f38ba8' : e.type === 'pipeline' ? '#89b4fa' : e.type?.includes('task') ? '#a6e3a1' : '#6c7086';
+    return `
+      <div class="missions-feed-entry${isUrgent ? ' missions-feed-urgent' : ''}">
+        <span class="missions-feed-agent">${_agentEmoji(e.agent)}</span>
+        <span class="missions-feed-type" style="background:${typeBadgeColor}">${_esc(e.type || 'event')}</span>
+        <span class="missions-feed-content">${_esc((e.content || '').slice(0, 120))}</span>
+        <span class="missions-feed-time">${_relTime(e.timestamp)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function _esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ═══════════════════════════════════════════════════════════
 // EXPLORE VIEW

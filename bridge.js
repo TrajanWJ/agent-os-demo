@@ -61,6 +61,14 @@ const Bridge = {
   async vaultStats() { return this.apiFetch('/api/vault/stats'); },
   async vaultGraph(limit=100) { return this.apiFetch(`/api/vault/graph?limit=${limit}`); },
 
+  // ── System ───────────────────────────────────────────────
+  async getSystemOverview() { return this.apiFetch('/api/system/overview'); },
+  async getSystemAgents() { return this.apiFetch('/api/system/agents'); },
+  async getSystemCrons() { return this.apiFetch('/api/system/crons'); },
+  async getSystemServices() { return this.apiFetch('/api/system/services'); },
+  async getSystemLogs(service, lines=50) { return this.apiFetch(`/api/system/logs?service=${encodeURIComponent(service)}&lines=${lines}`); },
+  async getSystemProcesses() { return this.apiFetch('/api/system/processes'); },
+
   // ── Feed ────────────────────────────────────────────────
   async getFeed(limit=50) { return this.apiFetch(`/api/feed?limit=${limit}`); },
 
