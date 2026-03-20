@@ -705,6 +705,97 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
 
+/* ── Drag handle ──────────────────────────────── */
+.drag-handle {
+  cursor: grab; color: var(--surface2); font-size: 14px; flex-shrink: 0;
+  user-select: none; transition: color .15s; padding: 0 2px;
+}
+.drag-handle:hover { color: var(--overlay0); }
+.drag-handle:active { cursor: grabbing; }
+
+/* ── Due date ─────────────────────────────────── */
+.due-date { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+.due-date.overdue { background: rgba(243,139,168,.15); color: var(--red); font-weight: 600; }
+.due-date.upcoming { background: rgba(249,226,175,.1); color: var(--yellow); }
+.due-date.normal { color: var(--overlay0); }
+
+/* ── Subtask progress bar ─────────────────────── */
+.subtask-progress {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--overlay0);
+}
+.subtask-progress-bar {
+  width: 40px; height: 4px; background: var(--surface1); border-radius: 2px; overflow: hidden;
+}
+.subtask-progress-bar .fill { height: 100%; background: var(--green); border-radius: 2px; transition: width .3s; }
+
+/* ── Quick-add bar ────────────────────────────── */
+.quick-add-bar {
+  display: flex; gap: 8px; padding: 10px 14px; background: var(--bg-mantle);
+  border: 1px solid var(--surface1); border-radius: 10px; margin-bottom: 16px;
+  align-items: center; transition: border-color .2s, box-shadow .2s;
+}
+.quick-add-bar:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(137,180,250,.12); }
+.quick-add-bar input {
+  flex: 1; background: transparent; border: none; color: var(--text);
+  font-size: 14px; outline: none;
+}
+.quick-add-bar input::placeholder { color: var(--overlay0); }
+.quick-add-bar .hint { font-size: 11px; color: var(--surface2); white-space: nowrap; }
+
+/* ── Goal enhancements ────────────────────────── */
+.goal-habits-link { font-size: 11px; color: var(--teal); margin-top: 6px; }
+.goal-habits-link span { background: rgba(148,226,213,.1); padding: 2px 6px; border-radius: 4px; margin-right: 4px; }
+.goal-countdown { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(137,180,250,.1); color: var(--blue); }
+.goal-countdown.urgent { background: rgba(243,139,168,.1); color: var(--red); }
+
+/* ── Habit heat map ───────────────────────────── */
+.habit-heatmap { display: flex; flex-direction: column; gap: 8px; }
+.habit-heatmap-row { display: flex; align-items: center; gap: 10px; }
+.habit-heatmap-row .habit-name { font-size: 13px; font-weight: 600; min-width: 100px; }
+.habit-heatmap-row .habit-stats { font-size: 11px; color: var(--overlay0); margin-left: auto; min-width: 80px; text-align: right; }
+.habit-category-badge {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0;
+}
+.streak-fire { color: var(--peach); font-weight: 700; }
+.best-streak { font-size: 10px; color: var(--overlay0); }
+
+/* ── Journal enhancements ─────────────────────── */
+.word-count { font-size: 11px; color: var(--overlay0); text-align: right; margin-top: 4px; }
+.journal-entry-viewer {
+  max-height: 0; overflow: hidden; transition: max-height .3s ease;
+}
+.journal-entry-viewer.open { max-height: 500px; }
+.journal-prompts-section {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.journal-prompt-chip {
+  font-size: 11px; padding: 4px 10px; border-radius: 16px; cursor: pointer;
+  background: var(--bg-mantle); border: 1px solid var(--surface1); color: var(--subtext0);
+  transition: all .2s;
+}
+.journal-prompt-chip:hover { border-color: var(--blue); color: var(--text); background: rgba(137,180,250,.06); }
+
+/* ── Focus enhancements ───────────────────────── */
+.focus-score-ring {
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+}
+.ambient-btn .status { font-size: 10px; display: block; margin-top: 2px; }
+
+/* ── Dashboard stat cards ─────────────────────── */
+.dash-stat-card {
+  background: var(--bg-mantle); border-radius: 10px; padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px; transition: all .2s;
+  border: 1px solid transparent;
+}
+.dash-stat-card:hover { border-color: var(--surface1); transform: translateY(-1px); }
+.dash-stat-card .icon { font-size: 24px; }
+.dash-stat-card .info { flex: 1; }
+.dash-stat-card .val { font-size: 20px; font-weight: 700; }
+.dash-stat-card .label { font-size: 11px; color: var(--subtext0); }
+
+/* ── Stat boxes border-radius match ──────────── */
+.stat-box { border-radius: 10px; }
+
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar {
@@ -798,6 +889,32 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
     <div class="subtitle" id="dashSummary">Loading...</div>
   </div>
 
+  <!-- Dashboard Stats Row -->
+  <div class="card-grid cols-4" id="dashStatsRow" style="margin-bottom:16px">
+    <div class="dash-stat-card"><span class="icon">✅</span><div class="info"><div class="val" id="dashTaskCount">0</div><div class="label">tasks today</div></div></div>
+    <div class="dash-stat-card"><span class="icon">⚡</span><div class="info"><div class="val" id="dashHabitStatus">—</div><div class="label">habits done</div></div></div>
+    <div class="dash-stat-card"><span class="icon">🎯</span><div class="info"><div class="val" id="dashGoalProgress">—</div><div class="label">goal progress</div></div></div>
+    <div class="dash-stat-card"><span class="icon">⏱️</span><div class="info"><div class="val" id="dashFocusTime">0m</div><div class="label">focus today</div></div></div>
+  </div>
+
+  <!-- Last Journal Mood + Focus Score -->
+  <div class="card-grid cols-2" style="margin-bottom:16px">
+    <div class="dash-stat-card">
+      <span class="icon">📔</span>
+      <div class="info">
+        <div class="val" id="dashLastMood">—</div>
+        <div class="label">last journal mood</div>
+      </div>
+    </div>
+    <div class="dash-stat-card">
+      <span class="icon">🧘</span>
+      <div class="info">
+        <div class="val" id="dashFocusScore">—</div>
+        <div class="label">focus score today</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Agent OS Integration row -->
   <div class="card-grid cols-2" style="margin-bottom:16px">
     <div class="card" style="padding:14px">
@@ -872,6 +989,13 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
     <div class="tab" onclick="switchTaskTab('completed')">✅ Done</div>
   </div>
 
+  <!-- Quick-add bar -->
+  <div class="quick-add-bar">
+    <span style="color:var(--blue);font-size:16px">+</span>
+    <input type="text" id="quickAddInput" placeholder="Quick add task — press Enter..." onkeydown="if(event.key==='Enter')quickAddTask()">
+    <span class="hint">⏎ Enter</span>
+  </div>
+
   <!-- Tag filter bar -->
   <div id="taskTagFilter" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px"></div>
 
@@ -889,6 +1013,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
       <option value="medium">🟡 Medium</option>
       <option value="large">🔴 Large</option>
     </select>
+    <input type="date" id="newTaskDue" style="width:140px" title="Due date">
     <input type="text" id="newTaskTags" placeholder="Tags (comma sep)" style="width:140px">
     <button class="btn" onclick="addTask()">Add</button>
   </div>
@@ -1005,11 +1130,19 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
     <div id="habitStreaks"><div class="empty">Add habits to see streaks</div></div>
   </div>
 
-  <div style="display:flex; gap:8px; margin-top:16px">
-    <input type="text" id="newHabitName" placeholder="New habit name..." style="flex:1">
+  <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap">
+    <input type="text" id="newHabitName" placeholder="New habit name..." style="flex:1;min-width:160px">
     <select id="newHabitFreq" style="width:100px">
       <option value="daily">Daily</option>
       <option value="weekly">Weekly</option>
+    </select>
+    <select id="newHabitCategory" style="width:120px">
+      <option value="health">💪 Health</option>
+      <option value="mind">🧠 Mind</option>
+      <option value="work">💼 Work</option>
+      <option value="social">🤝 Social</option>
+      <option value="creative">🎨 Creative</option>
+      <option value="other">📦 Other</option>
     </select>
     <button class="btn green" onclick="addHabit()">+ Add Habit</button>
   </div>
@@ -1037,11 +1170,11 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   <div class="card">
     <h3>How are you feeling?</h3>
     <div class="mood-selector">
-      <div class="mood-btn" onclick="selectMood('😫')">😫</div>
-      <div class="mood-btn" onclick="selectMood('😕')">😕</div>
+      <div class="mood-btn" onclick="selectMood('😢')">😢</div>
       <div class="mood-btn" onclick="selectMood('😐')">😐</div>
       <div class="mood-btn" onclick="selectMood('🙂')">🙂</div>
-      <div class="mood-btn" onclick="selectMood('😄')">😄</div>
+      <div class="mood-btn" onclick="selectMood('😊')">😊</div>
+      <div class="mood-btn" onclick="selectMood('🤩')">🤩</div>
     </div>
 
     <h3 style="margin-top:12px">Energy Level</h3>
@@ -1056,11 +1189,16 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
     <div style="display:flex; flex-direction:column; gap:10px">
       <div>
         <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">What are you grateful for?</label>
-        <textarea id="journalGratitude" rows="2" style="width:100%" placeholder="Three things..."></textarea>
+        <textarea id="journalGratitude" rows="2" style="width:100%" placeholder="Three things..." oninput="updateWordCount()"></textarea>
       </div>
       <div>
         <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">Reflection</label>
-        <textarea id="journalReflection" rows="3" style="width:100%" placeholder="How was your day? What did you learn?"></textarea>
+        <textarea id="journalReflection" rows="3" style="width:100%" placeholder="How was your day? What did you learn?" oninput="updateWordCount()"></textarea>
+        <div class="word-count" id="journalWordCount">0 words</div>
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--subtext0); display:block; margin-bottom:4px">💡 Prompts</label>
+        <div class="journal-prompts-section" id="journalPromptChips"></div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -1500,6 +1638,37 @@ async function renderDashboard() {
   document.getElementById('dashSummary').textContent =
     `Today is ${dateStr} — ${todayTasks.length} tasks, ${habits.length} habits, ${focusSessions.length} focus sessions`;
 
+  // Wire up dashboard stat cards
+  document.getElementById('dashTaskCount').textContent = todayTasks.length;
+  const habitLog = LS.get('habit-log-' + todayStr(), {});
+  const habitsDone = habits.filter(h => habitLog[h.id]).length;
+  document.getElementById('dashHabitStatus').textContent = habits.length ? `${habitsDone}/${habits.length}` : '—';
+
+  // Goal progress
+  const goals = LS.get('goals', []);
+  if (goals.length) {
+    const avgProg = Math.round(goals.reduce((s, g) => s + calcGoalProgress(g, goals) * 100, 0) / goals.length);
+    document.getElementById('dashGoalProgress').textContent = avgProg + '%';
+  }
+
+  // Focus time today
+  const focusMins = focusSessions.reduce((s, f) => s + (f.mins || 0), 0);
+  document.getElementById('dashFocusTime').textContent = focusMins >= 60 ? Math.floor(focusMins/60) + 'h ' + (focusMins%60) + 'm' : focusMins + 'm';
+
+  // Last journal mood
+  const allJournal = LS.get('journal', []);
+  const lastEntry = allJournal.length ? allJournal[allJournal.length - 1] : null;
+  document.getElementById('dashLastMood').textContent = lastEntry ? lastEntry.mood : '—';
+
+  // Focus score
+  const distractionsToday = LS.get('distractions', []).filter(d => d.date === todayStr()).length;
+  if (focusMins > 0) {
+    const score = Math.max(0, Math.round(((focusMins - distractionsToday * 5) / focusMins) * 100));
+    document.getElementById('dashFocusScore').textContent = score + '%';
+  } else {
+    document.getElementById('dashFocusScore').textContent = '—';
+  }
+
   // Priorities
   const priEl = document.getElementById('dashPriorities');
   const intentions = LS.get('intentions-' + todayStr(), []);
@@ -1527,7 +1696,6 @@ async function renderDashboard() {
 
   // Habits
   const dhEl = document.getElementById('dashHabits');
-  const habitLog = LS.get('habit-log-' + todayStr(), {});
   if (habits.length) {
     dhEl.innerHTML = habits.map(h =>
       `<div class="task-row" onclick="toggleHabitFromDash('${h.id}')" style="cursor:pointer">
@@ -2190,21 +2358,46 @@ async function confirmDispatch() {
   renderTaskList();
 }
 
+function quickAddTask() {
+  const input = document.getElementById('quickAddInput');
+  const title = input.value.trim();
+  if (!title) return;
+  const tasks = LS.get('tasks', []);
+  tasks.push({ id: uid(), title, priority: 'p2', estimate: '', tags: [], bucket: 'inbox', done: false, notes: '', subtasks: [], createdAt: nowISO() });
+  LS.set('tasks', tasks);
+  input.value = '';
+  showToast('Task added to inbox', 'success');
+  renderTasks();
+}
+
 function addTask() {
   const title = document.getElementById('newTaskInput').value.trim();
   if (!title) return;
   const priority = document.getElementById('newTaskPriority').value;
   const estimate = document.getElementById('newTaskEstimate').value;
+  const due = document.getElementById('newTaskDue')?.value || '';
   const tagsRaw = document.getElementById('newTaskTags').value.trim();
   const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
   const tasks = LS.get('tasks', []);
-  tasks.push({ id: uid(), title, priority, estimate, tags, bucket: 'inbox', done: false, notes: '', subtasks: [], createdAt: nowISO() });
+  tasks.push({ id: uid(), title, priority, estimate, tags, due, bucket: 'inbox', done: false, notes: '', subtasks: [], createdAt: nowISO() });
   LS.set('tasks', tasks);
   document.getElementById('newTaskInput').value = '';
   document.getElementById('newTaskTags').value = '';
   document.getElementById('newTaskEstimate').value = '';
+  if (document.getElementById('newTaskDue')) document.getElementById('newTaskDue').value = '';
   showToast('Task added', 'success');
   renderTasks();
+}
+
+function getDueDateInfo(due) {
+  if (!due) return null;
+  const today = new Date(todayStr());
+  const dueDate = new Date(due);
+  const diff = Math.ceil((dueDate - today) / 86400000);
+  if (diff < 0) return { class: 'overdue', text: Math.abs(diff) + 'd overdue' };
+  if (diff === 0) return { class: 'overdue', text: 'Due today' };
+  if (diff <= 3) return { class: 'upcoming', text: diff + 'd left' };
+  return { class: 'normal', text: due };
 }
 
 function toggleTask(id) {
