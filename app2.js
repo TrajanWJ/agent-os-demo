@@ -706,7 +706,7 @@ function renderAgentHealth() {
     const row = document.createElement('div');
     row.className = 'health-row';
     row.innerHTML = `
-      <div class="health-agent"><span class="health-status-dot" style="background:${statusClr}"></span>${a.emoji} ${a.name}</div>
+      <div class="health-agent" style="cursor:pointer" onclick="goToEntity('agent','${a.id}','${a.name}')"><span class="health-status-dot" style="background:${statusClr}"></span><span class="entity-link entity-agent">${a.emoji} ${a.name}</span></div>
       <div class="health-task">${a.task || a.role}</div>
       <div class="health-bar-outer"><div class="health-bar-inner" style="width:${a.fitness * 100}%;background:${fitClr}"></div></div>
       <div class="health-tokens">${(a.tokens / 1000).toFixed(1)}K</div>

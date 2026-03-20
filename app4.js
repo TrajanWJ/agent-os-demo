@@ -95,7 +95,7 @@ function getRecordsData(type) {
         })
       );
     case 'missions':
-      return MISSIONS_DATA.map(m => ({
+      return (typeof mcMissions !== 'undefined' && mcMissions.length > 0 ? mcMissions : MISSIONS_DATA).map(m => ({
         id: m.id, name: `${m.icon} ${m.title}`, status: m.status,
         agent: `${m.agents_active} agents`, priority: m.progress + '%', updated: m.days_active + 'd active',
         _raw: m,
@@ -152,7 +152,8 @@ function getAgentRelated(agentId) {
 }
 
 function getMissionRelated(missionId) {
-  const plans = (typeof mcPlans !== 'undefined' ? mcPlans : MISSION_PLANS_DATA).filter(p => p.mission === missionId);
+  const plansData = typeof mcPlans !== 'undefined' ? mcPlans : (typeof MISSION_PLANS_DATA !== 'undefined' ? MISSION_PLANS_DATA : []);
+  const plans = plansData.filter(p => p.mission === missionId);
   return plans.map(p => ({ type: 'Plan', name: p.name, icon: '📋' }));
 }
 
@@ -671,7 +672,7 @@ function renderCapacityPipeline(body) {
             <div class="capacity-card-header">
               <span class="capacity-agent-avatar" style="border-color:${a.color}">${a.emoji}</span>
               <div class="capacity-agent-info">
-                <div class="capacity-agent-name" style="color:${a.color}">${a.name}</div>
+                <div class="capacity-agent-name entity-link entity-agent" style="color:${a.color}" onclick="event.stopPropagation();goToEntity('agent','${a.id}','${a.name}')">${a.name}</div>
                 <div class="capacity-agent-role">${a.role}</div>
               </div>
               <span class="capacity-status-dot" style="background:${statusDot}"></span>

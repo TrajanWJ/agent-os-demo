@@ -1,6 +1,18 @@
 /* Agent OS v5 — app.js — Core + Feed + Queue + Talk */
 'use strict';
 
+// Safe date helper — prevents crashes on invalid date strings
+function safeDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+function safeDateStr(v, fallback) {
+  const d = safeDate(v);
+  if (!d) return fallback || '';
+  try { return d.toLocaleDateString([], { month: 'short', day: 'numeric' }); } catch { return fallback || ''; }
+}
+
 // ═══════════════════════════════════════════════════════════
 // CORE UTILITIES
 // ═══════════════════════════════════════════════════════════
@@ -485,7 +497,7 @@ function makeStreamItem(item, idx) {
       break;
     case 'vault':
       actionsHTML = `
-        <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','preview')">👁️</button>
+        <button class="stream-action-btn" onclick="event.stopPropagation();goToEntity('note','${(item.title||'').replace(/'/g,"\\'")}','${(item.title||'').replace(/'/g,"\\'")}')" title="View in Mind">👁️</button>
         <button class="stream-action-btn" onclick="event.stopPropagation();streamAction('${item.id}','link')">🔗</button>`;
       break;
     case 'system':
@@ -505,7 +517,7 @@ function makeStreamItem(item, idx) {
     const confColor = confPct > 80 ? '#a6e3a1' : confPct > 60 ? '#f9e2af' : '#f38ba8';
     detailHTML += `
       <div class="stream-confidence-bar" style="width:${confPct}%;background:${confColor}"></div>
-      ${item.linkedMission ? `<div class="stream-linked-mission">🔗 ${item.linkedMission}</div>` : ''}
+      ${item.linkedMission ? `<div class="stream-linked-mission entity-link entity-mission" onclick="event.stopPropagation();goToEntity('mission','${item.linkedMission}','${item.linkedMission}')">🔗 ${item.linkedMission}</div>` : ''}
       <div class="stream-proposal-actions">
         <button class="stream-proposal-btn approve" onclick="streamAction('${item.id}','approve')">✅ Approve</button>
         <button class="stream-proposal-btn edit" onclick="streamAction('${item.id}','edit')">📝 Edit</button>
@@ -529,7 +541,7 @@ function makeStreamItem(item, idx) {
     <div class="stream-item-header" onclick="toggleStreamExpand('${item.id}')">
       <input type="checkbox" class="stream-item-checkbox" onclick="event.stopPropagation();toggleStreamSelect('${item.id}',this.checked)" ${streamSelectedIds.has(item.id) ? 'checked' : ''}>
       <div class="stream-item-icon" style="background:${agent.color}20;border-color:${agent.color}">${agent.emoji}</div>
-      <span class="stream-item-agent" style="color:${agent.color};cursor:pointer" data-ctx-type="agent" data-ctx-id="${item.agent}">${agent.name}</span>
+      <span class="stream-item-agent" style="color:${agent.color};cursor:pointer" onclick="event.stopPropagation();goToEntity('agent','${item.agent}','${agent.name}')">${agent.name}</span>
       <span class="stream-item-type-badge" style="background:${typeBg};color:${typeColor}">${typeIcon} ${typeLabel}</span>
       <span class="stream-item-title">${(item.title || '').replace(/`([^`]+)`/g, '<code>$1</code>')}</span>
       <span class="stream-item-time">${timeStr}</span>
@@ -668,7 +680,7 @@ async function streamAction(itemId, action) {
       break;
     case 'preview':
       toast('👁️ Opening vault preview...', 'info');
-      nav('mind');
+      goToEntity('note', item.title || item.id, item.title);
       break;
     case 'edit':
       toast('📝 Edit mode — not yet implemented', 'info');
@@ -1081,15 +1093,15 @@ function makeProposalCard(q) {
   return `
     <div class="proposal-card" id="qcard-${q.id}" style="--priority-color:${priorityColor}">
       <div class="proposal-card-top">
-        <div class="proposal-card-title" style="cursor:pointer" data-ctx-type="task" data-ctx-id="${q.id}">${q.question || q.title || 'Untitled'}</div>
+        <div class="proposal-card-title entity-link entity-proposal" onclick="event.stopPropagation();goToEntity('proposal','${q.id}','${(q.question || q.title || 'Untitled').replace(/'/g, "\\'").substring(0,50)}')">${q.question || q.title || 'Untitled'}</div>
         <span class="proposal-priority-pill" style="background:${priorityColor}20;color:${priorityColor}">${priority}</span>
       </div>
       <div class="proposal-confidence-bar" style="width:${confWidth}%;background:${confColor}"></div>
       <div class="proposal-card-meta">
-        <span class="proposal-source-badge" style="background:${source.color}18;color:${source.color};cursor:pointer" data-ctx-type="agent" data-ctx-id="${q._source || q.agent}">${source.emoji} ${source.name}</span>
+        <span class="proposal-source-badge entity-link entity-agent" style="background:${source.color}18;color:${source.color}" onclick="event.stopPropagation();goToEntity('agent','${q._source || q.agent}','${source.name}')">${source.emoji} ${source.name}</span>
         <span class="proposal-type-badge">${typeEmojis[proposalType] || '📝'} ${proposalType}</span>
         ${created ? `<span class="proposal-time">${created}</span>` : ''}
-        ${linkedMission ? `<span class="proposal-linked">🔗 ${linkedMission}</span>` : ''}
+        ${linkedMission ? `<span class="proposal-linked entity-link entity-mission" onclick="event.stopPropagation();goToEntity('mission','${linkedMission}','${linkedMission}')">🔗 ${linkedMission}</span>` : ''}
       </div>
       ${q.context ? `<div class="proposal-card-context">${q.context}</div>` : ''}
       <div class="proposal-actions">
@@ -1879,7 +1891,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
 
   const headerSection = !collapsed ? `
     <div class="msg-header">
-      <span class="msg-author" style="color:${agent.color}" data-ctx-type="agent" data-ctx-id="${msg.agent}">${agent.name}</span>
+      <span class="msg-author entity-link entity-agent" style="color:${agent.color}" onclick="event.stopPropagation();goToEntity('agent','${msg.agent}','${agent.name}')">${agent.name}</span>
       <span class="msg-timestamp">${msg.time}</span>
       ${isUser ? '<span class="msg-sync-check">✓ synced</span>' : ''}
     </div>
@@ -2668,7 +2680,7 @@ function renderDashboard() {
   if (!agentBar) return;
   agentBar.innerHTML = AGENTS.map(a => {
     const statusDot = a.status === 'active' ? 'active' : 'idle';
-    return `<div class="dash-agent ${statusDot}" title="${a.name}: ${a.status === 'active' ? a.task || 'Working' : 'Idle'}" style="cursor:pointer" data-ctx-type="agent" data-ctx-id="${a.id}">
+    return `<div class="dash-agent ${statusDot}" title="${a.name}: ${a.status === 'active' ? a.task || 'Working' : 'Idle'}" style="cursor:pointer" onclick="goToEntity('agent','${a.id}','${a.name}')">
       <span class="dash-agent-emoji">${a.emoji}</span>
       <span class="dash-agent-name">${a.name}</span>
       <span class="dash-agent-dot ${statusDot}"></span>
@@ -3008,6 +3020,151 @@ document.addEventListener('click', e => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// ENTITY LINKING — Universal cross-page navigation
+// ═══════════════════════════════════════════════════════════
+
+let _entityNavHistory = [];
+
+function goToEntity(type, id, extra) {
+  // Record where we came from
+  _entityNavHistory.push(currentPage);
+
+  switch(type) {
+    case 'agent':
+      if (typeof openAgentDrawer === 'function') openAgentDrawer(id);
+      break;
+    case 'task':
+      if (typeof nav === 'function') {
+        nav('pipelines');
+        setTimeout(() => {
+          if (typeof selectTask === 'function') selectTask(id);
+          else if (typeof openCtxPanel === 'function') openCtxPanel('task', id);
+        }, 300);
+      }
+      break;
+    case 'proposal':
+      nav('queue');
+      setTimeout(() => {
+        if (typeof selectProposal === 'function') selectProposal(id);
+        else {
+          // Scroll to proposal card
+          const card = document.getElementById('qcard-' + id);
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+      break;
+    case 'mission':
+      nav('missions');
+      setTimeout(() => {
+        if (typeof selectMCMission === 'function') selectMCMission(id);
+      }, 300);
+      break;
+    case 'note':
+      nav('mind');
+      setTimeout(() => {
+        if (typeof mindShowNote === 'function') {
+          mindShowNote(id);
+        } else if (typeof setMindTab === 'function') {
+          setMindTab('reader');
+          // Try to open note by path or id
+          if (typeof openVaultNote === 'function') {
+            const note = (typeof VAULT_NOTES !== 'undefined') ? VAULT_NOTES.find(n => n.id === id || n.title === id || (n.path && n.path.includes(id))) : null;
+            if (note) openVaultNote(note);
+          }
+        }
+      }, 300);
+      break;
+    case 'channel':
+      nav('talk');
+      setTimeout(() => {
+        if (typeof switchChannel === 'function') switchChannel(id);
+      }, 300);
+      break;
+    case 'room':
+      nav('rooms');
+      setTimeout(() => {
+        if (typeof selectRoom === 'function') selectRoom(id);
+      }, 300);
+      break;
+  }
+
+  // Show breadcrumb
+  const fromPage = _entityNavHistory[_entityNavHistory.length - 1];
+  const fromLabel = PAGE_TITLES[fromPage] || fromPage || 'Home';
+  const entityLabel = extra || id || type;
+  const typeEmojis = { agent: '🤖', task: '📋', proposal: '💡', mission: '🎯', note: '📚', channel: '💬', room: '🏠' };
+  showBreadcrumbTrail(fromLabel, `${typeEmojis[type] || ''} ${type}: ${entityLabel}`);
+}
+
+function showBreadcrumbTrail(fromPage, entityDesc) {
+  const bar = document.getElementById('breadcrumb-bar');
+  const trail = document.getElementById('breadcrumb-trail');
+  if (!bar || !trail) return;
+  trail.innerHTML = `<span class="bc-page" onclick="entityNavBack()">${fromPage}</span><span class="bc-sep">→</span><span class="bc-entity">${entityDesc}</span>`;
+  bar.style.display = 'flex';
+}
+
+function clearBreadcrumb() {
+  const bar = document.getElementById('breadcrumb-bar');
+  if (bar) bar.style.display = 'none';
+  _entityNavHistory = [];
+}
+
+function entityNavBack() {
+  const prevPage = _entityNavHistory.pop();
+  if (prevPage) {
+    nav(prevPage);
+  }
+  clearBreadcrumb();
+}
+
+// Escape key goes back via breadcrumb
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _entityNavHistory.length > 0 && !agentDrawerOpen && !paletteOpen && !ctxPanelOpen) {
+    entityNavBack();
+  }
+});
+
+// ── Entity Link Helpers ──────────────────────────────────
+
+function agentLink(agentId, label) {
+  const safeId = (agentId || '').replace(/'/g, "\\'");
+  const agentObj = ga(agentId);
+  const displayLabel = label || (agentObj ? agentObj.name : agentId) || agentId;
+  return `<span class="entity-link entity-agent" onclick="event.stopPropagation();goToEntity('agent','${safeId}','${displayLabel.replace(/'/g, "\\'")}')" title="Click to view agent">${displayLabel}</span>`;
+}
+
+function taskLink(taskId, label) {
+  const safeId = (taskId || '').replace(/'/g, "\\'");
+  const displayLabel = label || taskId;
+  return `<span class="entity-link entity-task" onclick="event.stopPropagation();goToEntity('task','${safeId}','${(displayLabel||'').replace(/'/g, "\\'")}')" title="Click to view task">${displayLabel}</span>`;
+}
+
+function proposalLink(proposalId, label) {
+  const safeId = (proposalId || '').replace(/'/g, "\\'");
+  const displayLabel = label || proposalId;
+  return `<span class="entity-link entity-proposal" onclick="event.stopPropagation();goToEntity('proposal','${safeId}','${(displayLabel||'').replace(/'/g, "\\'")}')" title="Click to view proposal">${displayLabel}</span>`;
+}
+
+function missionLink(missionId, label) {
+  const safeId = (missionId || '').replace(/'/g, "\\'");
+  const displayLabel = label || missionId;
+  return `<span class="entity-link entity-mission" onclick="event.stopPropagation();goToEntity('mission','${safeId}','${(displayLabel||'').replace(/'/g, "\\'")}')" title="Click to view mission">${displayLabel}</span>`;
+}
+
+function noteLink(noteId, label) {
+  const safeId = (noteId || '').replace(/'/g, "\\'");
+  const displayLabel = label || noteId;
+  return `<span class="entity-link entity-note" onclick="event.stopPropagation();goToEntity('note','${safeId}','${(displayLabel||'').replace(/'/g, "\\'")}')" title="Click to view note">${displayLabel}</span>`;
+}
+
+function channelLink(channelId, label) {
+  const safeId = (channelId || '').replace(/'/g, "\\'");
+  const displayLabel = label || ('#' + channelId);
+  return `<span class="entity-link entity-channel" onclick="event.stopPropagation();goToEntity('channel','${safeId}','${(displayLabel||'').replace(/'/g, "\\'")}')" title="Click to open channel">${displayLabel}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════
 // OMNIBUS INPUT — Universal command bar
 // ═══════════════════════════════════════════════════════════
 
@@ -3027,7 +3184,7 @@ const NAV_PAGES = {
   'queue': 'queue', 'proposals': 'queue',
   'mind': 'mind', 'vault': 'mind', 'knowledge': 'mind',
   'pulse': 'pulse', 'system': 'pulse',
-  'board': 'board', 'tasks': 'board',
+  'board': 'board', 'tasks': 'tasks',
   'plans': 'plans', 'kanban': 'plans',
   'schedule': 'schedule', 'calendar': 'schedule',
   'missions': 'missions', 'goals': 'missions',

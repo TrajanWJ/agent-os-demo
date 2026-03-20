@@ -385,7 +385,7 @@ function renderInboxDetail() {
           <div class="inbox-thread-msg">
             <div class="inbox-thread-avatar" style="background:${ta.color}20;border-color:${ta.color}">${ta.emoji}</div>
             <div class="inbox-thread-body">
-              <span class="inbox-thread-name" style="color:${ta.color}">${ta.name}</span>
+              <span class="inbox-thread-name entity-link entity-agent" style="color:${ta.color}" onclick="event.stopPropagation();goToEntity('agent','${t.sender}','${ta.name}')">${ta.name}</span>
               <span class="inbox-thread-time">${formatInboxTime(t.time)}</span>
               <div class="inbox-thread-text">${t.content}</div>
             </div>
@@ -400,10 +400,10 @@ function renderInboxDetail() {
       <div class="inbox-detail-agent">
         <div class="inbox-detail-avatar" style="background:${agent.color}20;border-color:${agent.color}">${agent.emoji}</div>
         <div>
-          <div class="inbox-detail-agent-name" style="color:${agent.color}">${agent.name}</div>
+          <div class="inbox-detail-agent-name entity-link entity-agent" style="color:${agent.color}" onclick="goToEntity('agent','${item.agent}','${agent.name}')">${agent.name}</div>
           <div class="inbox-detail-time">${timeStr}</div>
         </div>
-        ${item.mission ? `<div class="inbox-detail-mission">🎯 ${item.mission}</div>` : ''}
+        ${item.mission ? `<div class="inbox-detail-mission entity-link entity-mission" onclick="goToEntity('mission','${item.mission}','${item.mission}')">🎯 ${item.mission}</div>` : ''}
       </div>
       <h2 class="inbox-detail-subject">${item.subject}</h2>
     </div>
@@ -842,7 +842,7 @@ function renderRoomView() {
         <div class="rooms-msg-avatar" style="background:${sender.color}20;border-color:${sender.color}">${sender.emoji}</div>
         <div class="rooms-msg-body">
           <div class="rooms-msg-header">
-            <span class="rooms-msg-name" style="color:${sender.color}">${sender.name}</span>
+            <span class="rooms-msg-name entity-link entity-agent" style="color:${sender.color}" onclick="event.stopPropagation();goToEntity('agent','${msg.sender}','${sender.name}')">${sender.name}</span>
             <span class="rooms-msg-time">${formatInboxTime(msg.time)}</span>
           </div>
           <div class="rooms-msg-text">${msg.content}</div>
@@ -1091,7 +1091,7 @@ async function renderBriefingDocument() {
     <div class="briefing-doc-divider">━━━ Since You Were Last Here ━━━</div>
 
     ${agentSummaries.length > 0 ? agentSummaries.map(a => `
-      <p>${a.emoji} <strong>${a.name}</strong> completed <span class="briefing-live-value">${a.taskCount}</span> tasks${a.lastTask ? `, including "<em>${a.lastTask.substring(0, 60)}${a.lastTask.length > 60 ? '...' : ''}</em>"` : ''}.</p>
+      <p><span class="entity-link entity-agent" onclick="goToEntity('agent','${a.id}','${a.name}')">${a.emoji} <strong>${a.name}</strong></span> completed <span class="briefing-live-value">${a.taskCount}</span> tasks${a.lastTask ? `, including "<em>${a.lastTask.substring(0, 60)}${a.lastTask.length > 60 ? '...' : ''}</em>"` : ''}.</p>
     `).join('') : '<p>No task completions recorded yet today.</p>'}
 
     <p><span class="briefing-live-value">${autoApproved.length}</span> proposals were auto-approved. 
@@ -1204,7 +1204,6 @@ function dismissBriefingItem(elementId) {
 // NAV INTEGRATION — Hook into nav()
 // ═══════════════════════════════════════════════════════════
 
-const _origNav = nav;
 // We can't easily override nav since it's declared with function, 
 // but we can hook into page init by watching for view activation.
 // Instead, let's just register init hooks.

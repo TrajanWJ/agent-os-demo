@@ -402,7 +402,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .journal-prompt .refresh-btn { cursor: pointer; opacity: .6; transition: opacity .15s; }
 .journal-prompt .refresh-btn:hover { opacity: 1; }
 
-/* ── Rules ────────────────────────────────────── */
+/* ── Life Agent / Rules ───────────────────────── */
 .rule-item {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; background: var(--bg-mantle); border-radius: 8px;
@@ -422,6 +422,169 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   background: white; transition: left .2s;
 }
 .rule-toggle.on .knob { left: 18px; }
+
+/* Life Agent capability row */
+.capability-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: var(--bg-mantle); border-radius: 8px;
+  margin-bottom: 6px; transition: all .2s;
+}
+.capability-row:hover { background: rgba(69,71,90,.2); }
+.capability-row .cap-icon { font-size: 18px; width: 28px; text-align: center; }
+.capability-row .cap-info { flex: 1; }
+.capability-row .cap-name { font-size: 13px; font-weight: 600; }
+.capability-row .cap-desc { font-size: 11px; color: var(--subtext0); margin-top: 2px; }
+
+/* Personality section */
+.personality-group { margin-bottom: 16px; }
+.personality-group label { font-size: 12px; color: var(--subtext0); margin-bottom: 6px; display: block; }
+.radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.radio-pill {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer;
+  background: var(--bg-mantle); border: 1px solid var(--surface1); color: var(--subtext0);
+  transition: all .2s; user-select: none;
+}
+.radio-pill:hover { border-color: var(--surface2); color: var(--text); }
+.radio-pill.active { background: rgba(232,168,56,.12); border-color: var(--gold); color: var(--gold); font-weight: 600; }
+
+.proactivity-slider { width: 100%; margin-top: 6px; accent-color: var(--gold); }
+.proactivity-value { font-size: 13px; color: var(--gold); font-weight: 600; margin-left: 8px; }
+
+/* Context display */
+.context-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.context-stat {
+  padding: 10px 14px; background: var(--bg-mantle); border-radius: 8px;
+  font-size: 13px; display: flex; align-items: center; gap: 8px;
+}
+.context-stat .stat-icon { font-size: 16px; }
+.context-stat .stat-value { color: var(--text); font-weight: 600; }
+.context-stat .stat-label { color: var(--subtext0); font-size: 11px; }
+
+/* ── Interview / Therapist ────────────────────── */
+.interview-container {
+  display: flex; height: calc(100vh - 80px); gap: 0;
+}
+.interview-chat {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+}
+.interview-messages {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.interview-input-bar {
+  padding: 12px 16px; border-top: 1px solid var(--surface0);
+  display: flex; gap: 8px; align-items: flex-end;
+  background: var(--bg-mantle);
+}
+.interview-input-bar textarea {
+  flex: 1; resize: none; background: var(--surface0); border: 1px solid var(--surface1);
+  border-radius: 8px; padding: 10px 14px; color: var(--text); font-size: 13px;
+  font-family: inherit; line-height: 1.4;
+}
+.interview-input-bar textarea:focus { border-color: var(--purple); outline: none; }
+.interview-input-bar button {
+  padding: 10px 18px; border-radius: 8px; background: var(--purple);
+  color: var(--bg-crust); border: none; font-weight: 600; cursor: pointer;
+  font-size: 13px; transition: all .2s; white-space: nowrap;
+}
+.interview-input-bar button:hover { filter: brightness(1.1); }
+
+.interview-sidebar {
+  width: 260px; min-width: 260px; border-left: 1px solid var(--surface0);
+  background: var(--bg-mantle); overflow-y: auto; padding: 16px;
+  transition: all .3s;
+}
+.interview-sidebar.collapsed { width: 0; min-width: 0; padding: 0; overflow: hidden; }
+.interview-sidebar h4 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--subtext0); margin-bottom: 12px;
+}
+.interview-sidebar .ctx-block {
+  margin-bottom: 14px; padding: 10px; background: var(--surface0);
+  border-radius: 6px; font-size: 12px;
+}
+.interview-sidebar .ctx-block .ctx-label {
+  color: var(--subtext0); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 4px;
+}
+.interview-sidebar .ctx-block .ctx-value { color: var(--text); }
+
+/* Chat bubbles */
+.msg-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  animation: msgSlideUp .3s ease;
+}
+.msg-row.user { flex-direction: row-reverse; }
+.msg-avatar {
+  width: 32px; height: 32px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 16px;
+  flex-shrink: 0;
+}
+.msg-row.therapist .msg-avatar { background: var(--surface1); }
+.msg-row.user .msg-avatar { background: var(--surface0); }
+.msg-bubble {
+  max-width: 70%; padding: 10px 14px; border-radius: 12px;
+  font-size: 13px; line-height: 1.5; word-wrap: break-word;
+}
+.msg-row.therapist .msg-bubble {
+  background: var(--surface1); border-top-left-radius: 4px;
+}
+.msg-row.user .msg-bubble {
+  background: var(--surface0); border-top-right-radius: 4px;
+}
+.msg-time {
+  font-size: 10px; color: var(--overlay0); margin-top: 4px;
+}
+.msg-row.user .msg-time { text-align: right; }
+
+/* Action buttons in therapist messages */
+.msg-action-btn {
+  display: inline-block; margin-top: 8px; padding: 4px 12px;
+  border-radius: 6px; font-size: 11px; font-weight: 600;
+  background: rgba(232,168,56,.12); border: 1px solid rgba(232,168,56,.3);
+  color: var(--gold); cursor: pointer; transition: all .2s;
+}
+.msg-action-btn:hover { background: rgba(232,168,56,.2); }
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex; gap: 4px; padding: 10px 14px;
+  background: var(--surface1); border-radius: 12px;
+  border-top-left-radius: 4px; width: fit-content;
+}
+.typing-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--overlay0); animation: typingPulse 1.2s infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: .2s; }
+.typing-dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes typingPulse {
+  0%, 60%, 100% { opacity: .3; transform: scale(.8); }
+  30% { opacity: 1; transform: scale(1); }
+}
+@keyframes msgSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Session history */
+.session-history-item {
+  padding: 8px 10px; background: var(--bg-base); border-radius: 6px;
+  margin-bottom: 4px; cursor: pointer; transition: all .2s; font-size: 12px;
+}
+.session-history-item:hover { background: var(--surface0); }
+.session-history-item .sh-date { color: var(--subtext0); font-size: 10px; }
+.session-history-item .sh-summary { color: var(--text); margin-top: 2px; }
+
+/* Toggle sidebar button */
+.sidebar-toggle-btn {
+  position: absolute; top: 12px; right: 12px; background: var(--surface0);
+  border: 1px solid var(--surface1); border-radius: 6px; padding: 4px 8px;
+  color: var(--subtext0); cursor: pointer; font-size: 12px; z-index: 10;
+  transition: all .2s;
+}
+.sidebar-toggle-btn:hover { color: var(--text); border-color: var(--surface2); }
 
 /* ── Distraction log ──────────────────────────── */
 .distraction-item {
@@ -613,8 +776,11 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
     <div class="nav-item" data-page="notes" onclick="navigate('notes')">
       <span class="icon">📝</span><span class="label">Notes</span>
     </div>
+    <div class="nav-item" data-page="interview" onclick="navigate('interview')">
+      <span class="icon">🧠</span><span class="label">Interview</span><span class="badge" id="interviewBadge" style="display:none">1</span>
+    </div>
     <div class="nav-item" data-page="rules" onclick="navigate('rules')">
-      <span class="icon">⚙️</span><span class="label">Rules</span>
+      <span class="icon">🤖</span><span class="label">Life Agent</span>
     </div>
   </div>
   <div class="nav-back">
@@ -1088,25 +1254,89 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 <!-- ════════════════ RULES ════════════════ -->
 <div class="page" id="page-rules">
   <div class="page-header">
-    <h1>⚙️ Agent Rules</h1>
-    <div class="subtitle">Define rules in natural language</div>
+    <h1>🤖 Life Agent</h1>
+    <div class="subtitle">Your personal AI — bridges intent to action across all of Life OS</div>
   </div>
 
+  <!-- Current Context -->
   <div class="card">
-    <div style="display:flex; gap:8px">
-      <input type="text" id="newRuleInput" placeholder='e.g. "When I haven&apos;t logged energy by 10am, remind me"' style="flex:1" onkeydown="if(event.key==='Enter')addRule()">
-      <button class="btn" onclick="addRule()">+ Add Rule</button>
+    <h3>📡 Current Context</h3>
+    <div class="context-grid" id="agentContextGrid"></div>
+  </div>
+
+  <!-- Capabilities -->
+  <div class="card">
+    <h3>🔐 Capabilities</h3>
+    <div id="capabilitiesList"></div>
+  </div>
+
+  <!-- Personality -->
+  <div class="card">
+    <h3>🎭 Personality</h3>
+    <div class="personality-group">
+      <label>Communication Style</label>
+      <div class="radio-group" id="commStyleGroup">
+        <div class="radio-pill" data-val="supportive" onclick="setPersonality('commStyle', 'supportive')">☀️ Supportive</div>
+        <div class="radio-pill" data-val="direct" onclick="setPersonality('commStyle', 'direct')">⚡ Direct</div>
+        <div class="radio-pill active" data-val="balanced" onclick="setPersonality('commStyle', 'balanced')">⚖️ Balanced</div>
+      </div>
+    </div>
+    <div class="personality-group">
+      <label>Proactivity <span class="proactivity-value" id="proactivityValue">50%</span></label>
+      <input type="range" class="proactivity-slider" id="proactivitySlider" min="0" max="100" value="50" oninput="setProactivity(this.value)">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--overlay0);margin-top:2px"><span>Silent</span><span>Fully proactive</span></div>
+    </div>
+    <div class="personality-group">
+      <label>Check-in Frequency</label>
+      <div class="radio-group" id="checkinGroup">
+        <div class="radio-pill" data-val="never" onclick="setPersonality('checkin', 'never')">Never</div>
+        <div class="radio-pill active" data-val="daily" onclick="setPersonality('checkin', 'daily')">Daily</div>
+        <div class="radio-pill" data-val="twice" onclick="setPersonality('checkin', 'twice')">Twice daily</div>
+        <div class="radio-pill" data-val="hourly" onclick="setPersonality('checkin', 'hourly')">Hourly</div>
+      </div>
     </div>
   </div>
 
+  <!-- Custom Rules -->
   <div class="card">
-    <h3>Active Rules</h3>
+    <h3>📜 Custom Rules</h3>
+    <div style="display:flex; gap:8px; margin-bottom:12px">
+      <input type="text" id="newRuleInput" placeholder='e.g. "When I haven&apos;t logged energy by 10am, remind me"' style="flex:1" onkeydown="if(event.key==='Enter')addRule()">
+      <button class="btn" onclick="addRule()">+ Add Rule</button>
+    </div>
     <div id="ruleList"></div>
   </div>
 
   <div class="card">
-    <h3>📋 Templates</h3>
+    <h3>📋 Rule Templates</h3>
     <div id="ruleTemplates"></div>
+  </div>
+</div>
+
+<!-- ════════════════ INTERVIEW / THERAPIST ════════════════ -->
+<div class="page" id="page-interview" style="padding:0; height:100vh;">
+  <div class="interview-container" style="position:relative;">
+    <div class="interview-chat">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--surface0); display:flex; align-items:center; gap:10px; background:var(--bg-mantle);">
+        <span style="font-size:22px">🧠</span>
+        <div>
+          <div style="font-size:14px; font-weight:700;">Therapist</div>
+          <div style="font-size:11px; color:var(--subtext0);">Reflect · Recognize patterns · Process</div>
+        </div>
+        <button class="sidebar-toggle-btn" style="position:static;margin-left:auto" onclick="toggleInterviewSidebar()">☰ Context</button>
+      </div>
+      <div class="interview-messages" id="interview-messages"></div>
+      <div class="interview-input-bar">
+        <textarea id="interview-input" placeholder="Talk to your therapist..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendInterviewMessage()}"></textarea>
+        <button onclick="sendInterviewMessage()">Send</button>
+      </div>
+    </div>
+    <div class="interview-sidebar" id="interviewSidebar">
+      <h4>Session Context</h4>
+      <div id="interview-context"></div>
+      <h4 style="margin-top:18px">Session History</h4>
+      <div id="interview-history"></div>
+    </div>
   </div>
 </div>
 
@@ -1246,8 +1476,8 @@ function navigate(page) {
       dashboard: renderDashboard, daily: renderDaily, goals: renderGoals,
       tasks: renderTasks, braindump: renderBrainDump, focus: renderFocus,
       analytics: renderAnalytics, habits: renderHabits, journal: renderJournal,
-      rules: renderRules, calendar: renderCalendar, review: renderReview,
-      notes: renderNotes,
+      rules: renderLifeAgent, calendar: renderCalendar, review: renderReview,
+      notes: renderNotes, interview: renderInterview,
     };
     if (renderers[page]) renderers[page]();
   }, 100);
@@ -2867,6 +3097,19 @@ function renderAnalytics() {
 // ═══════════════════════════════════════════════════
 // RULES
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// LIFE AGENT (formerly Rules)
+// ═══════════════════════════════════════════════════
+const AGENT_CAPABILITIES = [
+  { key: 'tasks', icon: '✅', name: 'Tasks: Read & Write', desc: 'Can create, complete, and modify tasks', default: true },
+  { key: 'goals', icon: '🎯', name: 'Goals: Read & Write', desc: 'Can update goals, add milestones', default: true },
+  { key: 'habits', icon: '⚡', name: 'Habits: Read & Write', desc: 'Can track habits, suggest new ones', default: true },
+  { key: 'journal', icon: '📔', name: 'Journal: Read Only', desc: 'Can read journal for context (privacy default)', default: true },
+  { key: 'focus', icon: '⏱️', name: 'Focus: Read & Write', desc: 'Can start focus sessions, track time', default: true },
+  { key: 'calendar', icon: '📅', name: 'Calendar: Read & Write', desc: 'Can schedule events', default: true },
+  { key: 'external', icon: '🔗', name: 'External: Agent OS Bridge', desc: 'Can send requests to Agent OS (dispatch tasks, search vault)', default: false },
+];
+
 const RULE_TEMPLATES = [
   { text: "Block focus time every morning 9-11am", trigger: "time=09:00", action: "block_focus" },
   { text: "Auto-defer P3 tasks if I have more than 5 P1 tasks", trigger: "p1_count>5", action: "defer_p3" },
@@ -2875,12 +3118,101 @@ const RULE_TEMPLATES = [
   { text: "When I haven't logged energy by 10am, remind me", trigger: "no_energy_by=10:00", action: "remind_energy" },
 ];
 
-function renderRules() {
+function renderLifeAgent() {
+  // Render context
+  const tasks = LS.get('tasks', []);
+  const goals = LS.get('goals', []);
+  const habits = LS.get('habits', []);
+  const journal = LS.get('journal', []);
+  const focusSessions = LS.get('focus-sessions', []);
+
+  const activeTasks = tasks.filter(t => !t.done);
+  const overdueTasks = tasks.filter(t => !t.done && t.due && t.due < todayStr());
+  const avgGoalProgress = goals.length ? Math.round(goals.reduce((s, g) => s + (g.progress || 0), 0) / goals.length) : 0;
+
+  // Last journal
+  const lastJ = journal.length ? journal[journal.length - 1] : null;
+  const lastJTime = lastJ ? relTime(lastJ.createdAt || lastJ.date) : 'never';
+  const lastJMood = lastJ?.mood || '—';
+
+  // Habit streak
+  const today = todayStr();
+  let maxStreak = 0;
+  habits.forEach(h => {
+    const log = h.log || [];
+    let streak = 0;
+    const d = new Date();
+    for (let i = 0; i < 60; i++) {
+      const ds = d.toISOString().slice(0, 10);
+      if (log.includes(ds)) { streak++; } else if (i > 0) break;
+      d.setDate(d.getDate() - 1);
+    }
+    if (streak > maxStreak) maxStreak = streak;
+  });
+
+  document.getElementById('agentContextGrid').innerHTML = `
+    <div class="context-stat"><span class="stat-icon">📋</span><div><div class="stat-value">${activeTasks.length} active tasks${overdueTasks.length ? ', ' + overdueTasks.length + ' overdue' : ''}</div><div class="stat-label">Task load</div></div></div>
+    <div class="context-stat"><span class="stat-icon">🎯</span><div><div class="stat-value">${goals.length} goals, ${avgGoalProgress}% avg progress</div><div class="stat-label">Goal tracking</div></div></div>
+    <div class="context-stat"><span class="stat-icon">📝</span><div><div class="stat-value">Last journal: ${lastJTime} (mood: ${lastJMood})</div><div class="stat-label">Journal</div></div></div>
+    <div class="context-stat"><span class="stat-icon">🔥</span><div><div class="stat-value">${maxStreak}-day habit streak</div><div class="stat-label">Best current streak</div></div></div>
+  `;
+
+  // Render capabilities
+  const caps = LS.get('agent-capabilities', null);
+  const capState = caps || AGENT_CAPABILITIES.reduce((o, c) => { o[c.key] = c.default; return o; }, {});
+  if (!caps) LS.set('agent-capabilities', capState);
+
+  document.getElementById('capabilitiesList').innerHTML = AGENT_CAPABILITIES.map(c =>
+    `<div class="capability-row">
+      <span class="cap-icon">${c.icon}</span>
+      <div class="cap-info"><div class="cap-name">${c.name}</div><div class="cap-desc">${c.desc}</div></div>
+      <div class="rule-toggle ${capState[c.key] ? 'on' : ''}" onclick="toggleCapability('${c.key}')"><div class="knob"></div></div>
+    </div>`
+  ).join('');
+
+  // Render personality
+  const personality = LS.get('agent-personality', { commStyle: 'balanced', proactivity: 50, checkin: 'daily' });
+  document.getElementById('proactivitySlider').value = personality.proactivity;
+  document.getElementById('proactivityValue').textContent = personality.proactivity + '%';
+
+  document.querySelectorAll('#commStyleGroup .radio-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.val === personality.commStyle);
+  });
+  document.querySelectorAll('#checkinGroup .radio-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.val === personality.checkin);
+  });
+
+  // Render rules
+  renderRulesList();
+}
+
+function toggleCapability(key) {
+  const caps = LS.get('agent-capabilities', {});
+  caps[key] = !caps[key];
+  LS.set('agent-capabilities', caps);
+  renderLifeAgent();
+}
+
+function setPersonality(field, value) {
+  const p = LS.get('agent-personality', { commStyle: 'balanced', proactivity: 50, checkin: 'daily' });
+  p[field] = value;
+  LS.set('agent-personality', p);
+  renderLifeAgent();
+}
+
+function setProactivity(val) {
+  const p = LS.get('agent-personality', { commStyle: 'balanced', proactivity: 50, checkin: 'daily' });
+  p.proactivity = parseInt(val);
+  LS.set('agent-personality', p);
+  document.getElementById('proactivityValue').textContent = val + '%';
+}
+
+function renderRulesList() {
   const rules = LS.get('rules', []);
   const el = document.getElementById('ruleList');
 
   if (!rules.length) {
-    el.innerHTML = '<div class="empty"><span class="empty-icon">⚙️</span>No rules defined<div class="empty-hint">Add one above or use a template</div></div>';
+    el.innerHTML = '<div class="empty"><span class="empty-icon">📜</span>No custom rules<div class="empty-hint">Add one above or use a template</div></div>';
   } else {
     el.innerHTML = rules.map((r, i) =>
       `<div class="rule-item">
@@ -2910,7 +3242,7 @@ function addRule() {
   Bridge.postRule(rule);
   document.getElementById('newRuleInput').value = '';
   showToast('Rule added', 'success');
-  renderRules();
+  renderRulesList();
 }
 
 function adoptTemplate(text) {
@@ -2921,7 +3253,7 @@ function adoptTemplate(text) {
   LS.set('rules', rules);
   Bridge.postRule(rule);
   showToast('Rule adopted!', 'success');
-  renderRules();
+  renderRulesList();
 }
 
 function toggleRule(i) {
@@ -2929,7 +3261,7 @@ function toggleRule(i) {
   if (rules[i]) {
     rules[i].active = !rules[i].active;
     LS.set('rules', rules);
-    renderRules();
+    renderRulesList();
   }
 }
 
@@ -2937,7 +3269,350 @@ function removeRule(i) {
   const rules = LS.get('rules', []);
   rules.splice(i, 1);
   LS.set('rules', rules);
-  renderRules();
+  renderRulesList();
+}
+
+// ═══════════════════════════════════════════════════
+// INTERVIEW / THERAPIST
+// ═══════════════════════════════════════════════════
+const THERAPIST_RESPONSES = {
+  greeting: [
+    "Hey. How are you feeling today?",
+    "Good to see you. What's on your mind?",
+    "Welcome back. How has your day been?"
+  ],
+  mood_low: [
+    "I hear you. That sounds tough. What do you think is contributing most to that feeling?",
+    "Thank you for sharing that. Sometimes naming what's hard is the first step.",
+  ],
+  mood_high: [
+    "That's great to hear! What's been going well?",
+    "Nice. Let's capture what's working so you can replicate it.",
+  ],
+  goals_struggling: [
+    "I notice your {goal} progress has slowed. What's getting in the way?",
+    "Sometimes goals need recalibrating. Is {goal} still the right target?",
+  ],
+  habit_streak: [
+    "You've got a {count}-day streak on {habit}. How does that feel?",
+    "Consistency is showing up. {count} days of {habit} is real momentum.",
+  ],
+  reflection: [
+    "What's one thing you'd do differently this week?",
+    "If you could only accomplish one thing tomorrow, what would matter most?",
+    "What's something you've been avoiding?",
+  ],
+  stressed: ["What's the biggest source of stress right now? Let's break it down."],
+  overwhelmed: ["When everything feels like too much, let's just pick ONE thing. What's most urgent?"],
+  grateful: ["Gratitude is powerful. Tell me three specific things."],
+  stuck: ["Feeling stuck usually means something needs to change. What's the constraint?"],
+  default: [
+    "Tell me more about that.",
+    "How does that make you feel?",
+    "What would the ideal outcome look like?",
+    "That's interesting. What triggered that thought?",
+    "I'm listening. Keep going.",
+  ],
+};
+
+let interviewSessionId = null;
+let interviewInitialized = false;
+
+function renderInterview() {
+  if (!interviewInitialized) {
+    interviewInitialized = true;
+    loadOrStartSession();
+  }
+  renderInterviewContext();
+  renderInterviewHistory();
+  scrollInterviewToBottom();
+  // Show badge
+  const badge = document.getElementById('interviewBadge');
+  if (badge) badge.style.display = 'none';
+}
+
+function loadOrStartSession() {
+  const sessions = LS.get('interview-sessions', []);
+  const today = todayStr();
+  let current = sessions.find(s => s.date === today && !s.ended);
+  if (!current) {
+    current = { id: uid(), date: today, messages: [], startedAt: nowISO(), ended: false };
+    sessions.push(current);
+    LS.set('interview-sessions', sessions);
+    // Send greeting
+    const greeting = pickRandom(THERAPIST_RESPONSES.greeting);
+    addTherapistMessage(current.id, greeting);
+  }
+  interviewSessionId = current.id;
+  renderMessages(current.messages);
+}
+
+function getSession(sessionId) {
+  const sessions = LS.get('interview-sessions', []);
+  return sessions.find(s => s.id === (sessionId || interviewSessionId));
+}
+
+function saveSession(session) {
+  const sessions = LS.get('interview-sessions', []);
+  const idx = sessions.findIndex(s => s.id === session.id);
+  if (idx >= 0) sessions[idx] = session;
+  LS.set('interview-sessions', sessions);
+}
+
+function renderMessages(messages) {
+  const el = document.getElementById('interview-messages');
+  el.innerHTML = messages.map(m =>
+    `<div class="msg-row ${m.role}">
+      <div class="msg-avatar">${m.role === 'therapist' ? '🧠' : '👤'}</div>
+      <div>
+        <div class="msg-bubble">${esc(m.text)}${m.actions ? m.actions.map(a =>
+          `<br><span class="msg-action-btn" onclick="${a.onclick}">${a.label}</span>`
+        ).join('') : ''}</div>
+        <div class="msg-time">${relTime(m.time)}</div>
+      </div>
+    </div>`
+  ).join('');
+  scrollInterviewToBottom();
+}
+
+function scrollInterviewToBottom() {
+  const el = document.getElementById('interview-messages');
+  if (el) setTimeout(() => el.scrollTop = el.scrollHeight, 50);
+}
+
+function sendInterviewMessage() {
+  const input = document.getElementById('interview-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  const session = getSession();
+  if (!session) return;
+
+  session.messages.push({ role: 'user', text, time: nowISO() });
+  saveSession(session);
+  renderMessages(session.messages);
+
+  // Show typing indicator
+  showTypingIndicator();
+
+  // Generate response after delay
+  setTimeout(() => {
+    hideTypingIndicator();
+    const response = generateTherapistResponse(text, session);
+    addTherapistMessage(session.id, response.text, response.actions);
+  }, 800 + Math.random() * 1200);
+}
+
+function showTypingIndicator() {
+  const el = document.getElementById('interview-messages');
+  const indicator = document.createElement('div');
+  indicator.className = 'msg-row therapist';
+  indicator.id = 'typing-indicator';
+  indicator.innerHTML = `
+    <div class="msg-avatar">🧠</div>
+    <div class="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>`;
+  el.appendChild(indicator);
+  scrollInterviewToBottom();
+}
+
+function hideTypingIndicator() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function addTherapistMessage(sessionId, text, actions) {
+  const session = getSession(sessionId);
+  if (!session) return;
+  const msg = { role: 'therapist', text, time: nowISO() };
+  if (actions) msg.actions = actions;
+  session.messages.push(msg);
+  saveSession(session);
+  renderMessages(session.messages);
+}
+
+function generateTherapistResponse(userText, session) {
+  const lower = userText.toLowerCase();
+  const tasks = LS.get('tasks', []);
+  const goals = LS.get('goals', []);
+  const habits = LS.get('habits', []);
+
+  // Keyword detection
+  if (lower.match(/stress|anxious|anxiety|tense/)) {
+    return { text: pickRandom(THERAPIST_RESPONSES.stressed) };
+  }
+  if (lower.match(/overwhelm|too much|can't cope|cant cope/)) {
+    return { text: pickRandom(THERAPIST_RESPONSES.overwhelmed) };
+  }
+  if (lower.match(/grateful|thankful|appreciate/)) {
+    return { text: pickRandom(THERAPIST_RESPONSES.grateful) };
+  }
+  if (lower.match(/stuck|blocked|stagnant/)) {
+    return { text: pickRandom(THERAPIST_RESPONSES.stuck) };
+  }
+  if (lower.match(/sad|bad|terrible|awful|horrible|down|depressed|low/)) {
+    return { text: pickRandom(THERAPIST_RESPONSES.mood_low) };
+  }
+  if (lower.match(/great|amazing|good|happy|fantastic|wonderful|awesome/)) {
+    return { text: pickRandom(THERAPIST_RESPONSES.mood_high) };
+  }
+
+  // Context-aware responses
+  if (lower.match(/exercise|workout|gym|run|fitness/) && habits.length >= 0) {
+    return {
+      text: "You mentioned wanting to exercise more. Consistency beats intensity — even 15 minutes counts.",
+      actions: [{ label: '⚡ Create Habit', onclick: "interviewCreateHabit('Exercise')" }]
+    };
+  }
+  if (lower.match(/goal|achieve|accomplish|target/)) {
+    const struggling = goals.find(g => (g.progress || 0) < 30);
+    if (struggling) {
+      return { text: pickRandom(THERAPIST_RESPONSES.goals_struggling).replace('{goal}', struggling.title || 'that goal') };
+    }
+    return {
+      text: "What goal is on your mind? Let's make it concrete.",
+      actions: [{ label: '🎯 Create Goal', onclick: "interviewCreateGoal()" }]
+    };
+  }
+  if (lower.match(/task|todo|to-do|overwhelm/)) {
+    const overdue = tasks.filter(t => !t.done && t.due && t.due < todayStr());
+    if (overdue.length) {
+      return {
+        text: `I see you have ${overdue.length} overdue task${overdue.length > 1 ? 's' : ''}. That weight adds up. Which one is bothering you most?`,
+        actions: [{ label: '📋 Prioritize Tasks', onclick: "navigate('tasks')" }]
+      };
+    }
+  }
+  if (lower.match(/habit/)) {
+    const today = todayStr();
+    let bestStreak = 0, bestHabit = '';
+    habits.forEach(h => {
+      const log = h.log || [];
+      let streak = 0;
+      const d = new Date();
+      for (let i = 0; i < 60; i++) {
+        if (log.includes(d.toISOString().slice(0, 10))) streak++; else if (i > 0) break;
+        d.setDate(d.getDate() - 1);
+      }
+      if (streak > bestStreak) { bestStreak = streak; bestHabit = h.name || h.title || 'a habit'; }
+    });
+    if (bestStreak > 2) {
+      return { text: pickRandom(THERAPIST_RESPONSES.habit_streak).replace('{count}', bestStreak).replace('{habit}', bestHabit) };
+    }
+  }
+
+  // Every 4th message, offer a reflection prompt
+  if (session.messages.length % 8 === 6) {
+    return { text: pickRandom(THERAPIST_RESPONSES.reflection) };
+  }
+
+  return { text: pickRandom(THERAPIST_RESPONSES.default) };
+}
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Bridge actions from therapist
+function interviewCreateHabit(name) {
+  const habits = LS.get('habits', []);
+  habits.push({ id: uid(), name: name || 'New Habit', log: [], createdAt: nowISO() });
+  LS.set('habits', habits);
+  showToast('Habit created: ' + (name || 'New Habit'), 'success');
+  addTherapistMessage(interviewSessionId, `Done — I've created a "${name}" habit for you. The key is showing up, not perfection.`);
+}
+
+function interviewCreateGoal() {
+  navigate('goals');
+  showToast('Create your goal on the Goals page', 'info');
+}
+
+// Sidebar context
+function renderInterviewContext() {
+  const tasks = LS.get('tasks', []);
+  const goals = LS.get('goals', []);
+  const habits = LS.get('habits', []);
+  const journal = LS.get('journal', []);
+  const focusSessions = LS.get('focus-sessions', []);
+
+  const overdue = tasks.filter(t => !t.done && t.due && t.due < todayStr());
+  const activeTasks = tasks.filter(t => !t.done);
+
+  // Mood trend from last 5 journal entries
+  const recentJ = journal.slice(-5);
+  const moodIcons = { great: '😄', good: '🙂', okay: '😐', bad: '😔', terrible: '😢' };
+  const moodTrend = recentJ.map(j => moodIcons[j.mood] || j.mood || '—').join(' ');
+
+  // Best habit streak
+  let bestStreak = 0, bestHabit = '';
+  habits.forEach(h => {
+    const log = h.log || [];
+    let streak = 0;
+    const d = new Date();
+    for (let i = 0; i < 60; i++) {
+      if (log.includes(d.toISOString().slice(0, 10))) streak++; else if (i > 0) break;
+      d.setDate(d.getDate() - 1);
+    }
+    if (streak > bestStreak) { bestStreak = streak; bestHabit = h.name || h.title || ''; }
+  });
+
+  // Goal progress
+  const avgProgress = goals.length ? Math.round(goals.reduce((s, g) => s + (g.progress || 0), 0) / goals.length) : 0;
+
+  // Last focus
+  const lastFocus = focusSessions.length ? focusSessions[focusSessions.length - 1] : null;
+
+  // Patterns
+  const patterns = [];
+  if (activeTasks.length > 15) patterns.push('⚠️ Task count high (' + activeTasks.length + ') — mood may be impacted');
+  if (overdue.length > 3) patterns.push('⚠️ ' + overdue.length + ' overdue tasks piling up');
+  if (bestStreak > 5) patterns.push('✅ Strong ' + bestStreak + '-day streak on ' + bestHabit);
+  if (journal.length && !journal.find(j => j.date === todayStr())) patterns.push('📝 No journal entry today');
+
+  const el = document.getElementById('interview-context');
+  el.innerHTML = `
+    <div class="ctx-block"><div class="ctx-label">Mood Trend</div><div class="ctx-value">${moodTrend || 'No entries yet'}</div></div>
+    <div class="ctx-block"><div class="ctx-label">Habit Streaks</div><div class="ctx-value">${bestStreak > 0 ? '🔥 ' + bestStreak + 'd — ' + bestHabit : 'No active streaks'}</div></div>
+    <div class="ctx-block"><div class="ctx-label">Overdue Tasks</div><div class="ctx-value">${overdue.length ? '⚠️ ' + overdue.length + ' overdue' : '✅ All clear'}</div></div>
+    <div class="ctx-block"><div class="ctx-label">Goal Progress</div><div class="ctx-value">${goals.length ? '🎯 ' + avgProgress + '% avg across ' + goals.length + ' goals' : 'No goals set'}</div></div>
+    <div class="ctx-block"><div class="ctx-label">Last Focus</div><div class="ctx-value">${lastFocus ? relTime(lastFocus.endedAt || lastFocus.startedAt) : 'None yet'}</div></div>
+    ${patterns.length ? '<div class="ctx-block"><div class="ctx-label">Patterns Noticed</div><div class="ctx-value">' + patterns.join('<br>') + '</div></div>' : ''}
+  `;
+}
+
+function renderInterviewHistory() {
+  const sessions = LS.get('interview-sessions', []);
+  const past = sessions.filter(s => s.id !== interviewSessionId).reverse().slice(0, 10);
+  const el = document.getElementById('interview-history');
+
+  if (!past.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--overlay0)">No previous sessions</div>';
+    return;
+  }
+
+  el.innerHTML = past.map(s => {
+    const msgCount = s.messages.length;
+    const summary = s.messages.find(m => m.role === 'user')?.text?.slice(0, 50) || 'Session';
+    return `<div class="session-history-item" onclick="loadPastSession('${s.id}')">
+      <div class="sh-date">${s.date} · ${msgCount} messages</div>
+      <div class="sh-summary">${esc(summary)}${summary.length >= 50 ? '…' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+function loadPastSession(sessionId) {
+  const session = getSession(sessionId);
+  if (!session) return;
+  interviewSessionId = sessionId;
+  renderMessages(session.messages);
+  renderInterviewContext();
+}
+
+function toggleInterviewSidebar() {
+  const sb = document.getElementById('interviewSidebar');
+  sb.classList.toggle('collapsed');
 }
 
 // ═══════════════════════════════════════════════════

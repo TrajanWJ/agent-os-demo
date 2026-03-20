@@ -341,9 +341,9 @@ function applyPageHelp(page) {
 }
 
 // Hook into nav() to apply help on page change
-const _origNav = nav;
+const _origNavHelp = nav;
 nav = function(page) {
-  _origNav(page);
+  _origNavHelp(page);
   applyPageHelp(page);
 };
 

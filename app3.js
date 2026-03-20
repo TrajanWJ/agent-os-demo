@@ -1884,7 +1884,7 @@ function renderMCOverviewGrid() {
           <div class="mc-overview-card" onclick="selectMCMission('${m.id}')">
             <div class="mc-ov-card-header">
               <span class="mc-ov-card-icon">${m.icon}</span>
-              <span class="mc-ov-card-title">${m.title}</span>
+              <span class="mc-ov-card-title entity-link entity-mission">${m.title}</span>
             </div>
             <div class="mc-ov-card-progress">
               ${renderMiniProgressRing(m.progress, progressColor, 36)}

@@ -8972,3 +8972,67 @@ textarea:focus-visible,
 .mobile-badge:not(:empty) {
   animation: badge-pulse 2s ease-in-out infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ENTITY LINKING — Clickable cross-page navigation
+═══════════════════════════════════════════════════════════ */
+
+.entity-link {
+  cursor: pointer;
+  border-bottom: 1px dotted currentColor;
+  transition: color 0.15s, border-bottom-color 0.15s;
+}
+.entity-link:hover {
+  color: #cba6f7;
+  border-bottom-color: #cba6f7;
+}
+.entity-agent:hover { color: #f9e2af; border-bottom-color: #f9e2af; }
+.entity-task:hover { color: #89b4fa; border-bottom-color: #89b4fa; }
+.entity-note:hover { color: #a6e3a1; border-bottom-color: #a6e3a1; }
+.entity-proposal:hover { color: #f5c2e7; border-bottom-color: #f5c2e7; }
+.entity-mission:hover { color: #fab387; border-bottom-color: #fab387; }
+.entity-channel:hover { color: #94e2d5; border-bottom-color: #94e2d5; }
+
+/* Breadcrumb Bar */
+.breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  background: var(--bg-crust);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 28px;
+}
+.breadcrumb-bar .breadcrumb-close {
+  font-size: 14px;
+  padding: 0 4px;
+  margin-left: auto;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.breadcrumb-bar .breadcrumb-close:hover {
+  color: var(--text);
+}
+#breadcrumb-trail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#breadcrumb-trail .bc-page {
+  cursor: pointer;
+  color: var(--accent2);
+}
+#breadcrumb-trail .bc-page:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+#breadcrumb-trail .bc-sep {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+#breadcrumb-trail .bc-entity {
+  color: var(--text-dim);
+  font-weight: 500;
+}
