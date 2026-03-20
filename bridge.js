@@ -285,6 +285,8 @@ async function bridgeGoLive() {
 
   // 5) Wire WebSocket events
   Bridge.on('message', (msg) => {
+    // Skip our own messages (sent via bridgeSendMessage → POST → WS broadcast)
+    if (msg.source === 'self') return;
     // Skip if we already have this message (dedup with optimistic sends)
     const existing = document.querySelector(`[data-msg-id="${msg.data?.id}"]`);
     if (existing) return;
@@ -450,6 +452,21 @@ function bridgeMsgToLocal(msg) {
 // HOOK: Send message — Use bridge when live
 // ═══════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════
+// HOOK: Switch channel — Load live messages when bridge is active
+// ═══════════════════════════════════════════════════════════
+
+if (typeof window !== 'undefined' && typeof window.switchChannel === 'function') {
+  const _realSwitchChannel = window.switchChannel;
+  window.switchChannel = function(chId) {
+    _realSwitchChannel.call(this, chId);
+    // After mock render, overlay with live data if bridge is active
+    if (Bridge.liveMode && /^\d+$/.test(chId)) {
+      loadLiveMessages(chId);
+    }
+  };
+}
+
 const _origSendMessage = typeof sendMessage === 'function' ? sendMessage : null;
 
 if (typeof window !== 'undefined' && typeof window.sendMessage === 'function') {
@@ -486,7 +503,7 @@ async function bridgeSendMessage() {
     time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
     ts: Date.now() / 1000,
     reactions: [],
-    replyTo: null,
+    replyTo: (typeof replyingTo !== 'undefined' && replyingTo?.id) || null,
     embed: null,
     attachments: [],
     _authorName: 'You',
@@ -503,11 +520,18 @@ async function bridgeSendMessage() {
   }
   
   try {
-    const result = await Bridge.sendMessage(currentChannel, text);
-    // Replace pending message with real one (the WS broadcast will handle it,
-    // but remove the optimistic one to avoid duplicates)
+    const replyId = (typeof replyingTo !== 'undefined' && replyingTo?.id) || null;
+    const result = await Bridge.sendMessage(currentChannel, text, replyId);
+    // Clear reply state after successful send
+    if (typeof replyingTo !== 'undefined') replyingTo = null;
+    const replyBar = document.getElementById('reply-bar');
+    if (replyBar) replyBar.style.display = 'none';
+    // Update the optimistic element with the real Discord message ID
     const pendingEl = container?.querySelector(`[data-msg-id="${tempId}"]`);
-    if (pendingEl) pendingEl.remove();
+    if (pendingEl) {
+      pendingEl.setAttribute('data-msg-id', result.id);
+      pendingEl.id = `msg-${result.id}`;
+    }
   } catch (e) {
     // Remove optimistic message and show error
     const pendingEl = container?.querySelector(`[data-msg-id="${tempId}"]`);

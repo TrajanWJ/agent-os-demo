@@ -969,8 +969,14 @@ function switchChannel(chId) {
   const ch = DC_CHANNELS.text.find(c => c.id === chId);
   if (ch) ch.unread = 0;
 
-  $('current-channel-name').textContent = chId;
-  $('message-input').placeholder = `Message #${chId}`;
+  // Show channel name (resolve from live data if available)
+  let displayName = chId;
+  if (typeof _liveChannelData !== 'undefined' && _liveChannelData?.flat) {
+    const lch = _liveChannelData.flat.find(c => c.id === chId);
+    if (lch) displayName = lch.name;
+  }
+  $('current-channel-name').textContent = displayName;
+  $('message-input').placeholder = `Message #${displayName}`;
 
   // Update topbar
   const color = CHANNEL_COLOR[chId] || '#D4A574';
