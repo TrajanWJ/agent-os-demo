@@ -32,7 +32,7 @@ const PAGE_TITLES = {
   schedule: 'Briefing', missions: 'Missions', explore: 'Mind',
   plans: 'Missions', briefing: 'Briefing', inbox: 'Inbox',
   rooms: 'Rooms', pipelines: 'Pipelines', roles: 'Roles',
-  records: 'Records'
+  records: 'Records', tasks: 'Tasks', projects: 'Projects'
 };
 
 // ── Navigation ────────────────────────────────────────────
@@ -80,6 +80,7 @@ function nav(page) {
       renderQueue();
     }
   }
+  if (page === 'rooms') { if (typeof initRooms === 'function') initRooms(); }
   if (page === 'talk') {
     renderChannelList();
     if (typeof Bridge !== 'undefined' && Bridge.liveMode && typeof loadLiveMessages === 'function' && currentChannel) {
@@ -1578,7 +1579,7 @@ function generateQueueCard() {
 // ═══════════════════════════════════════════════════════════
 
 let talkMode = 'channels'; // 'channels' | 'dms'
-let currentChannel = 'bridge';
+let currentChannel = null; // auto-selected on Talk page load
 let currentDM = null;
 let memberListVisible = false;
 let threadPanelVisible = false;

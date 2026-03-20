@@ -36,6 +36,11 @@
             <span class="nav-label">Inbox</span>
             <span class="nav-badge" id="inbox-badge"></span>
           </a>
+          <a class="nav-item" data-page="queue" onclick="nav('queue')">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Proposals</span>
+            <span class="nav-badge" id="proposals-badge"></span>
+          </a>
           <a class="nav-item" data-page="briefing" onclick="nav('briefing')">
             <span class="nav-icon">📜</span>
             <span class="nav-label">Briefing</span>
@@ -59,6 +64,16 @@
 
         <div class="nav-group">
           <div class="nav-group-label">🎯 DIRECT</div>
+          <a class="nav-item" data-page="tasks" onclick="nav('tasks')">
+            <span class="nav-icon">✅</span>
+            <span class="nav-label">Tasks</span>
+            <span class="nav-badge" id="tasks-badge"></span>
+          </a>
+          <a class="nav-item" data-page="projects" onclick="nav('projects')">
+            <span class="nav-icon">📁</span>
+            <span class="nav-label">Projects</span>
+            <span class="nav-badge" id="projects-badge"></span>
+          </a>
           <a class="nav-item" data-page="missions" onclick="nav('missions')">
             <span class="nav-icon">🎯</span>
             <span class="nav-label">Missions</span>
@@ -68,11 +83,6 @@
             <span class="nav-icon">🔀</span>
             <span class="nav-label">Pipelines</span>
             <span class="nav-badge" id="pipelines-badge"></span>
-          </a>
-          <a class="nav-item" data-page="queue" onclick="nav('queue')">
-            <span class="nav-icon">📋</span>
-            <span class="nav-label">Proposals</span>
-            <span class="nav-badge" id="proposals-badge"></span>
           </a>
         </div>
 
@@ -687,6 +697,15 @@
           </div>
         </div>
 
+        <!-- Projects View -->
+        <div id="view-projects" class="view hidden">
+          <div class="page-header">
+            <h2>📁 Projects</h2>
+            <p class="page-subtitle">Active projects with linked tasks, missions, and vault notes</p>
+          </div>
+          <div id="projects-container" class="projects-grid"></div>
+        </div>
+
         <!-- Pipelines View -->
         <div id="view-pipelines" class="view hidden">
           <div class="view-header"><h2>🔀 Pipelines</h2><span class="view-subtitle">Visual workflow pipelines — watch work flow through stages</span></div>
@@ -809,6 +828,7 @@
       <div class="mobile-menu-group-label">⚡ OPERATE</div>
       <button class="mobile-menu-item" onclick="nav('feed');toggleMobileMenu()">📡 Stream</button>
       <button class="mobile-menu-item" onclick="nav('inbox');toggleMobileMenu()">📬 Inbox</button>
+      <button class="mobile-menu-item" onclick="nav('queue');toggleMobileMenu()">📋 Proposals</button>
       <button class="mobile-menu-item" onclick="nav('briefing');toggleMobileMenu()">📜 Briefing</button>
       <div class="mobile-menu-divider"></div>
       <div class="mobile-menu-group-label">💬 COMMUNICATE</div>
@@ -816,9 +836,10 @@
       <button class="mobile-menu-item" onclick="nav('rooms');toggleMobileMenu()">🏠 Rooms</button>
       <div class="mobile-menu-divider"></div>
       <div class="mobile-menu-group-label">🎯 DIRECT</div>
+      <button class="mobile-menu-item" onclick="nav('tasks');toggleMobileMenu()">✅ Tasks</button>
+      <button class="mobile-menu-item" onclick="nav('projects');toggleMobileMenu()">📁 Projects</button>
       <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()">🎯 Missions</button>
       <button class="mobile-menu-item" onclick="nav('pipelines');toggleMobileMenu()">🔀 Pipelines</button>
-      <button class="mobile-menu-item" onclick="nav('queue');toggleMobileMenu()">📋 Proposals</button>
       <div class="mobile-menu-divider"></div>
       <div class="mobile-menu-group-label">🧠 KNOW</div>
       <button class="mobile-menu-item" onclick="nav('mind');toggleMobileMenu()">🧠 Mind</button>
