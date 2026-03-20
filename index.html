@@ -123,6 +123,29 @@
 
         <!-- FEED VIEW -->
         <div id="view-feed" class="view active">
+          <!-- Dashboard Header -->
+          <div class="dash-grid">
+            <!-- Agent Status Bar -->
+            <div class="dash-agents" id="dash-agents"></div>
+            <!-- Metrics Row -->
+            <div class="dash-metrics">
+              <div class="dash-metric"><span class="dash-metric-num" id="dash-tasks-done">0</span><span class="dash-metric-label">Tasks Done</span></div>
+              <div class="dash-metric"><span class="dash-metric-num" id="dash-proposals">0</span><span class="dash-metric-label">Proposals</span></div>
+              <div class="dash-metric"><span class="dash-metric-num" id="dash-vault-writes">0</span><span class="dash-metric-label">Vault Writes</span></div>
+              <div class="dash-metric"><span class="dash-metric-num" id="dash-uptime">—</span><span class="dash-metric-label">Uptime</span></div>
+              <div class="dash-metric"><span class="dash-metric-num" id="dash-load">—</span><span class="dash-metric-label">Load</span></div>
+              <div class="dash-metric"><span class="dash-metric-num" id="dash-memory">—</span><span class="dash-metric-label">Memory</span></div>
+            </div>
+            <!-- Quick Actions -->
+            <div class="dash-actions">
+              <button class="dash-action-btn" onclick="nav('queue')">📋 <span id="dash-pending-count">0</span> Pending</button>
+              <button class="dash-action-btn dash-urgent" id="dash-errors-btn" onclick="filterFeed('error')" style="display:none">🔴 <span id="dash-error-count">0</span> Errors</button>
+              <button class="dash-action-btn" onclick="nav('missions')">🎯 Missions</button>
+              <button class="dash-action-btn" onclick="nav('mind')">🧠 Vault</button>
+            </div>
+          </div>
+
+          <!-- Feed Below Dashboard -->
           <div class="feed-toolbar">
             <div class="filter-chips" id="feed-filters">
               <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>

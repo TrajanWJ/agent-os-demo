@@ -2115,3 +2115,55 @@ function loadAgentChatHistory() {
   });
   container.scrollTop = container.scrollHeight;
 }
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD — Home page header with agent status + metrics
+// ═══════════════════════════════════════════════════════════
+function renderDashboard() {
+  // Agent status bar
+  const agentBar = document.getElementById('dash-agents');
+  if (!agentBar) return;
+  agentBar.innerHTML = AGENTS.map(a => {
+    const statusDot = a.status === 'active' ? 'active' : 'idle';
+    return `<div class="dash-agent ${statusDot}" title="${a.name}: ${a.status === 'active' ? a.task || 'Working' : 'Idle'}">
+      <span class="dash-agent-emoji">${a.emoji}</span>
+      <span class="dash-agent-name">${a.name}</span>
+      <span class="dash-agent-dot ${statusDot}"></span>
+      ${a.status === 'active' ? `<span class="dash-agent-task">${(a.task || 'Working').substring(0, 25)}${(a.task||'').length > 25 ? '…' : ''}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  // Metrics from feed events
+  const tasksDone = feedEvents.filter(e => e.type === 'task_completed').length;
+  const vaultWrites = feedEvents.filter(e => e.type === 'vault_write').length;
+  const errors = feedEvents.filter(e => e.type === 'error').length;
+  const pendingQ = queueCards.filter(q => !q._status || q._status === 'pending').length;
+
+  const el = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  el('dash-tasks-done', tasksDone);
+  el('dash-proposals', queueCards.length);
+  el('dash-vault-writes', vaultWrites);
+  el('dash-pending-count', pendingQ);
+  el('dash-error-count', errors);
+
+  // Show/hide error button
+  const errBtn = document.getElementById('dash-errors-btn');
+  if (errBtn) errBtn.style.display = errors > 0 ? '' : 'none';
+
+  // System metrics (try bridge)
+  if (Bridge.liveMode) {
+    fetch('/api/system').then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return;
+      if (d.uptime) el('dash-uptime', d.uptime);
+      if (d.load) el('dash-load', d.load);
+      if (d.memory) el('dash-memory', d.memory);
+    }).catch(() => {});
+  }
+}
+
+// Run dashboard on feed render
+const _origRenderFeed = renderFeed;
+renderFeed = function() {
+  _origRenderFeed();
+  renderDashboard();
+};
