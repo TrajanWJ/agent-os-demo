@@ -468,19 +468,24 @@ function toggleCostRange(range) {
 }
 
 // ── 7. System Logs ────────────────────────────────────────
+let _sysLogsApiFailed = false; // backoff flag — stop spamming 403
 function _renderSystemLogs() {
   const el = $('sys-logs');
   if (!el) return;
 
-  // Try fetching from /api/system/logs
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+  // Try fetching from /api/system/logs (skip if previously failed with 403/404)
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && !_sysLogsApiFailed) {
     Bridge.getSystemLogs('all', 20).then(lines => {
       if (Array.isArray(lines) && lines.length > 0) {
         _drawLogs(el, lines);
       } else {
         _drawLogsFromStream(el);
       }
-    }).catch(() => _drawLogsFromStream(el));
+    }).catch(() => {
+      _sysLogsApiFailed = true;
+      console.warn('[QA] /api/system/logs failed, falling back to stream events');
+      _drawLogsFromStream(el);
+    });
   } else {
     _drawLogsFromStream(el);
   }
