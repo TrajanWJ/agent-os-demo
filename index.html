@@ -14,6 +14,13 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body>
+  <!-- Notification Permission Banner -->
+  <div id="notif-permission-banner" class="notif-permission-banner" style="display:none">
+    <span class="notif-permission-text">🔔 Enable notifications to stay updated</span>
+    <button class="notif-permission-btn enable" onclick="NotificationCenter.enableNotifications()">Enable</button>
+    <button class="notif-permission-btn dismiss" onclick="NotificationCenter.dismissBanner()">Dismiss</button>
+  </div>
+
   <!-- App Shell -->
   <div id="app">
 
@@ -1046,8 +1053,11 @@
   <!-- Notification Panel -->
   <div class="notif-panel hidden" id="notif-panel">
     <div class="notif-panel-header">
-      <span>Notifications</span>
-      <button onclick="clearNotifications()">Clear all</button>
+      <span>🔔 Notifications</span>
+      <div class="notif-panel-actions">
+        <button onclick="NotificationCenter.markAllRead()">Mark all read</button>
+        <button onclick="NotificationCenter.clearAll()">Clear all</button>
+      </div>
     </div>
     <div id="notif-list"></div>
   </div>
@@ -1140,6 +1150,7 @@
   <script src="app6.js?v=1773993468"></script>
   <script src="tasks.js?v=1773993468"></script>
   <script src="projects.js?v=1773994200"></script>
+  <script src="notifications.js?v=1773994300"></script>
   <script src="bridge.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
   <script src="help.js?v=1773994100"></script>
