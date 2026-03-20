@@ -1966,6 +1966,24 @@ function renderGoalCard(goal, allGoals, color) {
     ).join('')}</div>`;
   }
 
+  // Countdown
+  let countdownHtml = '';
+  if (goal.deadline) {
+    const daysLeft = Math.ceil((new Date(goal.deadline) - new Date()) / 86400000);
+    const urgent = daysLeft <= 7;
+    countdownHtml = daysLeft > 0
+      ? `<span class="goal-countdown ${urgent ? 'urgent' : ''}">${daysLeft}d left</span>`
+      : daysLeft === 0 ? `<span class="goal-countdown urgent">Due today</span>`
+      : `<span class="goal-countdown urgent">${Math.abs(daysLeft)}d overdue</span>`;
+  }
+
+  // Linked habits
+  const allHabits = LS.get('habits', []);
+  const linkedHabits = (goal.linkedHabits || []).map(hid => allHabits.find(h => h.id === hid)).filter(Boolean);
+  const linkedHtml = linkedHabits.length
+    ? `<div class="goal-habits-link">Supported by: ${linkedHabits.map(h => `<span>⚡ ${esc(h.name)}</span>`).join('')}</div>`
+    : '';
+
   return `<div class="goal-card" style="border-left-color:${color}">
     <div style="display:flex;align-items:center;gap:12px">
       <svg class="progress-ring" width="40" height="40" viewBox="0 0 40 40">
@@ -1978,15 +1996,17 @@ function renderGoalCard(goal, allGoals, color) {
       <div style="flex:1">
         <div class="goal-title">${esc(goal.title)}</div>
         <div class="goal-meta">
-          ${goal.deadline ? `<span>Due: ${goal.deadline}</span>` : ''}
+          ${countdownHtml}
           <span>${children.length} children</span>
           ${milestones.length ? `<span>${milestones.filter(m=>m.done).length}/${milestones.length} milestones</span>` : ''}
           ${goal.missionStatus ? `<span class="tag tag-agent">🤖 ${goal.missionStatus}</span>` : ''}
         </div>
+        ${linkedHtml}
       </div>
       <div style="display:flex;gap:4px">
         <button class="btn sm ghost" onclick="event.stopPropagation();addMilestone('${goal.id}')" title="Add milestone">+🏁</button>
         <button class="btn sm ghost" onclick="event.stopPropagation();addKeyResult('${goal.id}')" title="Add key result">+📏</button>
+        <button class="btn sm ghost" onclick="event.stopPropagation();linkHabitToGoal('${goal.id}')" title="Link habit">+⚡</button>
         <button class="btn sm danger" onclick="removeGoal('${goal.id}')" style="padding:2px 6px;font-size:10px">✕</button>
       </div>
     </div>
@@ -2014,6 +2034,7 @@ function calcGoalProgress(goal, allGoals) {
 function addGoal(level) {
   const title = prompt(`New ${level} title:`);
   if (!title) return;
+  const deadline = prompt('Target date (YYYY-MM-DD, or leave blank):') || '';
   const goals = LS.get('goals', getDefaultGoals());
   let parentId = null;
   if (level !== 'aspiration') {
@@ -2026,9 +2047,26 @@ function addGoal(level) {
       }
     }
   }
-  goals.push({ id: uid(), level, title, parentId, done: false, milestones: [], keyResults: [], createdAt: nowISO() });
+  goals.push({ id: uid(), level, title, parentId, deadline, done: false, milestones: [], keyResults: [], linkedHabits: [], createdAt: nowISO() });
   LS.set('goals', goals);
   renderGoals();
+}
+
+function linkHabitToGoal(goalId) {
+  const habits = LS.get('habits', []);
+  if (!habits.length) { showToast('No habits to link', 'info'); return; }
+  const pick = prompt('Link habit to goal:\n' + habits.map((h, i) => `${i+1}. ${h.name}`).join('\n') + '\n\nEnter number:');
+  if (!pick) return;
+  const habit = habits[parseInt(pick) - 1];
+  if (!habit) return;
+  const goals = LS.get('goals', []);
+  const goal = goals.find(g => g.id === goalId);
+  if (!goal) return;
+  if (!goal.linkedHabits) goal.linkedHabits = [];
+  if (!goal.linkedHabits.includes(habit.id)) goal.linkedHabits.push(habit.id);
+  LS.set('goals', goals);
+  renderGoals();
+  showToast(`Linked "${habit.name}" to goal`, 'success');
 }
 
 function addMilestone(goalId) {
@@ -2078,13 +2116,18 @@ function removeGoal(id) {
 }
 
 function getDefaultGoals() {
+  // Generate dynamic deadlines relative to today
+  const d1 = new Date(); d1.setDate(d1.getDate() + 90);
+  const d2 = new Date(); d2.setDate(d2.getDate() + 60);
+  const d3 = new Date(); d3.setDate(d3.getDate() + 14);
+  const d4 = new Date(); d4.setDate(d4.getDate() + 30);
   return [
-    { id: 'a1', level: 'aspiration', title: 'Master AI agent architecture', parentId: null, done: false, milestones: [], keyResults: ['Build 3 production agent systems', 'Contribute to 2 open-source agent frameworks'] },
-    { id: 'a2', level: 'aspiration', title: 'Build financial independence', parentId: null, done: false, milestones: [], keyResults: [] },
-    { id: 'm1', level: 'mission', title: 'Ship Agent OS v2', parentId: 'a1', done: false, milestones: [{text:'Core engine rewrite',done:true},{text:'Plugin system',done:false},{text:'UI dashboard',done:false}], keyResults: ['100+ daily active users', 'Sub-2s response time'] },
-    { id: 'm2', level: 'mission', title: 'Launch consulting practice', parentId: 'a2', done: false, milestones: [{text:'Write pitch deck',done:false},{text:'Land first client',done:false}], keyResults: [] },
-    { id: 'p1', level: 'plan', title: 'Redesign proposals page', parentId: 'm1', done: false, milestones: [], keyResults: [] },
-    { id: 'p2', level: 'plan', title: 'Write pitch deck', parentId: 'm2', done: false, milestones: [], keyResults: [] },
+    { id: 'a1', level: 'aspiration', title: 'Master AI agent architecture', parentId: null, deadline: d1.toISOString().slice(0,10), done: false, milestones: [], keyResults: ['Build 3 production agent systems', 'Contribute to 2 open-source agent frameworks'], linkedHabits: [] },
+    { id: 'a2', level: 'aspiration', title: 'Build financial independence', parentId: null, done: false, milestones: [], keyResults: [], linkedHabits: [] },
+    { id: 'm1', level: 'mission', title: 'Ship Agent OS v2', parentId: 'a1', deadline: d2.toISOString().slice(0,10), done: false, milestones: [{text:'Core engine rewrite',done:true},{text:'Plugin system',done:false},{text:'UI dashboard',done:false}], keyResults: ['100+ daily active users', 'Sub-2s response time'], linkedHabits: [] },
+    { id: 'm2', level: 'mission', title: 'Launch consulting practice', parentId: 'a2', deadline: d4.toISOString().slice(0,10), done: false, milestones: [{text:'Write pitch deck',done:false},{text:'Land first client',done:false}], keyResults: [], linkedHabits: [] },
+    { id: 'p1', level: 'plan', title: 'Redesign proposals page', parentId: 'm1', deadline: d3.toISOString().slice(0,10), done: false, milestones: [], keyResults: [], linkedHabits: [] },
+    { id: 'p2', level: 'plan', title: 'Write pitch deck', parentId: 'm2', done: false, milestones: [], keyResults: [], linkedHabits: [] },
   ];
 }
 
@@ -2189,18 +2232,22 @@ function renderTaskList() {
     const subtasksDone = subtasks.filter(s => s.done).length;
     const isExpanded = expandedTaskId === t.id;
     const tagsHtml = (t.tags || []).map(tag => `<span class="tag ${getTagClass(tag)}">${esc(tag)}</span>`).join('');
+    const dueInfo = getDueDateInfo(t.due);
+    const subtaskPct = subtasks.length ? Math.round((subtasksDone / subtasks.length) * 100) : 0;
 
     return `
       <div class="task-row ${t.done ? 'done' : ''}" draggable="true" data-task-id="${t.id}"
         ondragstart="onDragStart(event,'${t.id}')" ondragover="onDragOver(event)" ondragend="onDragEnd(event)"
         ondrop="onDrop(event,'${t.id}')">
+        <span class="drag-handle" title="Drag to reorder">⠿</span>
         <div class="task-check ${t.done ? 'done' : ''}" onclick="event.stopPropagation();toggleTask('${t.id}')"></div>
         <span class="tag ${t.priority}">${t.priority.toUpperCase()}</span>
         <span class="task-title" onclick="toggleTaskExpand('${t.id}')">${esc(t.title)}</span>
         <span class="task-meta">
           <span class="task-tags">${tagsHtml}</span>
+          ${dueInfo ? `<span class="due-date ${dueInfo.class}">${dueInfo.text}</span>` : ''}
           ${estLabel ? `<span class="est-indicator ${estClass}">${estLabel}</span>` : ''}
-          ${subtasks.length ? `<span style="font-size:11px;color:var(--overlay0)">${subtasksDone}/${subtasks.length}</span>` : ''}
+          ${subtasks.length ? `<span class="subtask-progress">${subtasksDone}/${subtasks.length}<span class="subtask-progress-bar"><span class="fill" style="width:${subtaskPct}%"></span></span></span>` : ''}
           ${currentTaskTab === 'inbox' ? `<button class="btn sm purple" onclick="event.stopPropagation();processTaskModal('${t.id}')">Process</button>` : ''}
           ${currentTaskTab === 'completed' ? `<span class="task-time">${relTime(t.doneAt)}</span>` : ''}
           <button class="btn sm ghost" onclick="event.stopPropagation();delegateTask('${t.id}')" title="Delegate to Agent" style="padding:2px 6px;font-size:12px">🤖</button>
@@ -2787,6 +2834,24 @@ function quickFocus(mins) {
 // ═══════════════════════════════════════════════════
 // HABITS
 // ═══════════════════════════════════════════════════
+const HABIT_CATEGORY_COLORS = {
+  health: 'var(--green)', mind: 'var(--purple)', work: 'var(--blue)',
+  social: 'var(--pink)', creative: 'var(--peach)', other: 'var(--overlay0)',
+};
+
+function getHabitBestStreak(id) {
+  let best = 0, current = 0;
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const ds = d.toISOString().slice(0, 10);
+    const log = LS.get('habit-log-' + ds, {});
+    if (log[id]) { current++; if (current > best) best = current; }
+    else { current = 0; }
+    d.setDate(d.getDate() - 1);
+  }
+  return best;
+}
+
 function renderHabits() {
   const habits = LS.get('habits', []);
   const todayLog = LS.get('habit-log-' + todayStr(), {});
@@ -2795,35 +2860,52 @@ function renderHabits() {
   if (!habits.length) {
     todayEl.innerHTML = '<div class="empty"><span class="empty-icon">⚡</span>No habits defined — add one below!</div>';
   } else {
-    todayEl.innerHTML = habits.map(h =>
-      `<div class="task-row" onclick="toggleHabit('${h.id}')" style="cursor:pointer">
+    todayEl.innerHTML = habits.map(h => {
+      const streak = getHabitStreak(h.id);
+      const catColor = HABIT_CATEGORY_COLORS[h.category] || 'var(--overlay0)';
+      const streakDisplay = streak >= 3 ? `<span class="streak-fire">🔥 ${streak}</span>` : `<span style="font-size:12px;color:var(--overlay0)">${streak}d</span>`;
+      return `<div class="task-row" onclick="toggleHabit('${h.id}')" style="cursor:pointer">
+        <span class="habit-category-badge" style="background:${catColor}"></span>
         <div class="task-check ${todayLog[h.id] ? 'done' : ''}"></div>
         <span class="task-title">${esc(h.name)}</span>
         <span class="tag">${h.freq}</span>
-        <span style="font-size:12px;color:var(--green);margin-left:auto">${getHabitStreak(h.id)}🔥</span>
+        ${streakDisplay}
         <button class="btn sm danger" onclick="event.stopPropagation();removeHabit('${h.id}')" style="padding:2px 6px;font-size:10px">✕</button>
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
   }
 
   const streakEl = document.getElementById('habitStreaks');
   if (!habits.length) {
     streakEl.innerHTML = '<div class="empty">Add habits to see streaks</div>';
   } else {
-    streakEl.innerHTML = habits.map(h => {
+    streakEl.innerHTML = '<div class="habit-heatmap">' + habits.map(h => {
+      const streak = getHabitStreak(h.id);
+      const best = getHabitBestStreak(h.id);
+      const catColor = HABIT_CATEGORY_COLORS[h.category] || 'var(--overlay0)';
+      // Heat map dots - last 30 days
       const dots = [];
+      let completedDays = 0;
       for (let i = 29; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
         const ds = d.toISOString().slice(0, 10);
         const log = LS.get('habit-log-' + ds, {});
         const isToday = ds === todayStr();
-        dots.push(`<div class="habit-dot ${log[h.id] ? 'done' : 'missed'} ${isToday ? 'today' : ''}" title="${ds}"></div>`);
+        const done = !!log[h.id];
+        if (done) completedDays++;
+        // Intensity levels for heat map
+        dots.push(`<div class="habit-dot ${done ? 'done' : 'missed'} ${isToday ? 'today' : ''}" title="${ds}" style="${done ? 'background:' + catColor : ''}"></div>`);
       }
-      return `<div style="margin-bottom:12px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${esc(h.name)} <span style="color:var(--green);font-size:12px">${getHabitStreak(h.id)} day streak</span></div>
+      return `<div class="habit-heatmap-row">
+        <span class="habit-category-badge" style="background:${catColor}"></span>
+        <span class="habit-name">${esc(h.name)}</span>
         <div class="habit-dots">${dots.join('')}</div>
+        <span class="habit-stats">
+          ${streak >= 3 ? '🔥' : ''} ${streak}d streak
+          <br><span class="best-streak">Best: ${best}d · ${completedDays}/30</span>
+        </span>
       </div>`;
-    }).join('');
+    }).join('') + '</div>';
   }
 
   loadHabitSuggestions();
@@ -2833,8 +2915,9 @@ function addHabit() {
   const name = document.getElementById('newHabitName').value.trim();
   if (!name) return;
   const freq = document.getElementById('newHabitFreq').value;
+  const category = document.getElementById('newHabitCategory')?.value || 'other';
   const habits = LS.get('habits', []);
-  habits.push({ id: uid(), name, freq, createdAt: nowISO() });
+  habits.push({ id: uid(), name, freq, category, createdAt: nowISO() });
   LS.set('habits', habits);
   document.getElementById('newHabitName').value = '';
   showToast('Habit added!', 'success');
@@ -2896,6 +2979,12 @@ function adoptHabitSuggestion(name) {
 // ═══════════════════════════════════════════════════
 let selectedMood = '';
 let selectedEnergy = 0;
+let expandedJournalId = null;
+
+function toggleJournalViewer(id) {
+  expandedJournalId = expandedJournalId === id ? null : id;
+  renderJournalEntries();
+}
 
 const JOURNAL_PROMPTS = [
   "What's one thing you learned today that surprised you?",
@@ -2917,6 +3006,36 @@ function renderJournal() {
   document.querySelectorAll('.energy-btn').forEach(b => b.classList.remove('active'));
   refreshPrompt();
   renderJournalEntries();
+  renderPromptChips();
+  updateWordCount();
+}
+
+function updateWordCount() {
+  const g = (document.getElementById('journalGratitude')?.value || '').trim();
+  const r = (document.getElementById('journalReflection')?.value || '').trim();
+  const words = (g + ' ' + r).split(/\s+/).filter(Boolean).length;
+  const el = document.getElementById('journalWordCount');
+  if (el) el.textContent = words + ' word' + (words !== 1 ? 's' : '');
+}
+
+function renderPromptChips() {
+  const el = document.getElementById('journalPromptChips');
+  if (!el) return;
+  // Pick 4 random prompts
+  const shuffled = [...JOURNAL_PROMPTS].sort(() => Math.random() - .5).slice(0, 4);
+  el.innerHTML = shuffled.map(p =>
+    `<span class="journal-prompt-chip" onclick="usePromptChip(this)" title="${esc(p)}">${esc(p.length > 40 ? p.slice(0, 40) + '…' : p)}</span>`
+  ).join('');
+}
+
+function usePromptChip(el) {
+  const text = el.title || el.textContent;
+  const textarea = document.getElementById('journalReflection');
+  if (textarea) {
+    textarea.value = (textarea.value ? textarea.value + '\n\n' : '') + text + '\n';
+    textarea.focus();
+    updateWordCount();
+  }
 }
 
 function refreshPrompt() {
@@ -2957,6 +3076,7 @@ function saveJournalEntry() {
   selectedEnergy = 0;
   document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
   document.querySelectorAll('.energy-btn').forEach(b => b.classList.remove('active'));
+  updateWordCount();
   showToast('Journal entry saved!', 'success');
   renderJournalEntries();
 }
@@ -2981,12 +3101,16 @@ function renderJournalEntries() {
   el.innerHTML = entries.slice(0, 20).map(e => {
     const tags = autoTag(e.reflection + ' ' + e.gratitude);
     const energyDisplay = e.energy ? '⚡'.repeat(e.energy) : '';
-    return `<div class="journal-entry">
+    const wordCount = ((e.gratitude || '') + ' ' + (e.reflection || '')).split(/\s+/).filter(Boolean).length;
+    return `<div class="journal-entry" onclick="toggleJournalViewer('${e.id}')" style="cursor:pointer">
       <div class="mood-display">${e.mood} ${energyDisplay}</div>
-      <div class="date">${formatDate(e.date)} ${e.createdAt ? '· ' + new Date(e.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : ''}</div>
-      ${e.gratitude ? `<div style="font-size:13px;margin-bottom:6px"><strong>Grateful for:</strong> ${esc(e.gratitude)}</div>` : ''}
-      ${e.reflection ? `<div style="font-size:13px">${esc(e.reflection)}</div>` : ''}
-      ${tags.length ? `<div style="margin-top:6px">${tags.map(t => `<span class="tag">${t}</span>`).join(' ')}</div>` : ''}
+      <div class="date">${formatDate(e.date)} ${e.createdAt ? '· ' + new Date(e.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : ''} · ${wordCount} words</div>
+      <div class="journal-entry-viewer ${expandedJournalId === e.id ? 'open' : ''}" id="journal-view-${e.id}">
+        ${e.gratitude ? `<div style="font-size:13px;margin-bottom:6px;margin-top:8px"><strong>Grateful for:</strong> ${esc(e.gratitude)}</div>` : ''}
+        ${e.reflection ? `<div style="font-size:13px">${esc(e.reflection)}</div>` : ''}
+        ${tags.length ? `<div style="margin-top:6px">${tags.map(t => `<span class="tag">${t}</span>`).join(' ')}</div>` : ''}
+      </div>
+      ${expandedJournalId !== e.id ? `<div style="font-size:11px;color:var(--overlay0);margin-top:4px">Click to expand</div>` : ''}
     </div>`;
   }).join('');
 }

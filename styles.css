@@ -12796,3 +12796,76 @@ textarea:focus-visible,
   .page-title { font-size: 14px; }
   #topbar { padding: 0 8px; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   FINAL POLISH — Dark mode micro-details
+═══════════════════════════════════════════════════════════ */
+
+/* ── Connection Status Indicator ─────────────────────────── */
+.topbar-connection-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: var(--bg-raised);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: default;
+  transition: all var(--transition);
+}
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.conn-dot.live {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(166,227,161,0.6);
+}
+.conn-dot.offline {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(243,139,168,0.5);
+}
+.conn-dot.connecting {
+  background: var(--yellow);
+  box-shadow: 0 0 6px rgba(249,226,175,0.5);
+  animation: pulse-dot 1.5s ease infinite;
+}
+.conn-label {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ── Topbar Clock ────────────────────────────────────────── */
+.topbar-clock {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* ── Sidebar Version Footer ──────────────────────────────── */
+.sidebar-version {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.sidebar-credit {
+  font-size: 9px;
+  color: #585b70;
+}
+
+/* ── Mobile hide new topbar elements ─────────────────────── */
+@media (max-width: 767px) {
+  .topbar-connection-status { display: none; }
+  .topbar-clock { display: none; }
+}

@@ -2,12 +2,62 @@
 'use strict';
 
 const AGENTS = [
-  {id:'righthand', emoji:'🤝', name:'Right Hand',      role:'Orchestrator',    color:'#E8A838', status:'active', task:'Coordinating morning batch', tasks:12, files:3,  tokens:9500,  fitness:.92},
-  {id:'researcher',emoji:'🔬', name:'Researcher',      role:'Deep Research',   color:'#2BA89E', status:'active', task:'AI Interface Competitive Study', tasks:6, files:4, tokens:18200, fitness:.88},
-  {id:'coder',     emoji:'💻', name:'Coder',           role:'Development',     color:'#57A773', status:'idle',   task:'', tasks:4, files:6, tokens:12800, fitness:.95},
-  {id:'ops',       emoji:'⚙️', name:'Ops',             role:'Infrastructure',  color:'#6C7A89', status:'idle',   task:'', tasks:1, files:0, tokens:734,   fitness:.85},
-  {id:'devil',     emoji:'😈', name:"Devil's Advocate", role:'Red Team',       color:'#C0392B', status:'idle',   task:'', tasks:2, files:1, tokens:2800,  fitness:.91},
-  {id:'utility',   emoji:'🔧', name:'Utility',         role:'General Purpose', color:'#8E44AD', status:'idle',   task:'', tasks:3, files:2, tokens:1500,  fitness:.83},
+  // ── Core Team ──
+  {id:'righthand', emoji:'🤝', name:'Right Hand',      role:'Orchestrator',    color:'#E8A838', status:'active', task:'Coordinating morning batch', tasks:12, files:3, tokens:9500, fitness:.92, dept:'core'},
+  {id:'researcher',emoji:'🔬', name:'Researcher',      role:'Deep Research',   color:'#2BA89E', status:'active', task:'AI Interface Competitive Study', tasks:6, files:4, tokens:18200, fitness:.88, dept:'core'},
+  {id:'coder',     emoji:'💻', name:'Coder',           role:'Development',     color:'#57A773', status:'idle',   task:'', tasks:4, files:6, tokens:12800, fitness:.95, dept:'core'},
+  {id:'ops',       emoji:'⚙️', name:'Ops',             role:'Infrastructure',  color:'#6C7A89', status:'idle',   task:'', tasks:1, files:0, tokens:734, fitness:.85, dept:'core'},
+  {id:'devil',     emoji:'😈', name:"Devil's Advocate", role:'Red Team',       color:'#C0392B', status:'idle',   task:'', tasks:2, files:1, tokens:2800, fitness:.91, dept:'core'},
+  {id:'utility',   emoji:'🔧', name:'Utility',         role:'General Purpose', color:'#8E44AD', status:'idle',   task:'', tasks:3, files:2, tokens:1500, fitness:.83, dept:'core'},
+  // ── Content & Knowledge ──
+  {id:'writer',        emoji:'✍️', name:'Writer',         role:'Docs & Notes',       color:'#89b4fa', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.80, dept:'content'},
+  {id:'vault-curator', emoji:'📚', name:'Vault Curator',  role:'Knowledge Mgmt',     color:'#cba6f7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.78, dept:'content'},
+  {id:'fact-checker',  emoji:'🔍', name:'Fact Checker',   role:'Verification',       color:'#f9e2af', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.85, dept:'content'},
+  // ── Design & Strategy ──
+  {id:'ui-designer',       emoji:'🎨', name:'UI Designer',       role:'Design',             color:'#f5c2e7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.82, dept:'design'},
+  {id:'design-philosopher',emoji:'💭', name:'Design Philosopher',role:'First Principles',   color:'#b4befe', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.88, dept:'design'},
+  {id:'product-strategist',emoji:'🎯', name:'Product Strategist',role:'Strategy',           color:'#fab387', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.90, dept:'design'},
+  {id:'architect',         emoji:'🏗️', name:'Architect',         role:'Systems Design',     color:'#94e2d5', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.87, dept:'design'},
+  // ── AI & Agent ──
+  {id:'prompt-engineer',emoji:'🎯', name:'Prompt Engineer',role:'Optimization',     color:'#f5c2e7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.90, dept:'ai'},
+  {id:'harness-expert', emoji:'🔌', name:'Harness Expert', role:'AI Frameworks',    color:'#74c7ec', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.85, dept:'ai'},
+  {id:'eval-specialist',emoji:'📊', name:'Eval Specialist',role:'Metrics',          color:'#a6e3a1', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.83, dept:'ai'},
+  // ── Development ──
+  {id:'frontend-dev',    emoji:'🖥️', name:'Frontend Dev',    role:'UI Development',   color:'#89b4fa', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.88, dept:'dev'},
+  {id:'backend-dev',     emoji:'🗄️', name:'Backend Dev',     role:'API Development',  color:'#a6e3a1', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.86, dept:'dev'},
+  {id:'script-smith',    emoji:'📜', name:'Script Smith',    role:'Shell Scripting',  color:'#f9e2af', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.92, dept:'dev'},
+  {id:'debugger',        emoji:'🐛', name:'Debugger',        role:'Bug Hunting',      color:'#f38ba8', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.89, dept:'dev'},
+  {id:'git-specialist',  emoji:'🌳', name:'Git Specialist',  role:'Version Control',  color:'#fab387', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.91, dept:'dev'},
+  {id:'performance-tuner',emoji:'⚡', name:'Performance Tuner',role:'Optimization',   color:'#f9e2af', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.87, dept:'dev'},
+  // ── Infrastructure ──
+  {id:'security',         emoji:'🛡️', name:'Security',         role:'Audit',            color:'#94e2d5', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.87, dept:'infra'},
+  {id:'sysadmin',         emoji:'🖥️', name:'Sysadmin',         role:'Linux Admin',      color:'#6c7086', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.84, dept:'infra'},
+  {id:'network-engineer', emoji:'🌐', name:'Network Engineer', role:'Networking',       color:'#74c7ec', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.82, dept:'infra'},
+  {id:'docker-specialist',emoji:'🐳', name:'Docker Specialist',role:'Containers',      color:'#89b4fa', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.86, dept:'infra'},
+  // ── Data ──
+  {id:'analyst',    emoji:'📈', name:'Analyst',    role:'Data Analysis',    color:'#a6e3a1', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.84, dept:'data'},
+  {id:'integrator', emoji:'🔗', name:'Integrator', role:'API Wiring',      color:'#fab387', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.81, dept:'data'},
+  // ── C-Suite ──
+  {id:'cto',  emoji:'👔', name:'CTO',  role:'Technical Leadership', color:'#cba6f7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.93, dept:'csuite'},
+  {id:'cpo',  emoji:'🎯', name:'CPO',  role:'Product Leadership',  color:'#f5c2e7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.91, dept:'csuite'},
+  {id:'cfo',  emoji:'💰', name:'CFO',  role:'Finance',             color:'#a6e3a1', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.88, dept:'csuite'},
+  {id:'ciso', emoji:'🔐', name:'CISO', role:'Security Leadership', color:'#f38ba8', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.90, dept:'csuite'},
+  // ── Department Heads ──
+  {id:'engineering-manager',emoji:'🏗️', name:'Engineering Manager',role:'Team Lead',       color:'#89b4fa', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.87, dept:'dept'},
+  {id:'qa-lead',           emoji:'✅', name:'QA Lead',            role:'Quality',          color:'#a6e3a1', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.85, dept:'dept'},
+  {id:'devrel',            emoji:'📣', name:'DevRel',             role:'Community',        color:'#fab387', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.83, dept:'dept'},
+  {id:'tech-lead',         emoji:'⚔️', name:'Tech Lead',          role:'Code Standards',   color:'#94e2d5', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.92, dept:'dept'},
+  // ── Operations ──
+  {id:'project-manager',emoji:'📋', name:'Project Manager',role:'Timelines',       color:'#f9e2af', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.86, dept:'ops'},
+  {id:'scrum-master',   emoji:'🔄', name:'Scrum Master',   role:'Process',         color:'#74c7ec', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.81, dept:'ops'},
+  {id:'hr-specialist',  emoji:'🤝', name:'HR Specialist',  role:'Culture',         color:'#f5c2e7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.79, dept:'ops'},
+  // ── Strategy & Growth ──
+  {id:'growth-hacker',  emoji:'🚀', name:'Growth Hacker',  role:'Growth',          color:'#a6e3a1', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.88, dept:'growth'},
+  {id:'biz-dev',        emoji:'🤝', name:'Biz Dev',        role:'Partnerships',    color:'#fab387', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.85, dept:'growth'},
+  {id:'legal-advisor',  emoji:'⚖️', name:'Legal Advisor',  role:'Risk & Compliance',color:'#6c7086', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.84, dept:'growth'},
+  // ── Creative ──
+  {id:'copywriter',      emoji:'✏️', name:'Copywriter',      role:'Copy',            color:'#89b4fa', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.86, dept:'creative'},
+  {id:'brand-strategist',emoji:'🎭', name:'Brand Strategist',role:'Brand',           color:'#cba6f7', status:'idle', task:'', tasks:0, files:0, tokens:0, fitness:.83, dept:'creative'},
 ];
 
 // ── FEED EVENTS ───────────────────────────────────────────────────────────────

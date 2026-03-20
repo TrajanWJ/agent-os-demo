@@ -7,7 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#181825">
-  <title>Agent OS v7</title>
+  <title>The Stream — Agent OS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
   <link rel="stylesheet" href="styles.css">
   <!-- Lucide Icons (modern SVG icon set) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -134,7 +135,10 @@
           <span class="xp-icon">⭐</span>
           <span id="sidebar-xp">Lv3 · 2840 XP</span>
         </div>
-
+        <div class="sidebar-version">
+          <span>Agent OS v7.0</span>
+          <span class="sidebar-credit">Built with 🤝 by Right Hand</span>
+        </div>
       </div>
     </nav>
 
@@ -165,6 +169,11 @@
           </div>
         </div>
         <div class="topbar-right">
+          <div class="topbar-connection-status" id="topbar-connection-status" title="Bridge connection status">
+            <span class="conn-dot" id="conn-dot"></span>
+            <span class="conn-label" id="conn-label">Connecting...</span>
+          </div>
+          <div class="topbar-clock" id="topbar-clock"></div>
           <div class="topbar-agents" id="topbar-agents">
             <span class="agent-dot-active"></span>
             <span id="active-agents-text"></span>

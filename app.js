@@ -38,7 +38,7 @@ const PAGE_TITLES = {
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
   schedule: 'Briefing', missions: 'Missions', explore: 'Mind',
-  plans: 'Missions', briefing: 'Briefing', inbox: 'Inbox',
+  plans: 'Plans', briefing: 'Briefing', inbox: 'Inbox',
   rooms: 'Rooms', pipelines: 'Pipelines', roles: 'Roles',
   records: 'Records', tasks: 'Tasks', projects: 'Projects'
 };
@@ -46,13 +46,17 @@ const PAGE_TITLES = {
 // ── Navigation ────────────────────────────────────────────
 function nav(page) {
   // Redirect removed pages
-  const redirects = { schedule: 'briefing', explore: 'mind', board: 'feed', config: 'feed', command: 'feed' };
+  const redirects = { schedule: 'briefing', explore: 'mind', board: 'feed', config: 'feed', command: 'feed', stream: 'feed' };
   if (redirects[page]) page = redirects[page];
   if (currentPage === page) return;
 
-  // Deactivate old
+  // Save scroll position before leaving
   const oldView = $('view-' + currentPage);
-  if (oldView) { oldView.classList.remove('active'); oldView.style.display = 'none'; }
+  if (oldView) {
+    oldView._savedScroll = oldView.scrollTop;
+    oldView.classList.remove('active');
+    oldView.style.display = 'none';
+  }
 
   // Update sidebar
   $$('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
@@ -64,19 +68,27 @@ function nav(page) {
     newView.classList.remove('hidden');
     newView.style.display = '';
     newView.classList.add('active');
+    // Restore scroll position
+    if (newView._savedScroll) {
+      requestAnimationFrame(() => { newView.scrollTop = newView._savedScroll; });
+    }
   }
 
   currentPage = page;
   $('page-title').textContent = PAGE_TITLES[page] || page;
+  document.title = `${PAGE_TITLES[page] || page} — Agent OS`;
 
   // Lazy init pages
   if (page === 'mind')     initMind();
   if (page === 'pulse')    renderPulse();
-  if (page === 'board')    renderBoard();
-  if (page === 'stream')   renderStream();
-  if (page === 'config')   renderConfig();
-  if (page === 'command')  initCommand();
+  if (page === 'board')    { if (typeof renderBoard === 'function') renderBoard(); }
+  if (page === 'stream')   { if (typeof renderStreamItems === 'function') renderStreamItems(); }
+  if (page === 'config')   { if (typeof renderConfig === 'function') renderConfig(); }
+  if (page === 'command')  { if (typeof initCommand === 'function') initCommand(); }
   if (page === 'schedule') renderSchedule();
+  if (page === 'tasks' && typeof initTasksPage === 'function') initTasksPage();
+  if (page === 'projects' && typeof initProjectsPage === 'function') initProjectsPage();
+  if (page === 'records' && typeof initRecords === 'function') initRecords();
   if (page === 'missions') renderMissions();
   if (page === 'explore')  renderExplore();
   if (page === 'plans')    { if (typeof renderPlansPage === 'function') renderPlansPage(); }
@@ -579,6 +591,29 @@ function makeStreamItem(item, idx) {
     <div class="stream-item-detail">${detailHTML}</div>
   `;
   return el;
+}
+
+// Add stream event (used by simulation engine and live.js)
+function addStreamEvent(event) {
+  if (!event) return;
+  const agent = ga(event.agent) || { emoji: '🤖', name: event.agent || 'System', color: '#cba6f7' };
+  const typeMap = { debug: 'system', info: 'activity', warn: 'system', error: 'error' };
+  const newItem = {
+    id: event.id || 'se_' + Date.now(),
+    type: typeMap[event.level] || 'activity',
+    streamType: event.level || 'info',
+    agent: event.agent || 'righthand',
+    title: event.text || '',
+    detail: '',
+    time: new Date().toISOString(),
+    displayTime: event.time || '',
+    severity: event.level || 'info',
+    source: 'system',
+    read: false,
+  };
+  if (!streamItems.find(i => i.id === newItem.id)) {
+    streamItems.push(newItem);
+  }
 }
 
 function formatStreamTime(isoStr) {
@@ -1680,7 +1715,7 @@ function makeCategorySection(label, channels, type) {
         <span class="channel-name">${ch.name}</span>
         <span class="forum-count">${ch.count || 0}</span>
       `;
-      item.onclick = () => switchChannel(ch.id);
+      item.onclick = (e) => { e.stopPropagation(); e.preventDefault(); switchChannel(ch.id); };
     } else {
       // text or mixed
       item.innerHTML = `
@@ -1688,7 +1723,7 @@ function makeCategorySection(label, channels, type) {
         <span class="channel-name">${ch.name}</span>
         ${ch.unread > 0 ? `<span class="channel-unread">${ch.unread}</span>` : ''}
       `;
-      item.onclick = () => switchChannel(ch.id);
+      item.onclick = (e) => { e.stopPropagation(); e.preventDefault(); switchChannel(ch.id); };
     }
     channelsDiv.appendChild(item);
   });
@@ -1716,7 +1751,7 @@ function renderDMList() {
       <span class="channel-name">${agent.name}</span>
       <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0"></span>
     `;
-    item.onclick = () => selectDM(agent.id);
+    item.onclick = (e) => { e.stopPropagation(); e.preventDefault(); selectDM(agent.id); };
     list.appendChild(item);
   });
   renderSessionList();
@@ -1761,9 +1796,16 @@ function setTalkMode(mode) {
   }
   if (mode === 'channels') {
     // Auto-select first real channel if none selected
-    if (!currentChannel && DC_CHANNELS.categories) {
-      const firstCat = DC_CHANNELS.categories.find(c => c.channels && c.channels.length > 0);
-      if (firstCat) currentChannel = firstCat.channels[0].id;
+    if (!currentChannel) {
+      if (DC_CHANNELS.categories) {
+        for (const cat of DC_CHANNELS.categories) {
+          const textCh = cat.channels?.find(c => (c.type || 'text') !== 'voice');
+          if (textCh) { currentChannel = textCh.id; break; }
+        }
+      }
+      if (!currentChannel && DC_CHANNELS.text && DC_CHANNELS.text.length > 0) {
+        currentChannel = DC_CHANNELS.text[0].id;
+      }
     }
     switchChannel(currentChannel);
   } else {
@@ -1805,7 +1847,10 @@ function switchChannel(chId) {
     topicEl.style.display = 'none';
   }
 
-  // If bridge is live, load real messages; otherwise use mock data
+  // Show loading state, then load messages
+  const msgContainer = $('messages-list');
+  if (msgContainer) msgContainer.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">Loading messages...</div>';
+
   if (typeof Bridge !== 'undefined' && Bridge.liveMode && typeof loadLiveMessages === 'function') {
     loadLiveMessages(chId);
   } else {
@@ -1845,7 +1890,7 @@ function renderMessages(channelId, dmId = null) {
   }
 
   if (messages.length === 0) {
-    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">No messages yet. Be the first!</div>';
+    container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">No messages in this channel yet</div>';
     return;
   }
 
@@ -2523,7 +2568,20 @@ document.addEventListener('click', e => {
 // ── Initial Talk render ───────────────────────────────────
 function initTalk() {
   renderChannelList();
-  switchChannel('bridge');
+  // Default to first real channel (not phantom 'bridge')
+  let firstCh = null;
+  if (DC_CHANNELS.categories) {
+    for (const cat of DC_CHANNELS.categories) {
+      if (cat.channels && cat.channels.length > 0) {
+        const textCh = cat.channels.find(c => (c.type || 'text') !== 'voice');
+        if (textCh) { firstCh = textCh.id; break; }
+      }
+    }
+  }
+  if (!firstCh && DC_CHANNELS.text && DC_CHANNELS.text.length > 0) {
+    firstCh = DC_CHANNELS.text[0].id;
+  }
+  switchChannel(firstCh || 'bridge');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3511,3 +3569,85 @@ async function submitOmnibus() {
 
 // Keyboard shortcut: ⌘K opens command palette (handled by global handler in ux.js)
 // / on feed page is handled by feed keydown handler above
+
+// ═══════════════════════════════════════════════════════════
+// CONNECTION STATUS INDICATOR
+// ═══════════════════════════════════════════════════════════
+
+let _connStatus = 'connecting'; // 'live' | 'offline' | 'connecting'
+
+function updateConnectionStatus(status) {
+  _connStatus = status;
+  const dot = $('conn-dot');
+  const label = $('conn-label');
+  if (!dot || !label) return;
+
+  dot.className = 'conn-dot ' + status;
+  switch (status) {
+    case 'live':
+      label.textContent = 'Live';
+      label.style.color = 'var(--green)';
+      break;
+    case 'offline':
+      label.textContent = 'Offline';
+      label.style.color = 'var(--red)';
+      break;
+    case 'connecting':
+      label.textContent = 'Connecting…';
+      label.style.color = 'var(--yellow)';
+      break;
+  }
+}
+
+// Auto-detect connection status from Bridge
+function pollConnectionStatus() {
+  if (typeof Bridge !== 'undefined') {
+    if (Bridge.liveMode && Bridge.ws && Bridge.ws.readyState === WebSocket.OPEN) {
+      updateConnectionStatus('live');
+    } else if (Bridge.liveMode && Bridge.ws && Bridge.ws.readyState === WebSocket.CONNECTING) {
+      updateConnectionStatus('connecting');
+    } else {
+      // Try a quick health check
+      fetch('/api/health', { signal: AbortSignal.timeout(3000) })
+        .then(r => r.ok ? updateConnectionStatus('live') : updateConnectionStatus('offline'))
+        .catch(() => updateConnectionStatus('offline'));
+    }
+  } else {
+    fetch('/api/health', { signal: AbortSignal.timeout(3000) })
+      .then(r => r.ok ? updateConnectionStatus('live') : updateConnectionStatus('offline'))
+      .catch(() => updateConnectionStatus('offline'));
+  }
+}
+
+// Poll connection every 10s
+setInterval(pollConnectionStatus, 10000);
+pollConnectionStatus();
+
+// ═══════════════════════════════════════════════════════════
+// TOPBAR CLOCK
+// ═══════════════════════════════════════════════════════════
+
+function updateTopbarClock() {
+  const el = $('topbar-clock');
+  if (!el) return;
+  const now = new Date();
+  el.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+updateTopbarClock();
+setInterval(updateTopbarClock, 60000);
+
+// ═══════════════════════════════════════════════════════════
+// SIDEBAR ACTIVE AGENT COUNT
+// ═══════════════════════════════════════════════════════════
+
+function updateSidebarAgentCount() {
+  const count = AGENTS.filter(a => a.status === 'active').length;
+  const el = $('sidebar-active-count');
+  if (el) el.textContent = `${count} active`;
+  const topEl = $('active-agents-text');
+  if (topEl) topEl.textContent = `${count} active`;
+}
+
+updateSidebarAgentCount();
+setInterval(updateSidebarAgentCount, 5000);

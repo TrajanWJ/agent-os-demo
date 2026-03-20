@@ -342,7 +342,7 @@ function showPipelineItems(stageId, label) {
     ${cards.length === 0 ? '<div style="padding:8px;color:var(--text-muted);font-size:12px">No items</div>' :
     cards.map(c => {
       const agent = ga(c.agent) || { emoji: '❓' };
-      return `<div class="sys-pipe-item"><span>${agent.emoji}</span><span>${c.title}</span><span class="priority-badge ${(c.priority||'P3').toLowerCase()}">${c.priority}</span></div>`;
+      return `<div class="sys-pipe-item"><span>${agent.emoji}</span><span>${c.title}</span><span class="priority-badge ${String(c.priority||'P3').toLowerCase()}">${c.priority}</span></div>`;
     }).join('')}`;
 }
 
@@ -852,7 +852,7 @@ async function submitNewPlan() {
 
 function makePlanTaskCard(task, col, plan) {
   const agentObj = task.agent ? (ga(task.agent) || { emoji: '🤖' }) : { emoji: '⬜' };
-  const pCls = (task.priority || 'P3').toLowerCase();
+  const pCls = String(task.priority || 'P3').toLowerCase();
   const isDone = col.id === 'done' || col.id === 'shipped';
 
   let agentBtns = `<button class="task-agent-btn ask-btn" onclick="event.stopPropagation();openTaskChat('${task.id}','${plan.id}')">❓ Ask</button>`;
@@ -928,7 +928,7 @@ function openPlanTaskDetail(taskId, planId) {
   const modal = $('card-modal-content');
   modal.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <span class="priority-badge ${(task.priority||'P3').toLowerCase()}" style="font-size:14px;padding:4px 12px">${task.priority||'P3'}</span>
+      <span class="priority-badge ${String(task.priority||'P3').toLowerCase()}" style="font-size:14px;padding:4px 12px">${task.priority||'P3'}</span>
       <div style="font-weight:700;font-size:16px;flex:1">${task.title}</div>
       <button onclick="closeModal()" style="color:var(--text-muted);font-size:18px;background:none;border:none;cursor:pointer">✕</button>
     </div>

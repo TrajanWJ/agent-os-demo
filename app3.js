@@ -471,7 +471,7 @@ EventBus.on('agent:statusChange', data => {
   if (currentPage === 'talk' && currentChannel === 'agent-feed') renderMessages('agent-feed');
   updateUnreadBadge('agent-feed');
   // Update pulse if visible
-  if (currentPage === 'pulse') renderAgentHealth();
+  if (currentPage === 'pulse' && typeof renderPulse === 'function') renderPulse();
 });
 
 function getAgentChannel(agentId) {
@@ -1058,7 +1058,7 @@ function renderTaskCtx(taskId, titleEl, bodyEl, footerEl) {
   titleEl.innerHTML = `📋 ${title}`;
 
   const description = task.description || task.context || '';
-  const priority = task.priority || task._priority || 'P3';
+  const priority = String(task.priority || task._priority || 'P3');
   const tags = task.tags || task.labels || [];
 
   bodyEl.innerHTML = `
@@ -1108,7 +1108,7 @@ function renderVaultCtx(noteId, titleEl, bodyEl, footerEl) {
   }
 
   const agent = ga(note.agent) || { emoji: '🤖', name: note.agent };
-  const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
+  const typeColor = (typeof TYPE_COLORS !== 'undefined' ? TYPE_COLORS : {})[note.type] || 'var(--text-dim)';
   const cc = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
 
   titleEl.innerHTML = `📚 ${note.title}`;

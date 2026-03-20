@@ -734,7 +734,7 @@ function renderPipelineCard(card, type) {
       <div class="pipeline-card-meta">
         <span class="pipeline-card-agent" style="border-color:${ag.color}">${ag.emoji}</span>
         <span style="font-size:11px;color:var(--text-dim)">${agName}</span>
-        <span class="pipeline-card-priority ${(card.priority || 'P3').toLowerCase()}">${card.priority || 'P3'}</span>
+        <span class="pipeline-card-priority ${String(card.priority || 'P3').toLowerCase()}">${card.priority || 'P3'}</span>
         ${timeInStage ? `<span style="font-size:10px;color:var(--text-muted);margin-left:auto">${timeInStage}</span>` : ''}
       </div>
     </div>
