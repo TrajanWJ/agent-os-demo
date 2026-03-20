@@ -72,6 +72,19 @@ const Bridge = {
   // ── Feed ────────────────────────────────────────────────
   async getFeed(limit=50) { return this.apiFetch(`/api/feed?limit=${limit}`); },
 
+  // ── Life OS ─────────────────────────────────────────────
+  async getLifeDashboard()      { return this.apiFetch('/api/life/dashboard'); },
+  async getLifeGoals()          { return this.apiFetch('/api/life/goals'); },
+  async getLifeSchedule()       { return this.apiFetch('/api/life/schedule'); },
+  async getLifeReminders()      { return this.apiFetch('/api/life/reminders'); },
+  async getLifeEnergy()         { return this.apiFetch('/api/life/energy'); },
+  async getLifeBrainDumps()     { return this.apiFetch('/api/life/brain-dumps'); },
+  async getLifeFocus()          { return this.apiFetch('/api/life/focus'); },
+  async postLifeBrainDump(text) { return this.apiFetch('/api/life/brain-dump', { method:'POST', body:JSON.stringify({text}) }); },
+  async postLifeFocusStart(task, duration) { return this.apiFetch('/api/life/focus/start', { method:'POST', body:JSON.stringify({task, duration}) }); },
+  async postLifeFocusStop(note) { return this.apiFetch('/api/life/focus/stop', { method:'POST', body:JSON.stringify({note: note || ''}) }); },
+  async postLifeEnergy(energy, focus, mood, note) { return this.apiFetch('/api/life/energy', { method:'POST', body:JSON.stringify({energy, focus, mood, note}) }); },
+
   // ── Missions ────────────────────────────────────────────
   async getMissionsGoals()        { return this.apiFetch('/api/missions/goals'); },
   async getMissionsGoalsArchive() { return this.apiFetch('/api/missions/goals/archive'); },

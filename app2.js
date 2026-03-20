@@ -1442,11 +1442,27 @@ function addStreamEvent(event) {
 // ═══════════════════════════════════════════════════════════
 
 let plansData = [];
-let currentPlanId = null;
+let currentPlanId = null; // null = "All Plans" overview
 let plansLoaded = false;
+let plansPollingInterval = null;
+let plansLastSyncTime = null;
 
 const PLAN_PRIORITY_COLORS = {P1:'#f38ba8', P2:'#fab387', P3:'#89b4fa', P4:'#6c7086'};
 const DEFAULT_COLUMNS = ['Backlog','In Progress','Review','Done'];
+
+// Helper: normalize column — handles both string and {id, name, color} formats
+function colName(col) { return typeof col === 'object' ? (col.name || col.id) : col; }
+function colId(col) { return typeof col === 'object' ? (col.id || col.name) : col; }
+function colColor(col, idx) {
+  if (typeof col === 'object' && col.color) return col.color;
+  const palette = ['#89b4fa','#fab387','#cba6f7','#a6e3a1'];
+  return palette[idx % palette.length];
+}
+function taskInCol(task, col) {
+  const cid = colId(col);
+  const cname = colName(col);
+  return task.column === cid || task.column === cname || task.status === cid || task.status === cname;
+}
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
