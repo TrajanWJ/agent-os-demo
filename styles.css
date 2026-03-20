@@ -4105,9 +4105,20 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   .quick-actions-menu { bottom: calc(var(--mobile-bar-h) + 72px); right: 16px; }
   .view-header { padding: 16px; }
   .view-header h2 { font-size: 18px; }
-  .schedule-content, .missions-content, .explore-content { padding: 12px; }
-  .streaks-row { gap: 8px; }
-  .streak-card { min-width: 120px; padding: 12px; }
+  .schedule-content, .explore-content { padding: 12px; }
+  /* Mission Control mobile: stack sidebar above detail */
+  .mc-layout { flex-direction: column; }
+  .mc-sidebar {
+    width: 100%;
+    min-width: unset;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .mc-detail { padding: 16px; }
+  .mc-back-btn { display: inline-flex !important; }
+  .mc-ov-top { flex-direction: column; gap: 16px; }
+  .mc-overview-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Skeleton Loading States ──────────────────────────────── */
