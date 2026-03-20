@@ -40,7 +40,8 @@ const PAGE_TITLES = {
   schedule: 'Briefing', missions: 'Missions', explore: 'Explore',
   plans: 'Plans', briefing: 'Briefing', inbox: 'Inbox',
   rooms: 'Rooms', pipelines: 'Pipelines', roles: 'Roles',
-  records: 'Records', tasks: 'Tasks', projects: 'Projects'
+  records: 'Records', tasks: 'Tasks', projects: 'Projects',
+  workbench: 'Workbench'
 };
 
 // ── Navigation ────────────────────────────────────────────
@@ -1863,10 +1864,20 @@ function switchChannel(chId) {
   $('current-channel-name').style.color = color;
   const topicEl = $('channel-topic');
   if (topicEl && chData?.topic) {
-    topicEl.textContent = chData.topic;
+    const fullTopic = chData.topic;
+    topicEl.dataset.fullTopic = fullTopic;
+    topicEl.textContent = fullTopic.length > 120 ? fullTopic.substring(0, 120) + '…' : fullTopic;
+    topicEl.classList.remove('expanded');
     topicEl.style.display = '';
   } else if (topicEl) {
+    topicEl.dataset.fullTopic = '';
     topicEl.style.display = 'none';
+  }
+
+  // Close info panel on channel switch
+  const infoPanel = $('channel-info-panel');
+  if (infoPanel && !infoPanel.classList.contains('hidden')) {
+    loadChannelInfo(chId);
   }
 
   // Show loading state, then load messages
@@ -2536,9 +2547,38 @@ function togglePinned() {
 }
 
 function renderPinnedMessages(channelId) {
+  // Try live bridge pins first
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode && channelId) {
+    Bridge.apiFetch(`/api/channels/${channelId}/pins`).then(pins => {
+      const list = $('pinned-list');
+      list.innerHTML = '';
+      if (!Array.isArray(pins) || !pins.length) {
+        list.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:12px">No pinned messages</div>';
+        return;
+      }
+      pins.forEach(msg => {
+        const item = document.createElement('div');
+        item.className = 'pinned-msg-item';
+        const authorName = msg.author?.display_name || msg.author?.username || 'Unknown';
+        item.innerHTML = `<span class="pinned-msg-author">${authorName}</span><span class="pinned-msg-text">${(msg.content || '').substring(0, 150)}</span>`;
+        list.appendChild(item);
+      });
+    }).catch(() => {
+      renderLocalPinnedFallback(channelId);
+    });
+    return;
+  }
+  renderLocalPinnedFallback(channelId);
+}
+
+function renderLocalPinnedFallback(channelId) {
   const pinned = DC_PINNED[channelId] || [];
   const list = $('pinned-list');
   list.innerHTML = '';
+  if (!pinned.length) {
+    list.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:12px">No pinned messages</div>';
+    return;
+  }
   pinned.forEach(id => {
     const msg = findMessage(id);
     if (!msg) return;
@@ -2548,6 +2588,129 @@ function renderPinnedMessages(channelId) {
     item.innerHTML = `<span class="pinned-msg-author">${agent.name}</span><span class="pinned-msg-text">${msg.text.substring(0, 100)}</span>`;
     list.appendChild(item);
   });
+}
+
+// ── Topic expand/collapse ─────────────────────────────────
+function expandChannelTopic() {
+  const el = $('channel-topic');
+  if (!el) return;
+  const full = el.dataset.fullTopic || '';
+  if (!full) return;
+  if (el.classList.contains('expanded')) {
+    el.classList.remove('expanded');
+    el.textContent = full.length > 120 ? full.substring(0, 120) + '…' : full;
+  } else {
+    el.classList.add('expanded');
+    el.textContent = full;
+  }
+}
+
+// ── Channel Info Panel ────────────────────────────────────
+let channelInfoVisible = false;
+
+function toggleChannelInfo() {
+  channelInfoVisible = !channelInfoVisible;
+  const panel = $('channel-info-panel');
+  panel.classList.toggle('hidden', !channelInfoVisible);
+  if (channelInfoVisible && currentChannel) {
+    loadChannelInfo(currentChannel);
+  }
+}
+
+async function loadChannelInfo(channelId) {
+  const content = $('channel-info-content');
+  if (!content) return;
+  content.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted)">Loading...</div>';
+
+  // Resolve channel name from local data
+  const allChannels = DC_CHANNELS.categories
+    ? DC_CHANNELS.categories.flatMap(c => c.channels)
+    : (DC_CHANNELS.text || []);
+  const chData = allChannels.find(c => c.id === channelId);
+  const channelName = chData?.name || channelId;
+  const channelTopic = chData?.topic || '';
+
+  // If bridge is live, fetch real stats
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    try {
+      const [info, pins] = await Promise.all([
+        Bridge.apiFetch(`/api/channels/${channelId}/info`).catch(() => null),
+        Bridge.apiFetch(`/api/channels/${channelId}/pins`).catch(() => []),
+      ]);
+
+      const created = info?.created_at ? new Date(info.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+      const lastMsg = info?.last_message_time ? timeAgo(new Date(info.last_message_time)) : '—';
+      const topic = info?.topic || channelTopic || 'No topic set';
+      const pinnedCount = Array.isArray(pins) ? pins.length : (info?.pinned_count || 0);
+
+      let html = `
+        <div class="channel-info-section">
+          <h4>Channel</h4>
+          <p style="font-size:16px;font-weight:600"># ${info?.name || channelName}</p>
+        </div>
+        <div class="channel-info-section">
+          <h4>Topic</h4>
+          <p style="font-size:12px;line-height:1.5">${escapeHtml(topic)}</p>
+        </div>
+        <div class="channel-info-section">
+          <h4>Stats</h4>
+          <div class="channel-info-stat"><span class="stat-label">Members</span><span class="stat-value">${info?.member_count || '—'}</span></div>
+          <div class="channel-info-stat"><span class="stat-label">Messages (24h)</span><span class="stat-value">${info?.recent_messages_24h ?? '—'}</span></div>
+          <div class="channel-info-stat"><span class="stat-label">Pinned</span><span class="stat-value">${pinnedCount}</span></div>
+          <div class="channel-info-stat"><span class="stat-label">Created</span><span class="stat-value">${created}</span></div>
+          <div class="channel-info-stat"><span class="stat-label">Last Message</span><span class="stat-value">${lastMsg}</span></div>
+        </div>`;
+
+      // Pinned messages in info panel
+      if (Array.isArray(pins) && pins.length > 0) {
+        html += `<div class="channel-info-section"><h4>📌 Pinned Messages (${pins.length})</h4>`;
+        pins.slice(0, 10).forEach(msg => {
+          const author = msg.author?.display_name || msg.author?.username || 'Unknown';
+          html += `<div class="channel-info-pin"><div class="pin-author">${escapeHtml(author)}</div><div class="pin-text">${escapeHtml((msg.content || '').substring(0, 200))}</div></div>`;
+        });
+        html += '</div>';
+      }
+
+      content.innerHTML = html;
+      return;
+    } catch (e) {
+      // Fall through to local-only display
+    }
+  }
+
+  // Fallback: local data only
+  content.innerHTML = `
+    <div class="channel-info-section">
+      <h4>Channel</h4>
+      <p style="font-size:16px;font-weight:600"># ${escapeHtml(channelName)}</p>
+    </div>
+    <div class="channel-info-section">
+      <h4>Topic</h4>
+      <p style="font-size:12px;line-height:1.5">${escapeHtml(channelTopic || 'No topic set')}</p>
+    </div>
+    <div class="channel-info-section" style="color:var(--text-muted);font-size:12px">
+      Connect to bridge for full channel stats
+    </div>`;
+}
+
+// Helper: time ago string
+function timeAgo(date) {
+  const now = new Date();
+  const diff = now - date;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+// Helper: escape HTML
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 function toggleMemberList() {
@@ -3779,6 +3942,27 @@ function setTheme(theme) {
     if (saved) document.documentElement.setAttribute('data-theme', saved);
   } catch {}
 })();
+
+function expandChannelTopic() {
+  const el = $('channel-topic');
+  if (!el) return;
+  el.classList.toggle('expanded');
+}
+
+function toggleChannelInfo() {
+  const panel = $('channel-info-panel');
+  if (!panel) return;
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) {
+    const content = $('channel-info-content');
+    if (content && typeof currentChannel !== 'undefined') {
+      const ch = typeof DC_CHANNELS !== 'undefined' ? (DC_CHANNELS.channels || DC_CHANNELS[currentChannel] || []).find(c => c.id === currentChannel || c.name === currentChannel) : null;
+      content.innerHTML = ch
+        ? `<div style="padding:12px"><strong>#${ch.name || currentChannel}</strong><p style="color:var(--text-muted);margin:8px 0">${ch.topic || 'No topic set'}</p></div>`
+        : `<div style="padding:12px"><strong>#${currentChannel}</strong><p style="color:var(--text-muted);margin:8px 0">No info available</p></div>`;
+    }
+  }
+}
 
 function toggleLevelFilter(level, btn) {
   if (btn) btn.classList.toggle('active');

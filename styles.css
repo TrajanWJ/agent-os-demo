@@ -2169,6 +2169,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   overflow: hidden;
   background: var(--bg-base);
   min-width: 0;
+  position: relative;
 }
 .message-topbar {
   display: flex;
@@ -4373,13 +4374,105 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 
 /* Channel topic */
 .channel-topic {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
-  margin-left: 8px;
-  max-width: 200px;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  max-width: 400px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.channel-topic:hover {
+  color: var(--text);
+}
+.channel-topic.expanded {
+  white-space: normal;
+  max-width: 600px;
+  overflow: visible;
+}
+
+/* Channel Info Panel */
+.channel-info-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 20;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.channel-info-panel.hidden { display: none; }
+.channel-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.channel-info-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+}
+.channel-info-close:hover { color: var(--text); }
+.channel-info-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.channel-info-section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
+}
+.channel-info-section p {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+}
+.channel-info-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.channel-info-stat .stat-label { color: var(--text-muted); }
+.channel-info-stat .stat-value { color: var(--text); font-weight: 500; }
+.channel-info-pin {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.channel-info-pin:last-child { border-bottom: none; }
+.channel-info-pin .pin-author {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.channel-info-pin .pin-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+@media (max-width: 768px) {
+  .channel-info-panel { width: 100%; }
 }
 
 /* Collapsed message hover timestamp */
@@ -15209,4 +15302,40 @@ textarea:focus-visible,
   .sys-disk-warning-banner { flex-direction: column; gap: 8px; text-align: center; }
   .sys-cron-human { min-width: auto; }
   .sys-cron-sched { display: none; }
+}
+
+/* ── Inbox Zero Celebration ─────────────────────────────── */
+.inbox-zero-celebration {
+  animation: inboxZeroFadeIn 0.6s ease;
+}
+.inbox-zero-bounce {
+  animation: inboxZeroBounce 1s ease infinite;
+}
+.inbox-zero-confetti {
+  font-size: 24px;
+  margin-top: 12px;
+  animation: inboxZeroPulse 2s ease infinite;
+}
+@keyframes inboxZeroFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes inboxZeroBounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@keyframes inboxZeroPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* ── Inbox source badge ─────────────────────────────────── */
+.inbox-cat-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-overlay, rgba(255,255,255,0.06));
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
 }

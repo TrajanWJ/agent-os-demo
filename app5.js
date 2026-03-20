@@ -75,6 +75,86 @@ function getCategoryForItem(item) {
   return item.category || 'proposals';
 }
 
+// Source label mapping
+function getSourceLabel(item) {
+  const map = {
+    proposal: 'Proposals',
+    feed_question: 'Questions',
+    feed_error: 'Errors',
+    failed_task: 'Failed Tasks',
+    overdue_goal: 'Overdue Goals',
+  };
+  return map[item._type] || 'Inbox';
+}
+
+// Type-aware quick action buttons
+function getInboxQuickActions(item) {
+  const id = item.id;
+  switch (item._type) {
+    case 'proposal':
+      return `
+        <button class="inbox-qa" title="Approve" onclick="event.stopPropagation();inboxAction('${id}','approve')">✅</button>
+        <button class="inbox-qa" title="Dismiss" onclick="event.stopPropagation();inboxAction('${id}','dismiss')">❌</button>
+        <button class="inbox-qa" title="Snooze" onclick="event.stopPropagation();snoozeItem('${id}',3600000)">⏰</button>`;
+    case 'feed_question':
+      return `
+        <button class="inbox-qa" title="Answer" onclick="event.stopPropagation();selectInboxItem('${id}');setTimeout(()=>document.getElementById('inbox-reply-input')?.focus(),100)">💬</button>
+        <button class="inbox-qa" title="Dismiss" onclick="event.stopPropagation();inboxAction('${id}','dismiss')">❌</button>
+        <button class="inbox-qa" title="Snooze" onclick="event.stopPropagation();snoozeItem('${id}',3600000)">⏰</button>`;
+    case 'feed_error':
+      return `
+        <button class="inbox-qa" title="Acknowledge" onclick="event.stopPropagation();inboxAction('${id}','acknowledge')">✅</button>
+        <button class="inbox-qa" title="Investigate" onclick="event.stopPropagation();inboxAction('${id}','investigate')">🔍</button>
+        <button class="inbox-qa" title="Snooze" onclick="event.stopPropagation();snoozeItem('${id}',3600000)">⏰</button>`;
+    case 'failed_task':
+      return `
+        <button class="inbox-qa" title="Retry" onclick="event.stopPropagation();inboxAction('${id}','retry')">🔄</button>
+        <button class="inbox-qa" title="Delete" onclick="event.stopPropagation();inboxAction('${id}','delete')">🗑️</button>
+        <button class="inbox-qa" title="Snooze" onclick="event.stopPropagation();snoozeItem('${id}',3600000)">⏰</button>`;
+    case 'overdue_goal':
+      return `
+        <button class="inbox-qa" title="Acknowledge" onclick="event.stopPropagation();inboxAction('${id}','acknowledge')">✅</button>
+        <button class="inbox-qa" title="Dismiss" onclick="event.stopPropagation();inboxAction('${id}','dismiss')">❌</button>
+        <button class="inbox-qa" title="Snooze" onclick="event.stopPropagation();snoozeItem('${id}',3600000)">⏰</button>`;
+    default:
+      return `
+        <button class="inbox-qa" title="Approve" onclick="event.stopPropagation();inboxAction('${id}','approve')">✅</button>
+        <button class="inbox-qa" title="Dismiss" onclick="event.stopPropagation();inboxAction('${id}','dismiss')">❌</button>
+        <button class="inbox-qa" title="Snooze" onclick="event.stopPropagation();snoozeItem('${id}',3600000)">⏰</button>`;
+  }
+}
+
+// Detail panel action buttons (type-aware)
+function getDetailActionButtons(item) {
+  const id = item.id;
+  switch (item._type) {
+    case 'proposal':
+      return `
+        <button class="inbox-action-btn approve" onclick="inboxAction('${id}','approve')"><span>✅ Approve</span><kbd>a</kbd></button>
+        <button class="inbox-action-btn dismiss" onclick="inboxAction('${id}','dismiss')"><span>❌ Dismiss</span><kbd>x</kbd></button>`;
+    case 'feed_question':
+      return `
+        <button class="inbox-action-btn approve" onclick="document.getElementById('inbox-reply-input')?.focus()"><span>💬 Answer</span><kbd>r</kbd></button>
+        <button class="inbox-action-btn dismiss" onclick="inboxAction('${id}','dismiss')"><span>❌ Dismiss</span><kbd>x</kbd></button>`;
+    case 'feed_error':
+      return `
+        <button class="inbox-action-btn approve" onclick="inboxAction('${id}','acknowledge')"><span>✅ Acknowledge</span><kbd>a</kbd></button>
+        <button class="inbox-action-btn dismiss" onclick="inboxAction('${id}','investigate')"><span>🔍 Investigate</span></button>`;
+    case 'failed_task':
+      return `
+        <button class="inbox-action-btn approve" onclick="inboxAction('${id}','retry')"><span>🔄 Retry</span><kbd>a</kbd></button>
+        <button class="inbox-action-btn delete" onclick="inboxAction('${id}','delete')"><span>🗑️ Delete</span><kbd>d</kbd></button>`;
+    case 'overdue_goal':
+      return `
+        <button class="inbox-action-btn approve" onclick="inboxAction('${id}','acknowledge')"><span>✅ Acknowledge</span><kbd>a</kbd></button>
+        <button class="inbox-action-btn dismiss" onclick="inboxAction('${id}','dismiss')"><span>❌ Dismiss</span><kbd>x</kbd></button>`;
+    default:
+      return `
+        <button class="inbox-action-btn approve" onclick="inboxAction('${id}','approve')"><span>✅ Approve</span><kbd>a</kbd></button>
+        <button class="inbox-action-btn dismiss" onclick="inboxAction('${id}','dismiss')"><span>❌ Dismiss</span><kbd>x</kbd></button>`;
+  }
+}
+
 // Seed data
 function seedInboxItems() {
   if (localStorage.getItem('inbox-cleared')) return [];
@@ -541,10 +621,11 @@ function renderInboxList() {
         : { icon: '🎉', title: 'Inbox Zero!', desc: 'All caught up. Your agents are handling everything. 🥳', celebration: true };
 
     container.innerHTML = `
-      <div class="inbox-empty-state">
-        <div class="inbox-empty-icon">${emptyMsg.icon}</div>
+      <div class="inbox-empty-state${emptyMsg.celebration ? ' inbox-zero-celebration' : ''}">
+        <div class="inbox-empty-icon${emptyMsg.celebration ? ' inbox-zero-bounce' : ''}">${emptyMsg.icon}</div>
         <div class="inbox-empty-title">${emptyMsg.title}</div>
         <div class="inbox-empty-desc">${emptyMsg.desc}</div>
+        ${emptyMsg.celebration ? '<div class="inbox-zero-confetti">✨🎊✨</div>' : ''}
       </div>
     `;
     return;
@@ -580,15 +661,12 @@ function renderInboxList() {
           <div class="inbox-card-row3">${item.preview}</div>
           <div class="inbox-card-row4">
             <span class="inbox-priority-badge" style="background:${prio.bg};color:${prio.color}">${prio.label}</span>
-            <span class="inbox-cat-badge">${catLabel}</span>
+            <span class="inbox-cat-badge">${getSourceLabel(item)}</span>
             ${labels.map(l => `<span class="inbox-label-badge">${l}</span>`).join('')}
           </div>
         </div>
         <div class="inbox-card-actions" style="opacity:0">
-          <button class="inbox-qa" title="Approve (a)" onclick="event.stopPropagation();inboxAction('${item.id}','approve')">✅</button>
-          <button class="inbox-qa" title="Dismiss (x)" onclick="event.stopPropagation();inboxAction('${item.id}','dismiss')">❌</button>
-          <button class="inbox-qa" title="Snooze (s)" onclick="event.stopPropagation();snoozeItem('${item.id}',3600000)">⏸️</button>
-          <button class="inbox-qa" title="Delete (d)" onclick="event.stopPropagation();inboxAction('${item.id}','delete')">🗑️</button>
+          ${getInboxQuickActions(item)}
         </div>
       </div>
     `;
@@ -690,7 +768,7 @@ function renderInboxDetail() {
           </div>
           <div class="inbox-detail-badges">
             <span class="inbox-priority-badge" style="background:${prio.bg};color:${prio.color}">${prio.label}</span>
-            <span class="inbox-cat-badge">${catLabel}</span>
+            <span class="inbox-cat-badge">${getSourceLabel(item)}</span>
             ${item.mission ? `<span class="inbox-mission-badge">🎯 ${item.mission}</span>` : ''}
           </div>
         </div>
@@ -717,16 +795,11 @@ function renderInboxDetail() {
     </div>
 
     ${isDone ? `<div class="inbox-action-bar done-bar">
-      <span class="inbox-done-label">${item._doneAction === 'approve' ? '✅ Approved' : item._doneAction === 'dismiss' ? '❌ Dismissed' : '🗑️ Deleted'}</span>
+      <span class="inbox-done-label">${{approve:'✅ Approved',dismiss:'❌ Dismissed',acknowledge:'✅ Acknowledged',investigate:'🔍 Investigating',retry:'🔄 Retried',delete:'🗑️ Deleted',forward:'→ Forwarded'}[item._doneAction] || '✅ Done'}</span>
     </div>` : `<div class="inbox-action-bar">
-      <button class="inbox-action-btn approve" onclick="inboxAction('${item.id}','approve')">
-        <span>✅ Approve</span><kbd>a</kbd>
-      </button>
-      <button class="inbox-action-btn dismiss" onclick="inboxAction('${item.id}','dismiss')">
-        <span>❌ Dismiss</span><kbd>x</kbd>
-      </button>
+      ${getDetailActionButtons(item)}
       <button class="inbox-action-btn snooze" onclick="showSnoozeDropdown()">
-        <span>⏸️ Snooze</span>
+        <span>⏰ Snooze</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
       </button>
       <button class="inbox-action-btn reply-btn" onclick="document.getElementById('inbox-reply-input')?.focus()">
@@ -734,9 +807,6 @@ function renderInboxDetail() {
       </button>
       <button class="inbox-action-btn forward" onclick="inboxAction('${item.id}','forward')">
         <span>→ Forward</span>
-      </button>
-      <button class="inbox-action-btn delete" onclick="inboxAction('${item.id}','delete')">
-        <span>🗑️</span><kbd>d</kbd>
       </button>
     </div>`}
   `;
@@ -1017,14 +1087,9 @@ async function inboxAction(id, action) {
             body: JSON.stringify({ action: 'approve' }),
           });
         } catch {}
-      } else {
-        fetch(`${baseUrl}/api/inbox/${id}/action`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'approve' }),
-        }).catch(() => {});
       }
       toast(`✅ Approved — ${agent.name} notified`, 'success');
-      addXP(10, 'inbox approve');
+      if (typeof addXP === 'function') addXP(10, 'inbox approve');
       moveInboxToDone(id, 'approve');
       break;
 
@@ -1036,19 +1101,55 @@ async function inboxAction(id, action) {
             body: JSON.stringify({ action: 'dismiss' }),
           });
         } catch {}
-      } else {
-        fetch(`${baseUrl}/api/inbox/${id}/action`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'reject' }),
-        }).catch(() => {});
       }
       toast('❌ Dismissed', 'info');
       moveInboxToDone(id, 'dismiss');
       break;
 
+    case 'acknowledge':
+      toast(`✅ Acknowledged — ${agent.name}`, 'success');
+      if (typeof addXP === 'function') addXP(5, 'inbox acknowledge');
+      moveInboxToDone(id, 'acknowledge');
+      break;
+
+    case 'investigate':
+      // Forward error to dispatch as investigation task
+      try {
+        await fetch(`${baseUrl}/api/dispatch/task`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Investigate: ${item.subject}`, description: item.body || item.preview,
+            agent: item.agent || 'ops', priority: item._priority || 'P1',
+          }),
+        });
+        toast(`🔍 Investigation dispatched to ${agent.name}`, 'success');
+      } catch {
+        toast(`🔍 Investigation queued`, 'info');
+      }
+      moveInboxToDone(id, 'investigate');
+      break;
+
+    case 'retry':
+      // Re-dispatch the failed task
+      try {
+        await fetch(`${baseUrl}/api/dispatch/task`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: item.subject.replace(/^💀 Failed: /, ''), description: item.body || item.preview,
+            agent: item.agent, priority: item._priority || 'P2',
+          }),
+        });
+        toast(`🔄 Task retried — dispatched to ${agent.name}`, 'success');
+      } catch {
+        toast(`🔄 Retry queued`, 'info');
+      }
+      if (typeof addXP === 'function') addXP(5, 'inbox retry');
+      moveInboxToDone(id, 'retry');
+      break;
+
     case 'forward':
       try {
-        await fetch(`${baseUrl}/api/tasks`, {
+        await fetch(`${baseUrl}/api/dispatch/task`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: item.subject, description: item.body || item.preview,
@@ -1063,14 +1164,11 @@ async function inboxAction(id, action) {
       break;
 
     case 'delete':
-      fetch(`${baseUrl}/api/inbox/${id}/action`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'archive' }),
-      }).catch(() => {});
       toast('🗑️ Deleted', 'info');
       removeInboxItem(id);
       break;
   }
+  updateInboxBadge();
 }
 
 function moveInboxToDone(id, action) {
@@ -1094,6 +1192,7 @@ function removeInboxItem(id) {
   }
   renderInbox();
   renderInboxContext();
+  updateInboxBadge();
 }
 
 // ── Reply ──────────────────────────────────────────────────
