@@ -71,8 +71,9 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-raised); border-radius: 3px; }
+::-webkit-scrollbar-track { background: #181825; }
+::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #585b70; }
 
 /* ═══════════════════════════════════════════════════════════
    LAYOUT
@@ -11994,7 +11995,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 
 /* ── 2. Micro-interactions ──────────────────────────────── */
 
-/* Card hover lift */
+/* Card hover lift — consistent across all card types */
 .card:hover, .inbox-card:hover, .task-card:hover,
 .proposal-card:hover, .mission-card:hover,
 .mc-overview-card:hover, .vault-card:hover,
@@ -12002,10 +12003,14 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 .capacity-card:hover, .explore-result:hover,
 .rooms-list-item:hover, .records-row:hover,
 .project-card:hover, .mc-mission-card:hover,
-.metric-card:hover, .mind-search-card:hover {
+.metric-card:hover, .mind-search-card:hover,
+.feed-card:hover, .queue-card:hover,
+.stream-item:hover, .docs-feature-card:hover,
+.docs-concept-card:hover, .docs-agent-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   border-color: #45475a;
+  transition: all 0.15s ease;
 }
 
 /* Smooth page transitions */

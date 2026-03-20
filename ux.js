@@ -28,6 +28,26 @@ function showCardLoading(containerId, count = 3) {
   `).join('');
 }
 
+/**
+ * Show skeleton placeholder cards inside a container element.
+ * @param {HTMLElement|string} container - DOM element or ID string
+ * @param {number} count - Number of skeleton cards to show
+ */
+function showSkeletons(container, count = 3) {
+  const el = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!el) return;
+  el.innerHTML = Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton skeleton-avatar"></div>
+      <div class="skeleton-body">
+        <div class="skeleton skeleton-line short"></div>
+        <div class="skeleton skeleton-line long"></div>
+        <div class="skeleton skeleton-line medium"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
 // ═══════════════════════════════════════════════════════════
 // KEYBOARD SHORTCUTS OVERLAY (Enhanced — sectioned help modal)
 // ═══════════════════════════════════════════════════════════
