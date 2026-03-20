@@ -43,6 +43,8 @@ let inboxFocusIdx = -1;
 
 // Seed data
 function seedInboxItems() {
+  // Check if inbox was cleared by user
+  if (localStorage.getItem('inbox-cleared')) return [];
   return [
     {
       id: 'inb_1', agent: 'researcher', category: 'review', priority: 'normal', unread: true,
@@ -244,6 +246,12 @@ async function fetchRealInboxItems() {
 }
 
 async function initInbox() {
+  // Check if user cleared inbox
+  if (localStorage.getItem('inbox-cleared')) {
+    inboxItems = [];
+    renderInbox();
+    return;
+  }
   // Try to fetch real data first
   const realItems = await fetchRealInboxItems();
   if (realItems && realItems.length > 0) {
