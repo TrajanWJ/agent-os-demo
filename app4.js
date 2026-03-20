@@ -996,7 +996,8 @@ function renderOverviewTab(el, agent, config) {
   const maxSpark = Math.max(...sparkData, 1);
   const sparkSvg = renderSparklineSvg(sparkData, maxSpark, agent.color);
   const autonomyLevel = AUTONOMY_LEVELS[config.autonomy] || AUTONOMY_LEVELS[1];
-  const uptime = agent.status === 'active' ? `${Math.floor(Math.random() * 6) + 1}h ${Math.floor(Math.random() * 59)}m` : 'Idle';
+  const sessions = AGENT_SESSIONS.filter(s => s.agent === agent.id);
+  const sessionCount = sessions.length || Math.floor(Math.random() * 3) + 1;
 
   el.innerHTML = `
     <div class="acenter-overview">
@@ -1010,10 +1011,17 @@ function renderOverviewTab(el, agent, config) {
           <div class="acenter-overview-status">
             <span class="acenter-status-dot ${agent.status === 'active' ? 'status-active' : 'status-idle'}"></span>
             <span>${agent.status === 'active' ? 'Active' : 'Idle'}</span>
-            ${agent.task ? `<span class="acenter-current-task">· ${agent.task}</span>` : ''}
           </div>
         </div>
       </div>
+
+      ${agent.task ? `
+        <div class="acenter-current-task-banner">
+          <span class="acenter-task-pulse"></span>
+          <span class="acenter-task-label">Currently working on:</span>
+          <span class="acenter-task-name">${agent.task}</span>
+        </div>
+      ` : ''}
 
       <div class="acenter-stats-grid">
         <div class="acenter-stat-card">
@@ -1022,15 +1030,15 @@ function renderOverviewTab(el, agent, config) {
         </div>
         <div class="acenter-stat-card">
           <div class="acenter-stat-value">${(agent.tokens / 1000).toFixed(1)}K</div>
-          <div class="acenter-stat-label">Tokens Used</div>
+          <div class="acenter-stat-label">Tokens</div>
         </div>
         <div class="acenter-stat-card">
           <div class="acenter-stat-value" style="color:${agent.fitness >= 0.9 ? 'var(--green)' : agent.fitness >= 0.8 ? 'var(--yellow)' : 'var(--red)'}">${Math.round(agent.fitness * 100)}%</div>
           <div class="acenter-stat-label">Fitness</div>
         </div>
         <div class="acenter-stat-card">
-          <div class="acenter-stat-value">${uptime}</div>
-          <div class="acenter-stat-label">Uptime</div>
+          <div class="acenter-stat-value">${sessionCount}</div>
+          <div class="acenter-stat-label">Sessions</div>
         </div>
       </div>
 
@@ -1047,7 +1055,7 @@ function renderOverviewTab(el, agent, config) {
       <div class="acenter-overview-meta">
         <div class="acenter-meta-row">
           <span class="acenter-meta-label">Autonomy</span>
-          <span class="acenter-meta-value" style="color:${autonomyLevel.color}">${autonomyLevel.label}</span>
+          <span class="acenter-meta-value" style="color:${autonomyLevel.color}">${autonomyLevel.icon} ${autonomyLevel.label}</span>
         </div>
         <div class="acenter-meta-row">
           <span class="acenter-meta-label">Active Capabilities</span>
@@ -1139,15 +1147,22 @@ function renderAutonomyTab(el, agent, config) {
           oninput="previewAutonomy(this.value)" onchange="setAgentAutonomy('${agent.id}', parseInt(this.value))">
         <div class="acenter-autonomy-labels">
           ${AUTONOMY_LEVELS.map(l => `
-            <span class="acenter-autonomy-label${config.autonomy === l.value ? ' active' : ''}" style="${config.autonomy === l.value ? `color:${l.color}` : ''}">${l.label}</span>
+            <span class="acenter-autonomy-label${config.autonomy === l.value ? ' active' : ''}" style="${config.autonomy === l.value ? `color:${l.color}` : ''}">${l.icon}</span>
           `).join('')}
         </div>
       </div>
-      <div class="acenter-autonomy-detail" id="acenter-autonomy-detail">
-        <div class="acenter-autonomy-badge" style="background:${currentLevel.color}20;color:${currentLevel.color};border-color:${currentLevel.color}40">
-          ${currentLevel.label}
-        </div>
-        <p class="acenter-autonomy-desc">${currentLevel.desc}</p>
+
+      <div class="acenter-autonomy-levels-detail">
+        ${AUTONOMY_LEVELS.map(l => `
+          <div class="acenter-autonomy-level-row${config.autonomy === l.value ? ' active' : ''}" style="${config.autonomy === l.value ? `border-color:${l.color};background:${l.color}10` : ''}">
+            <span class="acenter-autonomy-level-icon">${l.icon}</span>
+            <div class="acenter-autonomy-level-info">
+              <span class="acenter-autonomy-level-name" style="${config.autonomy === l.value ? `color:${l.color}` : ''}">${l.label}</span>
+              <span class="acenter-autonomy-level-desc">${l.desc}</span>
+            </div>
+            ${config.autonomy === l.value ? `<span class="acenter-autonomy-active-badge" style="background:${l.color}20;color:${l.color}">Active</span>` : ''}
+          </div>
+        `).join('')}
       </div>
 
       <div class="acenter-rules-section">
@@ -1184,24 +1199,28 @@ function renderAutonomyTab(el, agent, config) {
 }
 
 function previewAutonomy(val) {
-  const level = AUTONOMY_LEVELS[parseInt(val)] || AUTONOMY_LEVELS[1];
-  const detail = $('acenter-autonomy-detail');
-  if (detail) {
-    detail.innerHTML = `
-      <div class="acenter-autonomy-badge" style="background:${level.color}20;color:${level.color};border-color:${level.color}40">
-        ${level.label}
-      </div>
-      <p class="acenter-autonomy-desc">${level.desc}</p>
-    `;
-  }
+  const v = parseInt(val);
   // Update label highlights
   document.querySelectorAll('.acenter-autonomy-label').forEach((lbl, i) => {
-    if (i === parseInt(val)) {
+    if (i === v) {
       lbl.classList.add('active');
       lbl.style.color = AUTONOMY_LEVELS[i].color;
     } else {
       lbl.classList.remove('active');
       lbl.style.color = '';
+    }
+  });
+  // Update level rows
+  document.querySelectorAll('.acenter-autonomy-level-row').forEach((row, i) => {
+    const l = AUTONOMY_LEVELS[i];
+    if (i === v) {
+      row.classList.add('active');
+      row.style.borderColor = l.color;
+      row.style.background = l.color + '10';
+    } else {
+      row.classList.remove('active');
+      row.style.borderColor = '';
+      row.style.background = '';
     }
   });
 }
@@ -1255,57 +1274,77 @@ function addEscalation(agentId) {
 function renderHistoryTab(el, agent) {
   const history = AGENT_HISTORY[agent.id] || { tasks: [], proposals: [], errors: [] };
 
+  // Build unified timeline from all sources
+  const timelineItems = [];
+  history.tasks.forEach(t => {
+    const hrs = parseInt(t.time);
+    const relHrs = 9 - hrs + Math.floor(Math.random() * 2);
+    const relStr = relHrs <= 0 ? 'Just now' : relHrs === 1 ? '1h ago' : `${relHrs}h ago`;
+    timelineItems.push({
+      icon: t.status === 'completed' ? '✅' : '❌',
+      action: t.status === 'completed' ? 'Completed' : 'Failed',
+      name: t.name,
+      meta: `${relStr} · ${(t.tokens / 1000).toFixed(1)}K tokens`,
+      status: t.status,
+      sortKey: relHrs,
+    });
+  });
+  history.proposals.forEach(p => {
+    const hrs = parseInt(p.time);
+    const relHrs = 9 - hrs + Math.floor(Math.random() * 2);
+    const relStr = relHrs <= 0 ? 'Just now' : relHrs === 1 ? '1h ago' : `${relHrs}h ago`;
+    timelineItems.push({
+      icon: p.status === 'approved' ? '✅' : p.status === 'rejected' ? '❌' : '⏳',
+      action: p.status === 'approved' ? 'Approved' : p.status === 'rejected' ? 'Rejected' : 'Proposed',
+      name: p.name,
+      meta: relStr,
+      status: p.status,
+      sortKey: relHrs,
+    });
+  });
+  history.errors.forEach(e => {
+    const hrs = parseInt(e.time);
+    const relHrs = 9 - hrs + Math.floor(Math.random() * 2);
+    const relStr = relHrs <= 0 ? 'Just now' : relHrs === 1 ? '1h ago' : `${relHrs}h ago`;
+    timelineItems.push({
+      icon: e.severity === 'error' ? '🔴' : '🟡',
+      action: e.severity === 'error' ? 'Error' : 'Warning',
+      name: e.message,
+      meta: relStr,
+      status: e.severity,
+      sortKey: relHrs,
+    });
+  });
+  timelineItems.sort((a, b) => a.sortKey - b.sortKey);
+
   el.innerHTML = `
     <div class="acenter-history">
       <div class="acenter-history-section">
-        <div class="acenter-section-title">Recent Tasks</div>
-        <div class="acenter-history-list">
-          ${history.tasks.length === 0 ? '<div class="acenter-history-empty">No tasks yet</div>' :
-            history.tasks.map(t => `
-              <div class="acenter-history-item">
-                <span class="acenter-history-icon">${t.status === 'completed' ? '✅' : '❌'}</span>
-                <div class="acenter-history-item-info">
-                  <span class="acenter-history-item-name">${t.name}</span>
-                  <span class="acenter-history-item-meta">${t.time} · ${(t.tokens / 1000).toFixed(1)}K tokens</span>
+        <div class="acenter-section-title">Activity Timeline</div>
+        ${timelineItems.length === 0 ? `
+          <div class="acenter-history-empty-state">
+            <span class="acenter-history-empty-icon">📭</span>
+            <span>No history available yet</span>
+          </div>
+        ` : `
+          <div class="acenter-timeline">
+            ${timelineItems.map(item => `
+              <div class="acenter-timeline-item">
+                <div class="acenter-timeline-dot-col">
+                  <span class="acenter-timeline-dot" style="${item.status === 'completed' || item.status === 'approved' ? 'background:var(--green)' : item.status === 'failed' || item.status === 'error' ? 'background:var(--red)' : 'background:var(--text-muted)'}"></span>
+                  <div class="acenter-timeline-line"></div>
                 </div>
-                <span class="acenter-history-status ${t.status}">${t.status}</span>
+                <div class="acenter-timeline-content">
+                  <div class="acenter-timeline-header">
+                    <span class="acenter-timeline-action">${item.icon} ${item.action}:</span>
+                    <span class="acenter-timeline-time">${item.meta}</span>
+                  </div>
+                  <span class="acenter-timeline-name">${item.name}</span>
+                </div>
               </div>
             `).join('')}
-        </div>
-      </div>
-
-      <div class="acenter-history-section">
-        <div class="acenter-section-title">Recent Proposals</div>
-        <div class="acenter-history-list">
-          ${history.proposals.length === 0 ? '<div class="acenter-history-empty">No proposals</div>' :
-            history.proposals.map(p => `
-              <div class="acenter-history-item">
-                <span class="acenter-history-icon">${p.status === 'approved' ? '✅' : p.status === 'rejected' ? '❌' : '⏳'}</span>
-                <div class="acenter-history-item-info">
-                  <span class="acenter-history-item-name">${p.name}</span>
-                  <span class="acenter-history-item-meta">${p.time}</span>
-                </div>
-                <span class="acenter-history-status ${p.status}">${p.status}</span>
-              </div>
-            `).join('')}
-        </div>
-      </div>
-
-      <div class="acenter-history-section">
-        <div class="acenter-section-title">Error Log</div>
-        <div class="acenter-history-list">
-          ${history.errors.length === 0 ? '<div class="acenter-history-empty">No errors 🎉</div>' :
-            history.errors.map(e => `
-              <div class="acenter-history-item error-item">
-                <span class="acenter-history-icon">${e.severity === 'error' ? '🔴' : '🟡'}</span>
-                <div class="acenter-history-item-info">
-                  <span class="acenter-history-item-name">${e.message}</span>
-                  <span class="acenter-history-item-meta">${e.time}</span>
-                </div>
-                <span class="acenter-history-severity ${e.severity}">${e.severity}</span>
-              </div>
-            `).join('')}
-        </div>
+          </div>
+        `}
       </div>
     </div>
   `;

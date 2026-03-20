@@ -29,25 +29,63 @@ function showCardLoading(containerId, count = 3) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// KEYBOARD SHORTCUTS OVERLAY
+// KEYBOARD SHORTCUTS OVERLAY (Enhanced — sectioned help modal)
 // ═══════════════════════════════════════════════════════════
 
 let shortcutOverlayOpen = false;
 
-const SHORTCUTS = [
-  { keys: ['⌘', 'K'], desc: 'Command palette / Omnibus' },
-  { keys: ['/'], desc: 'Focus search' },
-  { divider: true },
-  { keys: ['j'], desc: 'Next item' },
-  { keys: ['k'], desc: 'Previous item' },
-  { keys: ['Enter'], desc: 'Open / expand selected' },
-  { divider: true },
-  { keys: ['a'], desc: 'Approve (Stream, Inbox, Proposals)' },
-  { keys: ['r'], desc: 'Reject' },
-  { keys: ['d'], desc: 'Defer / dismiss' },
-  { divider: true },
-  { keys: ['?'], desc: 'Show this help' },
-  { keys: ['Esc'], desc: 'Close overlay / cancel' },
+const SHORTCUT_SECTIONS = [
+  {
+    title: 'Navigation',
+    shortcuts: [
+      { keys: ['⌘', 'K'], desc: 'Command palette' },
+      { keys: ['1–6'], desc: 'Switch pages (Stream, Inbox, Talk, Tasks, Mind, System)' },
+      { keys: ['g', 'i'], desc: 'Go to Inbox' },
+      { keys: ['g', 't'], desc: 'Go to Tasks' },
+      { keys: ['g', 'm'], desc: 'Go to Mind' },
+      { keys: ['g', 'p'], desc: 'Go to Pulse / System' },
+      { keys: ['g', 's'], desc: 'Go to Stream' },
+      { keys: ['g', 'k'], desc: 'Go to Talk' },
+    ]
+  },
+  {
+    title: 'Stream',
+    shortcuts: [
+      { keys: ['j / k'], desc: 'Navigate items' },
+      { keys: ['Enter'], desc: 'Expand item' },
+      { keys: ['a'], desc: 'Approve' },
+      { keys: ['r'], desc: 'Reject' },
+      { keys: ['d'], desc: 'Defer' },
+      { keys: ['f'], desc: 'Cycle filter' },
+    ]
+  },
+  {
+    title: 'Inbox',
+    shortcuts: [
+      { keys: ['j / k'], desc: 'Navigate items' },
+      { keys: ['Enter'], desc: 'Open detail' },
+      { keys: ['a'], desc: 'Approve' },
+      { keys: ['x'], desc: 'Dismiss' },
+      { keys: ['r'], desc: 'Reply' },
+      { keys: ['s'], desc: 'Snooze' },
+      { keys: ['d'], desc: 'Delete' },
+      { keys: ['/'], desc: 'Search inbox' },
+    ]
+  },
+  {
+    title: 'Mind',
+    shortcuts: [
+      { keys: ['/'], desc: 'Focus search' },
+      { keys: ['1–5'], desc: 'Switch tabs' },
+    ]
+  },
+  {
+    title: 'General',
+    shortcuts: [
+      { keys: ['?'], desc: 'Show this help' },
+      { keys: ['Esc'], desc: 'Close overlay / go back' },
+    ]
+  },
 ];
 
 function showShortcutOverlay() {
@@ -59,21 +97,18 @@ function showShortcutOverlay() {
   overlay.className = 'shortcut-overlay';
   overlay.onclick = (e) => { if (e.target === overlay) hideShortcutOverlay(); };
 
-  const rows = SHORTCUTS.map(s => {
-    if (s.divider) return '<div class="shortcut-divider"></div>';
-    const keysHTML = s.keys.map(k => `<kbd>${k}</kbd>`).join('');
-    return `
-      <div class="shortcut-row">
-        <span class="shortcut-desc">${s.desc}</span>
-        <span class="shortcut-keys">${keysHTML}</span>
-      </div>
-    `;
+  const sectionsHTML = SHORTCUT_SECTIONS.map(section => {
+    const rows = section.shortcuts.map(s => {
+      const keysHTML = s.keys.map(k => `<kbd>${k}</kbd>`).join('');
+      return `<div class="shortcut-row"><span class="shortcut-desc">${s.desc}</span><span class="shortcut-keys">${keysHTML}</span></div>`;
+    }).join('');
+    return `<div class="shortcut-section"><div class="shortcut-section-title">${section.title}</div>${rows}</div>`;
   }).join('');
 
   overlay.innerHTML = `
     <div class="shortcut-card">
       <h3>⌨️ Keyboard Shortcuts</h3>
-      <div class="shortcut-list">${rows}</div>
+      <div class="shortcut-list">${sectionsHTML}</div>
       <button class="shortcut-close" onclick="hideShortcutOverlay()">Close <kbd>Esc</kbd></button>
     </div>
   `;
@@ -129,22 +164,100 @@ function showConfirm(title, message, onConfirm, confirmLabel = 'Confirm', isDang
 }
 
 // ═══════════════════════════════════════════════════════════
-// GLOBAL KEYBOARD SHORTCUT LISTENER — "?" shows shortcuts
+// GLOBAL KEYBOARD SYSTEM — Single handler for all pages
 // ═══════════════════════════════════════════════════════════
 
+// "g" prefix tracking for vim-style "go" shortcuts (g i → Inbox, g t → Tasks, etc.)
+let _goPrefixActive = false;
+let _goPrefixTimer = null;
+
+function _activateGoPrefix() {
+  _goPrefixActive = true;
+  clearTimeout(_goPrefixTimer);
+  _goPrefixTimer = setTimeout(() => { _goPrefixActive = false; }, 800);
+}
+
+function _handleGoKey(key) {
+  _goPrefixActive = false;
+  clearTimeout(_goPrefixTimer);
+  const goMap = {
+    's': 'feed', 'i': 'inbox', 'k': 'talk', 't': 'tasks',
+    'm': 'mind', 'p': 'pulse', 'q': 'queue', 'r': 'rooms',
+    'b': 'briefing', 'j': 'projects', 'n': 'missions',
+  };
+  if (goMap[key] && typeof nav === 'function') {
+    nav(goMap[key]);
+    return true;
+  }
+  return false;
+}
+
 document.addEventListener('keydown', (e) => {
-  // Don't fire in inputs
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  // Don't fire if command palette is open
+  // ── Always handle ⌘K regardless of focus ──
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    if (typeof paletteOpen !== 'undefined' && paletteOpen) {
+      if (typeof closeCommandPalette === 'function') closeCommandPalette();
+    } else {
+      if (typeof openCommandPalette === 'function') openCommandPalette();
+    }
+    return;
+  }
+
+  // ── Escape: close overlays in priority order ──
+  if (e.key === 'Escape') {
+    if (shortcutOverlayOpen) { e.preventDefault(); hideShortcutOverlay(); return; }
+    if (typeof paletteOpen !== 'undefined' && paletteOpen) { if (typeof closeCommandPalette === 'function') closeCommandPalette(); return; }
+    // Let page-specific handlers deal with other Escape usage
+    return;
+  }
+
+  // ── Don't fire in inputs/textareas ──
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+  // ── Don't fire if command palette is open ──
   if (typeof paletteOpen !== 'undefined' && paletteOpen) return;
 
+  // ── "g" prefix handler ──
+  if (_goPrefixActive && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (_handleGoKey(e.key)) { e.preventDefault(); return; }
+    _goPrefixActive = false; // invalid second key, cancel
+  }
+
+  if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey && !shortcutOverlayOpen) {
+    _activateGoPrefix();
+    return;
+  }
+
+  // ── ? — show keyboard help ──
   if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
     e.preventDefault();
     showShortcutOverlay();
+    return;
   }
 
-  if (e.key === 'Escape' && shortcutOverlayOpen) {
+  // ── Number keys — page navigation (only when not on pages that use numbers) ──
+  const cp = typeof currentPage !== 'undefined' ? currentPage : '';
+  // Inbox and Mind use number keys for their own tabs — skip global nav
+  if (cp !== 'inbox' && cp !== 'mind') {
+    const pageMap = { '1': 'feed', '2': 'inbox', '3': 'talk', '4': 'tasks', '5': 'mind', '6': 'pulse' };
+    if (pageMap[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      if (typeof nav === 'function') nav(pageMap[e.key]);
+      return;
+    }
+  }
+
+  // ── f — cycle stream filter (feed page only) ──
+  if (e.key === 'f' && cp === 'feed' && !e.ctrlKey && !e.metaKey) {
     e.preventDefault();
-    hideShortcutOverlay();
+    const chips = document.querySelectorAll('.stream-chip');
+    if (chips.length > 0) {
+      let activeIdx = -1;
+      chips.forEach((c, i) => { if (c.classList.contains('active')) activeIdx = i; });
+      const nextIdx = (activeIdx + 1) % chips.length;
+      chips[nextIdx].click();
+    }
+    return;
   }
 });
