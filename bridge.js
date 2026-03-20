@@ -2,7 +2,7 @@
 'use strict';
 
 const Bridge = {
-  baseUrl: localStorage.getItem('bridge_url') || '',
+  baseUrl: localStorage.getItem('bridge_url') || (location.pathname.startsWith('/app') ? location.origin : ''),
   token: localStorage.getItem('bridge_token') || '',
   ws: null,
   connected: false,
@@ -13,7 +13,7 @@ const Bridge = {
   // ── Config ──────────────────────────────────────────────
   setToken(t) { this.token = t; localStorage.setItem('bridge_token', t); },
   setBaseUrl(u) { this.baseUrl = u.replace(/\/$/, ''); localStorage.setItem('bridge_url', u); },
-  isConfigured() { return !!(this.token && this.baseUrl); },
+  isConfigured() { return !!(this.baseUrl && (this.token || this.baseUrl === location.origin)); },
 
   // ── HTTP ────────────────────────────────────────────────
   async apiFetch(path, opts = {}) {
