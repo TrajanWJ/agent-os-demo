@@ -111,6 +111,11 @@
             <span class="nav-label">Mind</span>
             <span class="nav-badge" id="mind-badge"></span>
           </a>
+          <a class="nav-item" data-page="explore" onclick="nav('explore')">
+            <span class="nav-icon">📖</span>
+            <span class="nav-label">Docs</span>
+            <span class="nav-badge" id="explore-badge"></span>
+          </a>
         </div>
 
         <div class="nav-group">
@@ -139,11 +144,11 @@
         </a>
       </nav>
       <div class="sidebar-footer">
-        <div class="sidebar-agents">
+        <div class="sidebar-agents" data-tip="Number of agents currently active">
           <span class="agents-dot active"></span>
           <span id="sidebar-active-count"></span>
         </div>
-        <div class="sidebar-xp">
+        <div class="sidebar-xp" data-tip="Your level and experience progress">
           <span class="xp-icon">⭐</span>
           <span id="sidebar-xp">Lv3 · 2840 XP</span>
         </div>
@@ -167,7 +172,7 @@
         </div>
         <div class="topbar-center">
           <div class="omnibus-container" id="omnibus-container">
-            <div class="omnibus-pill" id="omnibus-pill" onclick="focusOmnibus()">
+            <div class="omnibus-pill" id="omnibus-pill" onclick="focusOmnibus()" data-tip="Universal search — type anything or press ⌘K">
               <span class="omnibus-icon">⌘</span>
               <input type="text" class="omnibus-input" id="omnibus-input"
                 placeholder="Ask anything..."
@@ -181,7 +186,7 @@
           </div>
         </div>
         <div class="topbar-right">
-          <div class="topbar-connection-status" id="topbar-connection-status" title="Bridge connection status">
+          <div class="topbar-connection-status" id="topbar-connection-status" data-tip="Bridge connection — green means live data is flowing">
             <span class="conn-dot" id="conn-dot"></span>
             <span class="conn-label" id="conn-label">Connecting...</span>
           </div>
@@ -190,7 +195,7 @@
             <span class="agent-dot-active"></span>
             <span id="active-agents-text"></span>
           </div>
-          <div class="xp-badge" id="xp-badge" onclick="showLevelPanel()">
+          <div class="xp-badge" id="xp-badge" onclick="showLevelPanel()" data-tip="Your Agent OS level — earn XP by completing tasks and reviews">
             <span>⭐ Lv3</span>
             <div class="xp-bar-mini">
               <div class="xp-bar-fill" id="xp-bar-mini-fill"></div>
@@ -218,36 +223,36 @@
         <!-- FEED VIEW -->
         <div id="view-feed" class="view active">
           <!-- Agent Status Bar -->
-          <div class="agent-status-bar" id="agent-status-bar"></div>
+          <div class="agent-status-bar" id="agent-status-bar" data-tip="Agent status bar — shows which agents are active and their current tasks"></div>
 
           <!-- Quick Stats Row -->
           <div class="quick-stats-row" id="quick-stats-row">
-            <div class="quick-stat" onclick="filterStream2('action')" title="Active tasks">
+            <div class="quick-stat" onclick="filterStream2('action')" data-tip="Tasks currently being worked on by agents">
               <span class="quick-stat-icon">⚡</span>
               <span class="quick-stat-value" id="qs-active">0</span>
               <span class="quick-stat-label">Active</span>
             </div>
-            <div class="quick-stat" onclick="filterStream2('completed')" title="Completed today">
+            <div class="quick-stat" onclick="filterStream2('completed')" data-tip="Tasks completed by agents today">
               <span class="quick-stat-icon">✅</span>
               <span class="quick-stat-value" id="qs-completed">0</span>
               <span class="quick-stat-label">Done Today</span>
             </div>
-            <div class="quick-stat" onclick="nav('queue')" title="Pending proposals">
+            <div class="quick-stat" onclick="nav('queue')" data-tip="Pending proposals waiting for your review">
               <span class="quick-stat-icon">📋</span>
               <span class="quick-stat-value" id="qs-proposals">0</span>
               <span class="quick-stat-label">Proposals</span>
             </div>
-            <div class="quick-stat" onclick="filterStream2('errors')" title="Errors">
+            <div class="quick-stat" onclick="filterStream2('errors')" data-tip="Errors encountered today — click to filter">
               <span class="quick-stat-icon">🔴</span>
               <span class="quick-stat-value" id="qs-errors">0</span>
               <span class="quick-stat-label">Errors</span>
             </div>
-            <div class="quick-stat" title="Vault writes today">
+            <div class="quick-stat" data-tip="Vault notes created or updated today">
               <span class="quick-stat-icon">📚</span>
               <span class="quick-stat-value" id="qs-vault">0</span>
               <span class="quick-stat-label">Vault</span>
             </div>
-            <div class="quick-stat" title="System load">
+            <div class="quick-stat" data-tip="Current system CPU/memory load">
               <span class="quick-stat-icon">💻</span>
               <span class="quick-stat-value" id="qs-load">—</span>
               <span class="quick-stat-label">Load</span>
@@ -267,15 +272,15 @@
           </div>
 
           <!-- The Stream -->
-          <div class="stream-filter-bar" id="stream-filter-bar">
+          <div class="stream-filter-bar" id="stream-filter-bar" data-tip="Filter the stream by event type — click a chip to focus">
             <div class="stream-filter-chips">
               <button class="stream-chip active" data-filter="all" onclick="filterStream2('all')">All <span class="chip-count" id="chip-count-all"></span></button>
-              <button class="stream-chip" data-filter="action" onclick="filterStream2('action')">🔴 Needs Action <span class="chip-count" id="chip-count-action"></span></button>
-              <button class="stream-chip" data-filter="completed" onclick="filterStream2('completed')">✅ Completed <span class="chip-count" id="chip-count-completed"></span></button>
-              <button class="stream-chip" data-filter="errors" onclick="filterStream2('errors')">⚠️ Errors <span class="chip-count" id="chip-count-errors"></span></button>
-              <button class="stream-chip" data-filter="vault" onclick="filterStream2('vault')">📚 Vault <span class="chip-count" id="chip-count-vault"></span></button>
-              <button class="stream-chip" data-filter="insights" onclick="filterStream2('insights')">💡 Insights <span class="chip-count" id="chip-count-insights"></span></button>
-              <button class="stream-chip timeline-toggle" id="timeline-toggle-btn" onclick="toggleTimelineView()">🕐 Timeline</button>
+              <button class="stream-chip" data-filter="action" onclick="filterStream2('action')" data-tip="Items that need your attention or decision">🔴 Needs Action <span class="chip-count" id="chip-count-action"></span></button>
+              <button class="stream-chip" data-filter="completed" onclick="filterStream2('completed')" data-tip="Tasks and operations completed by agents">✅ Completed <span class="chip-count" id="chip-count-completed"></span></button>
+              <button class="stream-chip" data-filter="errors" onclick="filterStream2('errors')" data-tip="Errors and warnings from agent operations">⚠️ Errors <span class="chip-count" id="chip-count-errors"></span></button>
+              <button class="stream-chip" data-filter="vault" onclick="filterStream2('vault')" data-tip="Knowledge vault writes and updates">📚 Vault <span class="chip-count" id="chip-count-vault"></span></button>
+              <button class="stream-chip" data-filter="insights" onclick="filterStream2('insights')" data-tip="Agent insights and recommendations">💡 Insights <span class="chip-count" id="chip-count-insights"></span></button>
+              <button class="stream-chip timeline-toggle" id="timeline-toggle-btn" onclick="toggleTimelineView()" data-tip="Switch to timeline view — see events on a time axis">🕐 Timeline</button>
             </div>
             <div class="stream-batch-bar" id="stream-batch-bar" style="display:none">
               <label class="stream-select-all"><input type="checkbox" id="stream-select-all" onchange="toggleSelectAllStream(this.checked)"> Select All</label>
@@ -766,9 +771,8 @@
           <div class="roles-content" id="roles-content"></div>
         </div>
 
-        <!-- Explore View -->
+        <!-- Explore / Documentation View -->
         <div id="view-explore" class="view hidden">
-          <div class="view-header"><h2>🔍 Explore</h2><span class="view-subtitle">Search everything</span></div>
           <div class="explore-content" id="explore-content"></div>
         </div>
 
@@ -984,6 +988,7 @@
       <div class="mobile-menu-divider"></div>
       <div class="mobile-menu-group-label">🧠 KNOW</div>
       <button class="mobile-menu-item" onclick="nav('mind');toggleMobileMenu()">🧠 Mind</button>
+      <button class="mobile-menu-item" onclick="nav('explore');toggleMobileMenu()">📖 Docs</button>
       <div class="mobile-menu-divider"></div>
       <div class="mobile-menu-group-label">⚙️ CONFIGURE</div>
       <button class="mobile-menu-item" onclick="nav('roles');toggleMobileMenu()">🛡️ Roles</button>
@@ -1120,6 +1125,7 @@
   <script src="notifications.js?v=1773994300"></script>
   <script src="bridge.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
+  <script src="explore.js?v=1773994200"></script>
   <script src="help.js?v=1773994100"></script>
   <script src="timeline.js?v=1773994200"></script>
   <script src="workbench.js?v=1773994200"></script>

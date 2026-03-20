@@ -37,7 +37,7 @@ const PAGE_TITLES = {
   feed: 'Stream', queue: 'Proposals', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
-  schedule: 'Briefing', missions: 'Missions', explore: 'Mind',
+  schedule: 'Briefing', missions: 'Missions', explore: 'Explore',
   plans: 'Plans', briefing: 'Briefing', inbox: 'Inbox',
   rooms: 'Rooms', pipelines: 'Pipelines', roles: 'Roles',
   records: 'Records', tasks: 'Tasks', projects: 'Projects'

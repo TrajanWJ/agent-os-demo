@@ -57,7 +57,7 @@ const PAGE_SUBTITLES = {
   briefing:  'Your daily status document — auto-generated from live system data',
   schedule:  'Agent calendar & task timeline',
   plans:     'Agent-managed Kanban boards',
-  explore:   'Search everything across Agent OS',
+  explore:   'Documentation, guides, and everything you need to know about Agent OS',
 };
 
 function injectPageSubtitles() {
