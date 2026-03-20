@@ -1694,51 +1694,148 @@ let mcBlocking = [...MISSION_BLOCKING_DATA];
 let mcPlans = [...MISSION_PLANS_DATA];
 let _missionsRefreshTimer = null;
 
-async function fetchMissionsFromBridge() {
-  if (typeof Bridge === 'undefined' || !Bridge.liveMode) return false;
+// Direct API fetch for real missions + plans (no Bridge dependency)
+async function fetchRealMissions() {
   try {
-    const [missions, feed, proposals, plans] = await Promise.all([
-      Bridge.apiFetch('/api/missions').catch(() => null),
-      Bridge.getMissionsFeed(50).catch(() => null),
-      Bridge.getProposals('pending').catch(() => null),
-      Bridge.getPlans().catch(() => null),
+    const hdrs = { 'Referer': location.href };
+    const [missionsRes, plansRes, tasksRes] = await Promise.all([
+      fetch('/api/missions', { headers: hdrs }).catch(() => null),
+      fetch('/api/plans', { headers: hdrs }).catch(() => null),
+      fetch('/api/tasks/all', { headers: hdrs }).catch(() => null),
     ]);
-    if (missions && Array.isArray(missions) && missions.length > 0) {
-      mcMissions = missions;
-    }
-    if (feed && Array.isArray(feed)) {
-      mcFeed = feed.map(f => ({
-        ts: f.timestamp || f.ts, agent: f.agent_emoji || f.agent || '🤖',
-        type: f.type || 'task', text: f.text || f.message || f.description || f.content || '',
-        mission: f.mission_id || f.mission || '',
-      }));
-    }
-    if (proposals && Array.isArray(proposals)) {
-      mcBlocking = proposals.filter(p => p.status === 'pending').map(p => ({
-        mission: p.mission_id || p.goal_id || '', type: 'proposal',
-        title: p.title || p.description, source: p.agent || p.source || 'Agent',
-      }));
-    }
-    if (plans && Array.isArray(plans)) {
-      mcPlans = plans.map(p => {
-        const tasks = p.tasks || [];
-        return {
-          id: p.id, name: p.name, mission: p.mission_id || p.goal_id || '',
-          backlog: tasks.filter(t => t.column === 'backlog').length,
-          active: tasks.filter(t => t.column === 'active' || t.column === 'in_progress').length,
-          done: tasks.filter(t => t.column === 'done').length,
-          agents: [...new Set(tasks.map(t => t.agent).filter(Boolean))].map(a => {
-            const ag = typeof ga === 'function' ? ga(a) : null;
-            return ag ? ag.emoji : '🤖';
-          }),
-        };
-      });
-    }
-    return true;
+    const missions = missionsRes && missionsRes.ok ? await missionsRes.json() : null;
+    const plans = plansRes && plansRes.ok ? await plansRes.json() : null;
+    const allTasks = tasksRes && tasksRes.ok ? await tasksRes.json() : null;
+    if (!missions && !plans) return null;
+    return {
+      missions: Array.isArray(missions) ? missions : [],
+      plans: Array.isArray(plans) ? plans : [],
+      tasks: Array.isArray(allTasks) ? allTasks : [],
+    };
   } catch (e) {
-    console.warn('[MissionControl] Bridge load failed, using seed data:', e.message);
-    return false;
+    console.warn('[MissionControl] fetchRealMissions failed:', e.message);
+    return null;
   }
+}
+
+// Map raw API missions + plans into the shape mcMissions/mcPlans expect
+function mapRealMissionsToMC(data) {
+  const { missions, plans, tasks } = data;
+  if (missions.length > 0) {
+    mcMissions = missions.map(m => {
+      // Find plans linked to this mission
+      const linked = plans.filter(p => p.mission_id === m.id || p.goal_id === m.id);
+      let tasksDone = 0, tasksTotal = 0, agentSet = new Set();
+      linked.forEach(p => {
+        const pt = p.tasks || [];
+        pt.forEach(t => {
+          tasksTotal++;
+          if (t.column === 'done' || t.status === 'done') tasksDone++;
+          if (t.agent) agentSet.add(t.agent);
+        });
+      });
+      // Also count from dispatch tasks matching mission
+      const dispatchTasks = tasks.filter(t => t.mission_id === m.id || t.mission === m.id);
+      dispatchTasks.forEach(t => {
+        if (!linked.some(p => (p.tasks || []).some(pt => pt.id === t.id))) {
+          tasksTotal++;
+          if (t.status === 'done' || t.status === 'completed') tasksDone++;
+          if (t.agent) agentSet.add(t.agent);
+        }
+      });
+      const progress = m.progress != null ? m.progress : (tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0);
+      const daysActive = m.days_active || (m.created_at ? Math.max(1, Math.floor((Date.now() - new Date(m.created_at).getTime()) / 86400000)) : 0);
+      const velocity = m.velocity != null ? m.velocity : (daysActive > 0 ? +(tasksDone / daysActive).toFixed(1) : 0);
+      return {
+        id: m.id,
+        icon: m.icon || '🎯',
+        title: m.title || m.name || 'Untitled',
+        desc: m.desc || m.description || '',
+        progress,
+        status: m.status || 'active',
+        goal: m.goal || m.category || '',
+        target_date: m.target_date || '',
+        success_criteria: m.success_criteria || '',
+        agents_active: m.agents_active != null ? m.agents_active : agentSet.size,
+        blocking_items: m.blocking_items || 0,
+        velocity,
+        tasks_done: m.tasks_done != null ? m.tasks_done : tasksDone,
+        tasks_total: m.tasks_total != null ? m.tasks_total : tasksTotal,
+        days_active: daysActive,
+        milestones: m.milestones || [],
+      };
+    });
+  }
+  if (plans.length > 0) {
+    mcPlans = plans.map(p => {
+      const pt = p.tasks || [];
+      return {
+        id: p.id, name: p.name, mission: p.mission_id || p.goal_id || '',
+        backlog: pt.filter(t => t.column === 'backlog').length,
+        active: pt.filter(t => t.column === 'active' || t.column === 'in_progress').length,
+        done: pt.filter(t => t.column === 'done').length,
+        agents: [...new Set(pt.map(t => t.agent).filter(Boolean))].map(a => {
+          const ag = typeof ga === 'function' ? ga(a) : null;
+          return ag ? ag.emoji : '🤖';
+        }),
+      };
+    });
+  }
+}
+
+async function fetchMissionsFromBridge() {
+  // Try Bridge first if available
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    try {
+      const [missions, feed, proposals, plans] = await Promise.all([
+        Bridge.apiFetch('/api/missions').catch(() => null),
+        Bridge.getMissionsFeed(50).catch(() => null),
+        Bridge.getProposals('pending').catch(() => null),
+        Bridge.getPlans().catch(() => null),
+      ]);
+      if (missions && Array.isArray(missions) && missions.length > 0) {
+        mcMissions = missions;
+      }
+      if (feed && Array.isArray(feed)) {
+        mcFeed = feed.map(f => ({
+          ts: f.timestamp || f.ts, agent: f.agent_emoji || f.agent || '🤖',
+          type: f.type || 'task', text: f.text || f.message || f.description || f.content || '',
+          mission: f.mission_id || f.mission || '',
+        }));
+      }
+      if (proposals && Array.isArray(proposals)) {
+        mcBlocking = proposals.filter(p => p.status === 'pending').map(p => ({
+          mission: p.mission_id || p.goal_id || '', type: 'proposal',
+          title: p.title || p.description, source: p.agent || p.source || 'Agent',
+        }));
+      }
+      if (plans && Array.isArray(plans)) {
+        mcPlans = plans.map(p => {
+          const tasks = p.tasks || [];
+          return {
+            id: p.id, name: p.name, mission: p.mission_id || p.goal_id || '',
+            backlog: tasks.filter(t => t.column === 'backlog').length,
+            active: tasks.filter(t => t.column === 'active' || t.column === 'in_progress').length,
+            done: tasks.filter(t => t.column === 'done').length,
+            agents: [...new Set(tasks.map(t => t.agent).filter(Boolean))].map(a => {
+              const ag = typeof ga === 'function' ? ga(a) : null;
+              return ag ? ag.emoji : '🤖';
+            }),
+          };
+        });
+      }
+      return true;
+    } catch (e) {
+      console.warn('[MissionControl] Bridge load failed:', e.message);
+    }
+  }
+  // Fallback: direct API fetch
+  const realData = await fetchRealMissions();
+  if (realData && (realData.missions.length > 0 || realData.plans.length > 0)) {
+    mapRealMissionsToMC(realData);
+    return true;
+  }
+  return false;
 }
 
 async function renderMissions() {

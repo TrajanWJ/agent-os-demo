@@ -292,7 +292,13 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   overflow-y: auto;
   display: none;
 }
-.view.active { display: flex; flex-direction: column; }
+.view.active { display: flex; flex-direction: column; animation: fadeSlideIn 0.2s ease-out; }
+
+/* Page transition animation */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* ═══════════════════════════════════════════════════════════
    FEED PAGE
@@ -12040,8 +12046,9 @@ textarea:focus-visible,
 /* ── 5. Enhanced Scrollbar Styling ──────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #181825; }
-::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; transition: background 0.15s; }
 ::-webkit-scrollbar-thumb:hover { background: #585b70; }
+* { scrollbar-color: #45475a #181825; }
 
 /* ── 6. Enhanced Toast System ───────────────────────────── */
 .toast-success { background: #1e3a2f; border-left: 3px solid var(--green); }
@@ -13631,6 +13638,11 @@ textarea:focus-visible,
 .conn-dot.live {
   background: var(--green);
   box-shadow: 0 0 6px rgba(166,227,161,0.6);
+  animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(166,227,161,0.6); }
+  50% { opacity: 0.7; box-shadow: 0 0 10px rgba(166,227,161,0.3); }
 }
 .conn-dot.offline {
   background: var(--red);
