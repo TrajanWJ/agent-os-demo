@@ -350,30 +350,8 @@ function toggleAgent(agentId, enabled) {
   }
 }
 
-function setTheme(theme) {
-  $$('.theme-option').forEach(el => el.classList.remove('active'));
-  const selected = [...$$('.theme-option')].find(el => el.querySelector(`.theme-preview.${theme}`));
-  if (selected) selected.classList.add('active');
-
-  // Apply theme vars (simplified — only Mocha fully implemented)
-  if (theme === 'mocha') {
-    document.documentElement.style.setProperty('--bg-base', '#1e1e2e');
-    document.documentElement.style.setProperty('--bg-surface', '#252536');
-    document.documentElement.style.setProperty('--bg-overlay', '#2a2a3c');
-    document.documentElement.style.setProperty('--text', '#cdd6f4');
-  } else if (theme === 'latte') {
-    document.documentElement.style.setProperty('--bg-base', '#eff1f5');
-    document.documentElement.style.setProperty('--bg-surface', '#e6e9ef');
-    document.documentElement.style.setProperty('--bg-overlay', '#dce0e8');
-    document.documentElement.style.setProperty('--text', '#4c4f69');
-  } else if (theme === 'macchiato') {
-    document.documentElement.style.setProperty('--bg-base', '#24273a');
-    document.documentElement.style.setProperty('--bg-surface', '#2a2d3e');
-    document.documentElement.style.setProperty('--bg-overlay', '#303347');
-    document.documentElement.style.setProperty('--text', '#cad3f5');
-  }
-  toast(`🎨 Theme: ${theme}`, 'info');
-}
+// Theme is now fixed to Obsidian Dark — no switcher needed
+function setTheme() {}
 
 function renderConfigCrons() {
   const container = $('config-crons');

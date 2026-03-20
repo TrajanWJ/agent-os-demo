@@ -19,8 +19,8 @@ let graphAnimId = null;
 
 const MIND_TYPES = ['all','Research','Architecture','Vision','Operations','Report','Code'];
 const TYPE_COLORS = {
-  Research:'#89b4fa', Architecture:'#f9e2af', Vision:'#cba6f7',
-  Operations:'#fab387', Report:'#f38ba8', Code:'#a6e3a1'
+  Research:'#5B8AF0', Architecture:'#D4A574', Vision:'#D4A574',
+  Operations:'#F39C12', Report:'#E74C3C', Code:'#4CAF50'
 };
 
 function initMind() {
@@ -217,7 +217,7 @@ function drawGraph() {
   const ctx = graphCtx;
   const W = graphCanvas.width, H = graphCanvas.height;
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#1e1e2e';
+  ctx.fillStyle = '#0f0f12';
   ctx.fillRect(0, 0, W, H);
 
   // Edges
@@ -242,7 +242,7 @@ function drawGraph() {
       ctx.beginPath();
       ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2);
       const gr = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r + 8);
-      gr.addColorStop(0, (n.hex || '#cba6f7') + '60');
+      gr.addColorStop(0, (n.hex || '#D4A574') + '60');
       gr.addColorStop(1, 'transparent');
       ctx.fillStyle = gr;
       ctx.fill();
@@ -250,7 +250,7 @@ function drawGraph() {
 
     ctx.beginPath();
     ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = n.hex || '#cba6f7';
+    ctx.fillStyle = n.hex || '#D4A574';
     ctx.fill();
     ctx.strokeStyle = isS ? '#fff' : 'rgba(255,255,255,0.25)';
     ctx.lineWidth = isS ? 2 : 1;
@@ -470,7 +470,7 @@ function renderTimeline() {
   const range = maxD - minD || 1;
 
   desktopSorted.forEach((note, i) => {
-    const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
+    const agent = ga(note.agent) || { emoji: '🤖', color: '#D4A574' };
     const pct = (new Date(note.date).getTime() - minD) / range;
     const x = 60 + pct * (trackW - 120);
     const above = i % 2 === 0;
@@ -481,7 +481,7 @@ function renderTimeline() {
     item.onclick = () => openVaultNote(note);
     item.innerHTML = `
       <div class="timeline-label ${above ? 'above' : 'below'}">${agent.emoji} ${note.title.substring(0, 22)}${note.title.length > 22 ? '…' : ''}</div>
-      <div class="timeline-dot" style="background:${agent.color || '#cba6f7'}"></div>
+      <div class="timeline-dot" style="background:${agent.color || '#D4A574'}"></div>
     `;
     track.appendChild(item);
   });
@@ -494,7 +494,7 @@ function renderVerticalTimeline(track, sorted) {
 
   let lastDate = '';
   sorted.forEach(note => {
-    const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
+    const agent = ga(note.agent) || { emoji: '🤖', color: '#D4A574' };
     const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
     const cc = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
 
@@ -626,7 +626,7 @@ function renderCostChart() {
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = '';
   const agents = ['righthand', 'researcher', 'coder', 'vault', 'other'];
-  const colors = { righthand: '#f9e2af', researcher: '#89b4fa', coder: '#a6e3a1', vault: '#cba6f7', other: '#94e2d5' };
+  const colors = { righthand: '#D4A574', researcher: '#5B8AF0', coder: '#4CAF50', vault: '#D4A574', other: '#1ABC9C' };
   const barW = (W - 60) / COST_DATA.length;
   const maxT = Math.max(...COST_DATA.map(d => agents.reduce((s, a) => s + (d[a] || 0), 0)));
 
@@ -641,7 +641,7 @@ function renderCostChart() {
       rect.setAttribute('y', y);
       rect.setAttribute('width', barW - 8);
       rect.setAttribute('height', bH);
-      rect.setAttribute('fill', colors[agent] || '#94e2d5');
+      rect.setAttribute('fill', colors[agent] || '#1ABC9C');
       rect.setAttribute('rx', '2');
       svg.appendChild(rect);
     });
@@ -773,7 +773,7 @@ function makeBoardCard(card, colId) {
 }
 
 function openBoardCard(card, colId) {
-  const agent = ga(card.agent) || { emoji: '🤖', name: card.agent, color: '#cba6f7' };
+  const agent = ga(card.agent) || { emoji: '🤖', name: card.agent, color: '#D4A574' };
   const pCls = (card.priority || 'P3').toLowerCase();
   const col = BOARD_COLUMNS.find(c => c.id === colId);
   const modal = $('card-modal-content');

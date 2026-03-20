@@ -244,7 +244,7 @@ function renderFeed() {
 }
 
 function makeFeedCard(event, isNew = false) {
-  const agent = ga(event.agent) || { emoji: '🤖', name: event.agent, color: '#cba6f7' };
+  const agent = ga(event.agent) || { emoji: '🤖', name: event.agent, color: '#D4A574' };
   const card = document.createElement('div');
   card.className = `feed-card type-${event.type}${event.pinned ? ' pinned' : ''}${event.urgent ? ' urgent' : ''}${isNew ? ' new' : ''}`;
   card.dataset.id = event.id;
@@ -355,7 +355,7 @@ function renderQueue() {
 }
 
 function makeQueueCard(q) {
-  const agent = ga(q.agent) || { emoji: '🤖', name: q.agent, color: '#cba6f7' };
+  const agent = ga(q.agent) || { emoji: '🤖', name: q.agent, color: '#D4A574' };
   const pct = (q.remaining / q.ttl) * 100;
   const urgency = pct < 20 ? 'urgent' : pct < 40 ? 'warning' : '';
 
@@ -668,9 +668,9 @@ let typingTimer = null;
 const THREAD_REPLIES = {};
 
 const CHANNEL_COLOR = {
-  bridge: '#cba6f7', dev: '#a6e3a1', 'research-feed': '#89b4fa',
-  'devils-corner': '#f38ba8', 'ops-log': '#fab387', dispatch: '#f9e2af',
-  'code-output': '#a6e3a1', 'agent-feed': '#94e2d5',
+  bridge: '#D4A574', concierge: '#D4A574', dev: '#4CAF50', 'research-feed': '#5B8AF0',
+  'devils-corner': '#E74C3C', 'ops-log': '#F39C12', dispatch: '#E67E22',
+  'code-output': '#4CAF50', 'agent-feed': '#1ABC9C',
 };
 
 function renderChannelList() {
@@ -833,7 +833,7 @@ function switchChannel(chId) {
   $('message-input').placeholder = `Message #${chId}`;
 
   // Update topbar
-  const color = CHANNEL_COLOR[chId] || '#cba6f7';
+  const color = CHANNEL_COLOR[chId] || '#D4A574';
   $('current-channel-name').style.color = color;
 
   // Show channel topic
@@ -856,7 +856,18 @@ function switchChannel(chId) {
 function selectDM(agentId) {
   currentDM = agentId;
   talkMode = 'dms';
-  setTalkMode('dms');
+
+  // Update server rail icons
+  const serverIcons = $$('.server-icon');
+  serverIcons[0].classList.remove('active');
+  $('dm-icon').classList.add('active');
+  // Update mobile tabs
+  $$('.mobile-talk-tab').forEach((tab, i) => {
+    tab.classList.toggle('active', i === 1);
+  });
+
+  // Re-render DM list with correct active state
+  renderChannelList();
 
   $$('.channel-item').forEach(el => {
     const ag = AGENTS.find(a => a.emoji === el.querySelector('span')?.textContent);
@@ -865,7 +876,7 @@ function selectDM(agentId) {
 
   const agent = ga(agentId);
   $('current-channel-name').textContent = agent ? `${agent.emoji} ${agent.name}` : agentId;
-  $('current-channel-name').style.color = agent?.color || '#cba6f7';
+  $('current-channel-name').style.color = agent?.color || '#D4A574';
   $('message-input').placeholder = `Message ${agent?.name || agentId}...`;
 
   renderMessages(null, agentId);
@@ -906,7 +917,7 @@ function renderMessages(channelId, dmId = null) {
 
 function makeMessageGroup(msg, collapsed = false, channelId = null) {
   const isUser = msg.agent === 'user';
-  const agent = isUser ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : (ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' });
+  const agent = isUser ? { emoji: '🧑', name: 'You', color: '#D4A574' } : (ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#D4A574' });
 
   const group = document.createElement('div');
   group.className = `msg-group${collapsed ? ' collapsed' : ''}${isUser ? ' msg-user' : ''}`;
@@ -921,7 +932,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
       replyHTML = `
         <div class="msg-reply-ref">
           <span>↩</span>
-          <span class="reply-author" style="color:${ga(refMsg.agent)?.color || '#cba6f7'}">${refAgent.name}</span>
+          <span class="reply-author" style="color:${ga(refMsg.agent)?.color || '#D4A574'}">${refAgent.name}</span>
           <span>${refMsg.text.substring(0, 60)}${refMsg.text.length > 60 ? '...' : ''}</span>
         </div>
       `;
@@ -935,7 +946,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
   let embedHTML = '';
   if (msg.embed) {
     embedHTML = `
-      <div class="msg-embed" style="border-color:${msg.embed.color || '#cba6f7'}">
+      <div class="msg-embed" style="border-color:${msg.embed.color || '#D4A574'}">
         <div class="embed-title">${msg.embed.title}</div>
         <div class="embed-desc">${msg.embed.desc}</div>
       </div>
@@ -1141,6 +1152,38 @@ function handleSlashCommand(text) {
       toast(`🔍 Searching: ${args || '...'}`, 'info');
       appendSystemMessage(`Search results for "${args}":\n• 3 vault notes matched\n• 2 recent conversations\n• 1 dispatched task`);
       break;
+    case '/ask': {
+      const askParts = args.split(/\s+/);
+      const targetAgent = askParts[0] || 'righthand';
+      const question = askParts.slice(1).join(' ') || 'How are you?';
+      const agent = ga(targetAgent) || AGENTS[0];
+      appendSystemMessage(`Asking ${agent.emoji} ${agent.name}: "${question}"`);
+      setTimeout(() => {
+        appendSystemMessage(`${agent.emoji} **${agent.name}**: I've received your question and I'm working on it. I'll update you shortly.`);
+      }, 1500);
+      break;
+    }
+    case '/pin': {
+      const msgs = currentDM ? (DM_MESSAGES[currentDM] || []) : (DC_MESSAGES[currentChannel] || []);
+      const lastMsg = msgs[msgs.length - 1];
+      if (lastMsg && currentChannel) {
+        pinMessage(lastMsg.id, currentChannel);
+      } else {
+        toast('📌 No message to pin', 'error');
+      }
+      break;
+    }
+    case '/thread': {
+      const msgs2 = currentDM ? (DM_MESSAGES[currentDM] || []) : (DC_MESSAGES[currentChannel] || []);
+      const lastMsg2 = msgs2[msgs2.length - 1];
+      if (lastMsg2) {
+        threadFromMessage(lastMsg2.id);
+        toast('🧵 Thread started', 'success');
+      } else {
+        toast('🧵 No message to thread', 'error');
+      }
+      break;
+    }
     default:
       toast(`Unknown command: ${cmd}`, 'error');
       return;
@@ -1344,7 +1387,7 @@ function threadFromMessage(msgId) {
   if (!THREAD_REPLIES[msgId]) {
     THREAD_REPLIES[msgId] = [];
     // Seed with 2-3 fake replies for demo
-    const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#cba6f7' };
+    const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#D4A574' };
     const otherAgents = AGENTS.filter(a => a.id !== msg.agent).slice(0, 2);
     const fakeReplies = [
       { id: 'tr_' + msgId + '_1', agent: otherAgents[0]?.id || 'researcher', text: 'Good point — I\'ll factor this into my analysis.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 60 },
@@ -1365,11 +1408,11 @@ function threadFromMessage(msgId) {
 }
 
 function renderThreadPanel(msgId, msg) {
-  const agent = ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' };
+  const agent = ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#D4A574' };
   const replies = THREAD_REPLIES[msgId] || [];
 
   const repliesHTML = replies.map(r => {
-    const ra = ga(r.agent) || { emoji: '🤖', name: r.agent, color: '#cba6f7' };
+    const ra = ga(r.agent) || { emoji: '🤖', name: r.agent, color: '#D4A574' };
     const time = r.time || new Date(r.ts * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     return `
       <div class="thread-reply">
@@ -1543,6 +1586,14 @@ document.addEventListener('click', e => {
 
 // ── Initial Talk render ───────────────────────────────────
 function initTalk() {
+  // Ensure channels with demo data have message entries
+  // Map concierge to bridge messages if concierge has none
+  if (!DC_MESSAGES['concierge'] && DC_MESSAGES['bridge']) {
+    DC_MESSAGES['concierge'] = DC_MESSAGES['bridge'];
+  }
+  if (!DC_PINNED['concierge'] && DC_PINNED['bridge']) {
+    DC_PINNED['concierge'] = DC_PINNED['bridge'];
+  }
   renderChannelList();
-  switchChannel('bridge');
+  switchChannel('concierge');
 }

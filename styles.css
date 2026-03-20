@@ -1,25 +1,25 @@
-/* Agent OS v7 — Catppuccin Mocha Dark Theme + Frosted Glass */
+/* Agent OS v7 — Obsidian Dark Theme + Frosted Glass */
 
 :root {
-  --bg-base:    #1e1e2e;
-  --bg-surface: #252536;
-  --bg-overlay: #2a2a3c;
-  --bg-raised:  #313145;
-  --bg-crust:   #181825;
-  --accent:     #cba6f7;
-  --accent2:    #89b4fa;
-  --green:      #a6e3a1;
-  --red:        #f38ba8;
-  --yellow:     #f9e2af;
-  --orange:     #fab387;
-  --teal:       #94e2d5;
-  --pink:       #f5c2e7;
-  --text:       #cdd6f4;
-  --text-muted: #6c7086;
-  --text-dim:   #9399b2;
-  --border:     #313145;
-  --glass:      rgba(24,24,37,0.75);
-  --glass-border: rgba(49,49,69,0.6);
+  --bg-base:    #0f0f12;
+  --bg-surface: #16161a;
+  --bg-overlay: #1e1e24;
+  --bg-raised:  #26262e;
+  --bg-crust:   #0b0b0e;
+  --accent:     #D4A574;
+  --accent2:    #5B8AF0;
+  --green:      #4CAF50;
+  --red:        #E74C3C;
+  --yellow:     #F39C12;
+  --orange:     #E67E22;
+  --teal:       #1ABC9C;
+  --pink:       #E91E63;
+  --text:       #e8e8f0;
+  --text-muted: #8888a0;
+  --text-dim:   #a0a0b8;
+  --border:     #2a2a35;
+  --glass:      rgba(11,11,14,0.75);
+  --glass-border: rgba(42,42,53,0.6);
   --sidebar-w:  220px;
   --topbar-h:   52px;
   --mobile-bar-h: 64px;
@@ -294,7 +294,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   border: 1px solid transparent;
 }
 .chip:hover { background: var(--bg-overlay); color: var(--text); }
-.chip.active { background: var(--accent); color: #1e1e2e; font-weight: 600; }
+.chip.active { background: var(--accent); color: #0f0f12; font-weight: 600; }
 
 .feed-list {
   flex: 1;
@@ -532,7 +532,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   padding: 8px 16px;
   border-radius: var(--radius);
   background: var(--accent);
-  color: #1e1e2e;
+  color: #0f0f12;
   font-weight: 600;
   align-self: flex-end;
   transition: all var(--transition);
@@ -1079,7 +1079,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   flex-shrink: 0;
   transition: all var(--transition);
 }
-.input-attach-btn:hover { background: var(--accent); color: #1e1e2e; }
+.input-attach-btn:hover { background: var(--accent); color: #0f0f12; }
 .message-input-wrapper {
   flex: 1;
   position: relative;
@@ -1132,7 +1132,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   width: 32px; height: 32px;
   border-radius: 50%;
   background: var(--accent);
-  color: #1e1e2e;
+  color: #0f0f12;
   font-size: 16px;
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
@@ -1292,7 +1292,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   color: var(--text-dim);
   transition: all var(--transition);
 }
-.view-toggle.active { background: var(--accent); color: #1e1e2e; font-weight: 600; }
+.view-toggle.active { background: var(--accent); color: #0f0f12; font-weight: 600; }
 .mind-search {
   flex: 1;
   max-width: 320px;
@@ -1772,7 +1772,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   border: 1px solid var(--border);
   transition: all var(--transition);
 }
-.quick-btn:hover { background: var(--accent); color: #1e1e2e; border-color: var(--accent); }
+.quick-btn:hover { background: var(--accent); color: #0f0f12; border-color: var(--accent); }
 
 /* ═══════════════════════════════════════════════════════════
    BOARD PAGE
@@ -1790,7 +1790,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   padding: 6px 14px;
   border-radius: var(--radius);
   background: var(--accent);
-  color: #1e1e2e;
+  color: #0f0f12;
   font-weight: 600;
   font-size: 13px;
   transition: all var(--transition);
@@ -2165,9 +2165,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
-.theme-preview.mocha { background: #1e1e2e; }
-.theme-preview.latte { background: #eff1f5; }
-.theme-preview.macchiato { background: #24273a; }
+.theme-preview.obsidian { background: #0f0f12; }
 
 /* Skills */
 .skills-list { display: flex; flex-direction: column; gap: 6px; }
@@ -2377,7 +2375,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
 .levelup-text { font-size: 16px; color: var(--text-dim); margin-bottom: 20px; }
 .levelup-card button {
   background: var(--accent);
-  color: #1e1e2e;
+  color: #0f0f12;
   font-weight: 700;
   padding: 10px 28px;
   border-radius: var(--radius);
