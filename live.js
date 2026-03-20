@@ -497,6 +497,8 @@ function updateMetric(id, value) {
 
 // ── Discord channels (real structure) ─────────────────────
 async function loadChannels() {
+  // Skip if bridge.js already replaced DC_CHANNELS with proper numeric IDs
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) return;
   const data = await apiFetch('channels');
   if (!data || data.error) return;
 
