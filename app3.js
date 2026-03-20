@@ -1535,11 +1535,183 @@ async function renderMissions() {
   if (mcSelectedMission) {
     renderMCDetail(mcSelectedMission);
   } else {
-    renderMCOverviewGrid();
+    renderMCHillAndCards();
   }
   
   // Start auto-refresh every 30s
   startMissionsRefresh();
+}
+
+// ── Hill Chart ────────────────────────────────────────────
+
+function renderMCHillAndCards() {
+  const detail = $('mc-detail');
+  if (!detail) return;
+
+  const active = mcMissions.filter(m => m.status !== 'completed' && m.status !== 'planned');
+  const planned = mcMissions.filter(m => m.status === 'planned');
+  const completed = mcMissions.filter(m => m.status === 'completed');
+  const all = [...active, ...planned, ...completed];
+
+  detail.innerHTML = `
+    <div class="hill-chart-container">
+      <div class="hill-chart-title">Mission Progress</div>
+      <div class="hill-chart-labels">
+        <span class="hill-label-left">Figuring it out</span>
+        <span class="hill-label-right">Making it happen</span>
+      </div>
+      <svg class="hill-chart-svg" viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="hill-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#1e1e2e"/>
+            <stop offset="50%" stop-color="#313244"/>
+            <stop offset="100%" stop-color="#1e1e2e"/>
+          </linearGradient>
+          <linearGradient id="hill-stroke-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#cba6f7" stop-opacity="0.4"/>
+            <stop offset="50%" stop-color="#cba6f7"/>
+            <stop offset="100%" stop-color="#a6e3a1" stop-opacity="0.4"/>
+          </linearGradient>
+          <filter id="dot-shadow">
+            <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.5"/>
+          </filter>
+          <filter id="dot-glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- Hill fill -->
+        <path d="M0,180 C150,180 150,40 300,40 C450,40 450,180 600,180 Z" fill="url(#hill-grad)" opacity="0.6"/>
+        <!-- Hill curve -->
+        <path d="M0,180 C150,180 150,40 300,40 C450,40 450,180 600,180" fill="none" stroke="url(#hill-stroke-grad)" stroke-width="2"/>
+        <!-- Midline -->
+        <line x1="300" y1="35" x2="300" y2="185" stroke="#585b70" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
+        <!-- Mission dots -->
+        ${all.map(m => {
+          const pos = hillPosition(m.progress);
+          const color = hillDotColor(m);
+          const r = hillDotSize(m);
+          return `
+            <g class="hill-dot-group" data-mission="${m.id}" onclick="selectMCMission('${m.id}')" style="cursor:pointer">
+              <circle cx="${pos.x}" cy="${pos.y}" r="${r + 4}" fill="${color}" opacity="0.15" class="hill-dot-pulse"/>
+              <circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${color}" filter="url(#dot-shadow)" class="hill-dot"/>
+              <title>${m.title} — ${m.progress}%</title>
+            </g>
+          `;
+        }).join('')}
+      </svg>
+      <div class="hill-chart-legend">
+        <span class="hill-legend-item"><span class="hill-legend-dot" style="background:#a6e3a1"></span>Active</span>
+        <span class="hill-legend-item"><span class="hill-legend-dot" style="background:#89b4fa"></span>Planned</span>
+        <span class="hill-legend-item"><span class="hill-legend-dot" style="background:#94e2d5"></span>Complete</span>
+        <span class="hill-legend-item"><span class="hill-legend-dot" style="background:#f38ba8"></span>Blocked</span>
+      </div>
+    </div>
+
+    <div class="mc-cards-grid">
+      ${active.map(m => renderMissionCard(m)).join('')}
+      ${planned.map(m => renderMissionCard(m)).join('')}
+      ${completed.map(m => renderMissionCard(m)).join('')}
+    </div>
+  `;
+
+  // Animate hill dots on mount
+  requestAnimationFrame(() => {
+    detail.querySelectorAll('.hill-dot').forEach((dot, i) => {
+      dot.style.opacity = '0';
+      dot.style.transform = 'scale(0)';
+      setTimeout(() => {
+        dot.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1)';
+        dot.style.opacity = '1';
+        dot.style.transform = 'scale(1)';
+      }, i * 80);
+    });
+    // Animate progress rings
+    detail.querySelectorAll('.mc-card-ring-fill').forEach(ring => {
+      const target = ring.getAttribute('data-target-offset');
+      if (target) {
+        ring.style.strokeDashoffset = ring.getAttribute('data-full-circ');
+        setTimeout(() => {
+          ring.style.transition = 'stroke-dashoffset 0.8s ease';
+          ring.style.strokeDashoffset = target;
+        }, 200);
+      }
+    });
+  });
+}
+
+function hillPosition(progress) {
+  // Map 0-100% to x: 30-570 on the SVG
+  const x = 30 + (progress / 100) * 540;
+  // Hill curve: y = 180 at edges, 40 at peak (x=300)
+  // Using the same bezier logic: parabola approximation
+  const t = (x - 0) / 600;
+  // Approximate the hill shape
+  const y = 180 - 140 * Math.sin(t * Math.PI);
+  return { x, y: y + 2 }; // slight offset to sit on curve
+}
+
+function hillDotColor(m) {
+  if (m.status === 'completed') return '#94e2d5';
+  if (m.status === 'planned') return '#89b4fa';
+  if (m.blocking_items > 0) return '#f38ba8';
+  return '#a6e3a1';
+}
+
+function hillDotSize(m) {
+  // Size by importance: more tasks = bigger, blocking = bigger
+  if (m.status === 'completed') return 6;
+  if (m.blocking_items > 0) return 9;
+  if (m.tasks_total >= 15) return 8;
+  return 7;
+}
+
+function renderMissionCard(m) {
+  const progressColor = m.status === 'completed' ? 'var(--teal)' : m.progress >= 50 ? 'var(--green)' : 'var(--yellow)';
+  const statusMap = { active:'Active', planned:'Planning', completed:'Complete' };
+  const statusClass = m.status === 'completed' ? 'mc-status-complete' : m.status === 'planned' ? 'mc-status-planning' : m.blocking_items > 0 ? 'mc-status-blocked' : 'mc-status-active';
+  const statusLabel = m.blocking_items > 0 && m.status === 'active' ? 'Blocked' : (statusMap[m.status] || 'Active');
+  const blocking = mcBlocking.filter(b => b.mission === m.id);
+
+  const ringSize = 48;
+  const r = (ringSize - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (m.progress / 100) * circ;
+
+  return `
+    <div class="mc-mission-card" onclick="selectMCMission('${m.id}')">
+      <div class="mc-card-top-row">
+        <div class="mc-card-title-area">
+          <span class="mc-card-icon">${m.icon}</span>
+          <div>
+            <div class="mc-card-title">${m.title}</div>
+            <div class="mc-card-desc">${m.desc}</div>
+          </div>
+        </div>
+        <div class="mc-card-ring-wrap">
+          <svg width="${ringSize}" height="${ringSize}" viewBox="0 0 ${ringSize} ${ringSize}">
+            <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="var(--bg-raised)" stroke-width="4"/>
+            <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="${progressColor}" stroke-width="4"
+              stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
+              stroke-linecap="round" transform="rotate(-90 ${ringSize/2} ${ringSize/2})"
+              class="mc-card-ring-fill" data-target-offset="${offset}" data-full-circ="${circ}"/>
+          </svg>
+          <span class="mc-card-ring-pct">${m.progress}%</span>
+        </div>
+      </div>
+      <div class="mc-card-stats-row">
+        <span class="mc-card-stat"><span class="mc-card-stat-val">${m.tasks_done}/${m.tasks_total}</span> tasks</span>
+        <span class="mc-card-stat"><span class="mc-card-stat-val">${m.agents_active}</span> agents</span>
+        <span class="mc-card-stat"><span class="mc-card-stat-val">${m.days_active}d</span> active</span>
+        <span class="mc-card-stat"><span class="mc-card-stat-val">${m.velocity.toFixed(1)}</span>/day</span>
+      </div>
+      <div class="mc-card-bottom-row">
+        <span class="mc-card-status ${statusClass}">${statusLabel}</span>
+        ${blocking.length > 0 ? blocking.map(b => `<span class="mc-card-blocking-pill">⚠ ${b.title}</span>`).join('') : ''}
+      </div>
+      ${blocking.length > 0 ? `<div class="mc-card-needs-input">⚡ Needs your input · ${blocking.length} item${blocking.length>1?'s':''}</div>` : ''}
+    </div>
+  `;
 }
 
 function startMissionsRefresh() {
@@ -1553,7 +1725,7 @@ function startMissionsRefresh() {
       if (mcSelectedMission) {
         renderMCDetail(mcSelectedMission);
       } else {
-        renderMCOverviewGrid();
+        renderMCHillAndCards();
       }
     }
   }, 30000);
@@ -1628,7 +1800,7 @@ function selectMCMission(id) {
   renderMCDetail(id);
 }
 
-function renderMCOverviewGrid() {
+function renderMCHillAndCards() {
   const detail = $('mc-detail');
   if (!detail) return;
 
@@ -1682,27 +1854,26 @@ function renderMCDetail(missionId) {
   const detail = $('mc-detail');
   if (!detail) return;
   const m = mcMissions.find(x => x.id === missionId);
-  if (!m) { renderMCOverviewGrid(); return; }
+  if (!m) { renderMCHillAndCards(); return; }
 
-  const statusClass = m.status === 'completed' ? 'mc-badge-completed' : m.status === 'planned' ? 'mc-badge-planned' : 'mc-badge-active';
-  const statusLabel = m.status === 'completed' ? '✓ Completed' : m.status === 'planned' ? 'Planned' : 'Active';
+  const statusClass = m.status === 'completed' ? 'mc-badge-completed' : m.status === 'planned' ? 'mc-badge-planned' : m.blocking_items > 0 ? 'mc-badge-blocked' : 'mc-badge-active';
+  const statusLabel = m.status === 'completed' ? '✓ Completed' : m.status === 'planned' ? 'Planned' : m.blocking_items > 0 ? '⚠ Blocked' : 'Active';
+  const linkedAgents = AGENTS.filter(a => a.status === 'active').slice(0, m.agents_active);
 
   detail.innerHTML = `
     <div class="mc-detail-header">
       <div class="mc-detail-title-row">
-        <button class="mc-back-btn" onclick="mcSelectedMission=null;renderMCSidebar();renderMCOverviewGrid()">←</button>
+        <button class="mc-back-btn" onclick="mcSelectedMission=null;renderMCSidebar();renderMCHillAndCards()">←</button>
         <span class="mc-detail-icon">${m.icon}</span>
         <h2 class="mc-detail-title">${m.title}</h2>
         <span class="mc-badge ${statusClass}">${statusLabel}</span>
       </div>
-      ${m.goal ? `<div class="mc-detail-goal">Serves: ${m.goal}</div>` : ''}
-      <details class="mc-detail-criteria">
-        <summary>Target & Criteria</summary>
-        <div class="mc-detail-criteria-body">
-          ${m.target_date ? `<div><strong>Target:</strong> ${m.target_date}</div>` : ''}
-          ${m.success_criteria ? `<div><strong>Success:</strong> ${m.success_criteria}</div>` : ''}
-        </div>
-      </details>
+      <div class="mc-detail-meta-row">
+        ${m.goal ? `<span class="mc-detail-meta-chip">🎯 ${m.goal}</span>` : ''}
+        ${m.target_date ? `<span class="mc-detail-meta-chip">📅 ${m.target_date}</span>` : ''}
+        ${linkedAgents.length > 0 ? `<span class="mc-detail-meta-chip">${linkedAgents.map(a => a.emoji).join('')} ${linkedAgents.length} agent${linkedAgents.length>1?'s':''}</span>` : ''}
+      </div>
+      ${m.success_criteria ? `<div class="mc-detail-criteria-inline">✅ <strong>Success:</strong> ${m.success_criteria}</div>` : ''}
     </div>
 
     <div class="mc-tabs">
@@ -1790,8 +1961,33 @@ function mcRenderOverview(el, missionId) {
 
     <div class="mc-milestones-section">
       <div class="mc-section-label">Milestones</div>
-      <div class="mc-milestones-row">
-        ${m.milestones.map(ms => `<span class="milestone-badge${ms.includes('✓')?' earned':''}">${ms}</span>`).join('')}
+      <div class="mc-milestone-track">
+        <div class="mc-milestone-bar">
+          <div class="mc-milestone-bar-fill" style="width:${m.progress}%;background:${progressColor}"></div>
+        </div>
+        <div class="mc-milestone-markers">
+          ${m.milestones.map((ms, i) => {
+            const pos = ((i + 1) / m.milestones.length) * 100;
+            const done = ms.includes('✓');
+            return `<div class="mc-milestone-marker${done ? ' done' : ''}" style="left:${pos}%">
+              <div class="mc-milestone-dot"></div>
+              <div class="mc-milestone-label">${ms.replace(' ✓','')}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="mc-linked-section">
+      <div class="mc-section-label">Linked Vault Notes</div>
+      <div class="mc-linked-items">
+        ${VAULT_NOTES.filter(v => v.tags.some(t => m.title.toLowerCase().includes(t) || m.desc.toLowerCase().includes(t))).slice(0,3).map(v => `
+          <div class="mc-linked-item">
+            <span class="mc-linked-icon">📝</span>
+            <span class="mc-linked-title">${v.title}</span>
+            <span class="mc-linked-conf">${v.confidence}%</span>
+          </div>
+        `).join('') || '<div class="mc-empty" style="padding:8px">No linked notes found</div>'}
       </div>
     </div>
   `;
@@ -1937,16 +2133,30 @@ function mcRenderDecisions(el, missionId) {
 function showNewMissionModal() {
   const m = document.createElement('div');
   m.id = 'new-mission-modal';
+  m.className = 'modal-overlay';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
   m.innerHTML = `
-    <div style="background:var(--bg-secondary,#1e1e2e);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:480px;">
-      <h3 style="margin:0 0 16px;color:var(--text);font-size:16px;">🎯 New Mission</h3>
-      <input id="nm-title" placeholder="Mission title..." style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;box-sizing:border-box;" />
-      <textarea id="nm-desc" placeholder="Description / success criteria..." rows="3" style="width:100%;padding:8px 12px;margin-bottom:12px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;resize:vertical;box-sizing:border-box;"></textarea>
-      <input id="nm-deadline" type="date" placeholder="Deadline (optional)" style="width:100%;padding:8px 12px;margin-bottom:16px;background:var(--bg-tertiary,#181825);color:var(--text);border:1px solid var(--border);border-radius:8px;box-sizing:border-box;" />
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button onclick="document.getElementById('new-mission-modal').remove()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer;">Cancel</button>
-        <button onclick="submitNewMission()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#000;font-weight:600;cursor:pointer;">Create Mission</button>
+    <div class="modal-panel" style="background:var(--bg-surface,#252536);border:1px solid var(--border);border-radius:16px;padding:28px;width:90%;max-width:520px;">
+      <h3 style="margin:0 0 20px;color:var(--text);font-size:18px;font-weight:700;">🎯 New Mission</h3>
+      <label class="modal-label">Title</label>
+      <input id="nm-title" placeholder="e.g. Ship Agent OS v1" class="modal-input" />
+      <label class="modal-label">Goal / Description</label>
+      <textarea id="nm-desc" placeholder="What does success look like?" rows="3" class="modal-textarea"></textarea>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="modal-label">Target Date</label>
+          <input id="nm-deadline" type="date" class="modal-input" />
+        </div>
+        <div>
+          <label class="modal-label">Linked Project</label>
+          <input id="nm-project" placeholder="(optional)" class="modal-input" />
+        </div>
+      </div>
+      <label class="modal-label">Success Criteria</label>
+      <textarea id="nm-criteria" placeholder="Measurable criteria for completion..." rows="2" class="modal-textarea"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <button onclick="document.getElementById('new-mission-modal').remove()" class="modal-btn-cancel">Cancel</button>
+        <button onclick="submitNewMission()" class="modal-btn-primary">Create Mission</button>
       </div>
       <div id="nm-status" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
     </div>

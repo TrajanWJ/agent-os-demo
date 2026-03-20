@@ -42,34 +42,64 @@ let inboxItems = [];
 let inboxFilter = 'all';
 let inboxSelectedId = null;
 let inboxFocusIdx = -1;
+let inboxSearchQuery = '';
+let inboxSortMode = 'newest';
+let inboxSelectedIds = new Set();
+let inboxContextVisible = true;
+let inboxLabels = {};   // id -> [label strings]
+let inboxDoneItems = []; // items moved to Done
+
+// Priority system
+const INBOX_PRIORITIES = {
+  P0: { label: 'P0', color: '#f38ba8', bg: 'rgba(243,139,168,0.15)' },
+  P1: { label: 'P1', color: '#fab387', bg: 'rgba(250,179,135,0.15)' },
+  P2: { label: 'P2', color: '#f9e2af', bg: 'rgba(249,226,175,0.15)' },
+  P3: { label: 'P3', color: '#a6e3a1', bg: 'rgba(166,227,161,0.15)' },
+};
+
+function getItemPriority(item) {
+  if (item._priority) return item._priority;
+  if (item.priority === 'urgent') return 'P0';
+  return 'P3';
+}
+
+function getCategoryForItem(item) {
+  if (item.category === 'urgent') return 'urgent';
+  if (item.category === 'proposals' || item._type === 'proposal') return 'proposals';
+  if (item.category === 'questions' || item._type === 'feed_question') return 'questions';
+  if (item.category === 'reports') return 'reports';
+  return item.category || 'proposals';
+}
 
 // Seed data
 function seedInboxItems() {
-  // Check if inbox was cleared by user
   if (localStorage.getItem('inbox-cleared')) return [];
   return [
     {
-      id: 'inb_1', agent: 'researcher', category: 'review', priority: 'normal', unread: true,
+      id: 'inb_1', agent: 'researcher', category: 'proposals', priority: 'normal', _priority: 'P2', unread: true,
       subject: 'Competitive Analysis Report — Phase 2 Complete',
       preview: 'Finished deep-dive on Devin, LangSmith, and Cursor. 47 pages with scoring matrix.',
       body: `## Competitive Analysis — Phase 2\n\nCompleted deep-dive analysis of three key competitors:\n\n**Devin** — Most autonomous but lacks human oversight controls. Confidence: 0.85\n**LangSmith** — Best observability but no orchestration layer. Confidence: 0.91\n**Cursor** — Best UX but limited to code tasks. Confidence: 0.88\n\nKey finding: No existing tool combines real-time orchestration + knowledge graph + CLI + comms. This is the gap Agent OS fills.\n\n### Recommendation\nFocus differentiation on the **human-in-the-loop** paradigm. All competitors optimize for full autonomy — we optimize for augmented control.\n\nFull report: \`vault/Research/Competitive-Analysis-Phase2.md\``,
       time: new Date(Date.now() - 25 * 60000).toISOString(),
       mission: 'Market Intelligence',
+      confidence: 0.88,
+      linkedItems: ['vault/Research/Competitive-Analysis-Phase2.md'],
       thread: [
         { sender: 'researcher', content: 'Report ready for your review. I\'ve flagged 3 areas where I\'m less confident.', time: new Date(Date.now() - 25 * 60000).toISOString() },
       ]
     },
     {
-      id: 'inb_2', agent: 'coder', category: 'proposals', priority: 'urgent', unread: true,
+      id: 'inb_2', agent: 'coder', category: 'proposals', priority: 'urgent', _priority: 'P1', unread: true,
       subject: 'Proposal: Refactor dispatch engine to async pipeline',
       preview: 'Current synchronous dispatch is causing queue backups. Proposing async redesign.',
       body: `## Proposal: Async Dispatch Pipeline\n\n**Problem:** Current dispatch engine processes tasks synchronously. At peak load (>5 concurrent agents), the queue backs up by 30-60 seconds.\n\n**Solution:** Refactor to an async pipeline with:\n- Event-driven task queue (using Node.js worker threads)\n- Backpressure handling with configurable concurrency limit\n- Circuit breaker for failing agents\n\n**Estimated effort:** 4-6 hours\n**Risk:** Medium — touches core dispatch logic\n**Tokens:** ~15K estimated\n\nShall I proceed?`,
       time: new Date(Date.now() - 45 * 60000).toISOString(),
       mission: 'Infrastructure',
+      confidence: 0.78,
       thread: []
     },
     {
-      id: 'inb_3', agent: 'ops', category: 'urgent', priority: 'urgent', unread: true,
+      id: 'inb_3', agent: 'ops', category: 'urgent', priority: 'urgent', _priority: 'P0', unread: true,
       subject: '⚠️ Disk usage at 87% — approaching threshold',
       preview: 'Agent logs and session artifacts consuming 12GB. Cleanup recommended.',
       body: `## System Alert: Disk Usage\n\n**Current:** 87% of 50GB used\n**Threshold:** 90% (auto-alert)\n**Primary culprits:**\n- Agent session logs: 5.2GB (\`~/.openclaw/sessions/\`)\n- Claude Code artifacts: 4.1GB (\`~/.claude/\`)\n- Build caches: 2.8GB\n\n### Recommended Actions\n1. Archive sessions older than 7 days → \`/archive/\`\n2. Clear Claude Code build cache\n3. Rotate agent logs (keep last 3 days)\n\nI can execute cleanup automatically with your approval. Estimated space recovery: **8.4GB**.`,
@@ -80,7 +110,7 @@ function seedInboxItems() {
       ]
     },
     {
-      id: 'inb_4', agent: 'devil', category: 'questions', priority: 'normal', unread: true,
+      id: 'inb_4', agent: 'devil', category: 'questions', priority: 'normal', _priority: 'P2', unread: true,
       subject: 'Question: Should I red-team the new auth flow before launch?',
       preview: 'OAuth Guardian v4 was deployed yesterday. I can run adversarial testing.',
       body: `## Red Team Request\n\nOAuth Guardian v4 was deployed yesterday. I notice it hasn't been adversarially tested yet.\n\nI can run the following checks:\n- Token refresh race conditions\n- Expired token handling edge cases\n- Multi-store sync conflict scenarios\n- Browser auto-login fallback reliability\n\nEstimated time: 2 hours. Estimated tokens: ~8K.\n\nShould I proceed? If yes, should I prioritize any specific area?`,
@@ -89,7 +119,7 @@ function seedInboxItems() {
       thread: []
     },
     {
-      id: 'inb_5', agent: 'righthand', category: 'reports', priority: 'normal', unread: false,
+      id: 'inb_5', agent: 'righthand', category: 'reports', priority: 'normal', _priority: 'P3', unread: false,
       subject: 'Daily Summary — March 20, 2026',
       preview: '14 tasks completed, 3 proposals resolved, 2 vault notes created.',
       body: `## Daily Summary\n\n**Tasks Completed:** 14\n**Proposals Resolved:** 3 (2 approved, 1 deferred)\n**Vault Notes:** 2 new, 5 updated\n**Errors:** 1 (session watchdog — resolved)\n**Token Usage:** 42.3K / 100K budget\n\n### Highlights\n- Competitive analysis phase 2 completed\n- Dispatch engine concurrency fix deployed\n- Knowledge graph density up 23% this week\n\n### Open Items\n- Disk cleanup pending approval\n- Red team request from Devil's Advocate\n- Async dispatch proposal needs decision`,
@@ -98,28 +128,30 @@ function seedInboxItems() {
       thread: []
     },
     {
-      id: 'inb_6', agent: 'utility', category: 'review', priority: 'normal', unread: true,
+      id: 'inb_6', agent: 'utility', category: 'proposals', priority: 'normal', _priority: 'P2', unread: true,
       subject: 'Vault reorganization complete — review new structure',
       preview: 'Moved 23 notes to new category structure. 4 orphaned notes found.',
       body: `## Vault Reorganization\n\nCompleted the planned vault cleanup:\n\n**Moved:** 23 notes to new category structure\n**Merged:** 6 duplicate entries\n**Orphaned:** 4 notes with no backlinks (listed below)\n**New cross-links:** 12 created\n\n### Orphaned Notes\n1. \`vault/Scratch/old-prompt-ideas.md\`\n2. \`vault/Research/abandoned-tool-eval.md\`\n3. \`vault/Ops/deprecated-cron-config.md\`\n4. \`vault/Code/unused-snippet-collection.md\`\n\nShould I archive these or attempt to link them?`,
       time: new Date(Date.now() - 2 * 3600000).toISOString(),
       mission: 'Knowledge Management',
+      linkedItems: ['vault/Scratch/old-prompt-ideas.md', 'vault/Research/abandoned-tool-eval.md'],
       thread: []
     },
     {
-      id: 'inb_7', agent: 'coder', category: 'review', priority: 'normal', unread: true,
+      id: 'inb_7', agent: 'coder', category: 'proposals', priority: 'normal', _priority: 'P2', unread: true,
       subject: 'PR ready: cross-channel-backlinker v2.1',
       preview: 'Added rate limiting and retry logic. All tests passing.',
       body: `## Pull Request: cross-channel-backlinker v2.1\n\n**Changes:**\n- Added rate limiting (max 3 req/s to Discord API)\n- Retry logic with exponential backoff\n- Better error messages for failed link resolutions\n- Unit tests for all new paths (12 tests added)\n\n**Test Results:**\n\`\`\`\n✓ 47 tests passed\n✗ 0 failed\nCoverage: 84%\n\`\`\`\n\n**Files changed:** 4 (156 additions, 23 deletions)\n\nReady for review and merge.`,
       time: new Date(Date.now() - 4 * 3600000).toISOString(),
       mission: 'Infrastructure',
+      confidence: 0.92,
       thread: [
         { sender: 'coder', content: 'This addresses the rate limit storm that Devil\'s Advocate flagged.', time: new Date(Date.now() - 4 * 3600000).toISOString() },
         { sender: 'devil', content: 'Reviewed the retry logic. Looks solid. Approve from my side.', time: new Date(Date.now() - 3.5 * 3600000).toISOString() },
       ]
     },
     {
-      id: 'inb_8', agent: 'researcher', category: 'questions', priority: 'normal', unread: false,
+      id: 'inb_8', agent: 'researcher', category: 'questions', priority: 'normal', _priority: 'P3', unread: false,
       subject: 'Which model tier for deep competitor teardown?',
       preview: 'Standard vs Heavy tier for the Devin deep-dive. Cost difference is ~$2.',
       body: `## Model Tier Decision\n\nI'm about to start the deep-dive on Devin (most autonomous competitor).\n\n**Standard tier:** ~$1.20, good for structured analysis\n**Heavy tier:** ~$3.40, better for nuanced competitive insights\n\nThe analysis involves:\n- Architecture inference from public docs\n- Feature gap analysis against Agent OS\n- Speculative capability assessment\n\nHeavy tier would give better results on the speculative parts. Your call.`,
@@ -128,7 +160,7 @@ function seedInboxItems() {
       thread: []
     },
     {
-      id: 'inb_9', agent: 'ops', category: 'reports', priority: 'normal', unread: false,
+      id: 'inb_9', agent: 'ops', category: 'reports', priority: 'normal', _priority: 'P3', unread: false,
       subject: 'Infrastructure audit — Q1 complete',
       preview: 'No critical vulnerabilities. 3 minor recommendations.',
       body: `## Q1 Infrastructure Audit\n\n**Result: PASS** ✅\n\n**Findings:**\n- No critical vulnerabilities\n- SSH keys: current and properly rotated\n- Firewall rules: appropriate\n- Services: all healthy\n\n**Recommendations:**\n1. Rotate API keys (last rotation: 47 days ago)\n2. Update Node.js to 22.x LTS (currently 18.x)\n3. Consider adding disk usage monitoring cron\n\n**Next audit:** Q2 (scheduled for June)`,
@@ -137,12 +169,13 @@ function seedInboxItems() {
       thread: []
     },
     {
-      id: 'inb_10', agent: 'righthand', category: 'proposals', priority: 'normal', unread: true,
+      id: 'inb_10', agent: 'righthand', category: 'proposals', priority: 'normal', _priority: 'P3', unread: true,
       subject: 'Proposal: Add weekly knowledge graph report to briefing',
       preview: 'Auto-generate vault health metrics every Monday morning.',
       body: `## Proposal: Weekly Knowledge Graph Report\n\n**What:** Automatically generate a vault health report every Monday at 06:00 UTC.\n\n**Contents:**\n- Note count delta (new, modified, deleted)\n- Cross-link density change\n- Orphaned notes list\n- Most-linked nodes (top 10)\n- Confidence distribution histogram\n\n**Implementation:** Cron job → QMD query → Markdown report → Vault + Briefing\n\n**Effort:** ~1 hour to set up\n**Ongoing cost:** ~500 tokens/week\n\nThis gives you a weekly pulse on knowledge quality without manual checking.`,
       time: new Date(Date.now() - 6 * 3600000).toISOString(),
       mission: 'Knowledge Management',
+      confidence: 0.85,
       thread: []
     },
   ];
@@ -153,9 +186,7 @@ let inboxPollTimer = null;
 async function fetchRealInboxItems() {
   const items = [];
   const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
-
   try {
-    // Fetch pending proposals → "Needs Decision" items
     const proposals = await fetch(`${baseUrl}/api/proposals?status=pending`).then(r => r.ok ? r.json() : []).catch(() => []);
     proposals.forEach(p => {
       items.push({
@@ -163,6 +194,7 @@ async function fetchRealInboxItems() {
         agent: p.source || p.source_agent || 'righthand',
         category: 'proposals',
         priority: (p.priority || 'P3') <= 'P2' ? 'urgent' : 'normal',
+        _priority: p.priority || 'P3',
         unread: true,
         subject: p.title || 'Proposal',
         preview: (p.body || p.description || '').substring(0, 100),
@@ -172,17 +204,17 @@ async function fetchRealInboxItems() {
         thread: [],
         _proposalId: p.id,
         _type: 'proposal',
+        confidence: p.confidence || null,
       });
     });
-
-    // Fetch active tasks → "Active Work" items
     const tasks = await fetch(`${baseUrl}/api/tasks/active`).then(r => r.ok ? r.json() : []).catch(() => []);
     tasks.forEach(t => {
       items.push({
         id: t.id || 'task_' + Date.now(),
         agent: t.agent || 'coder',
-        category: 'review',
+        category: 'proposals',
         priority: (t.priority || 'P3') <= 'P2' ? 'urgent' : 'normal',
+        _priority: t.priority || 'P3',
         unread: true,
         subject: `Active: ${t.title || t.task || 'Task'}`,
         preview: (t.description || t.context || '').substring(0, 100),
@@ -194,171 +226,296 @@ async function fetchRealInboxItems() {
         _type: 'task',
       });
     });
-
-    // Fetch recent feed events → items that need attention (errors, questions)
     const feed = await fetch(`${baseUrl}/api/feed?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []);
     feed.forEach(f => {
       if (f.type === 'error' || f.type === 'system_alert') {
         items.push({
-          id: f.id || 'feed_' + Date.now(),
-          agent: f.agent || 'ops',
-          category: 'urgent',
-          priority: 'urgent',
-          unread: true,
+          id: f.id || 'feed_' + Date.now(), agent: f.agent || 'ops', category: 'urgent',
+          priority: 'urgent', _priority: 'P0', unread: true,
           subject: `⚠️ ${f.content || f.summary || 'System Alert'}`,
           preview: (f.detail || f.content || '').substring(0, 100),
           body: f.detail || f.content || '',
           time: f.timestamp || new Date().toISOString(),
-          mission: null,
-          thread: [],
-          _feedId: f.id,
-          _type: 'feed_error',
+          mission: null, thread: [], _feedId: f.id, _type: 'feed_error',
         });
       } else if (f.type === 'question_asked' || f.type === 'queue_item_created') {
         items.push({
-          id: f.id || 'feed_' + Date.now(),
-          agent: f.agent || 'righthand',
-          category: 'questions',
-          priority: 'normal',
-          unread: true,
+          id: f.id || 'feed_' + Date.now(), agent: f.agent || 'righthand', category: 'questions',
+          priority: 'normal', _priority: 'P2', unread: true,
           subject: f.content || f.summary || 'Question',
           preview: (f.detail || f.content || '').substring(0, 100),
           body: f.detail || f.content || '',
           time: f.timestamp || new Date().toISOString(),
-          mission: null,
-          thread: [],
-          _feedId: f.id,
-          _type: 'feed_question',
+          mission: null, thread: [], _feedId: f.id, _type: 'feed_question',
         });
       }
     });
-
-    // Sort by urgency: urgent first, then newest
     items.sort((a, b) => {
       if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
       if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
       return new Date(b.time) - new Date(a.time);
     });
-
     return items;
   } catch (e) {
     console.error('[Inbox] Failed to fetch real data:', e);
-    return null; // null = fallback to seed
+    return null;
   }
 }
 
+// ── Snooze System ──────────────────────────────────────────
+
+function snoozeItem(id, duration) {
+  const item = inboxItems.find(i => i.id === id);
+  if (!item) return;
+  const snoozed = JSON.parse(localStorage.getItem('inbox-snoozed') || '{}');
+  snoozed[id] = Date.now() + duration;
+  localStorage.setItem('inbox-snoozed', JSON.stringify(snoozed));
+  inboxItems = inboxItems.filter(i => i.id !== id);
+  if (inboxSelectedId === id) {
+    const filtered = getFilteredInboxItems();
+    inboxSelectedId = filtered.length > 0 ? filtered[0].id : null;
+  }
+  const labels = { 3600000: '1 hour', 14400000: '4 hours', 86400000: 'tomorrow', 604800000: 'next week' };
+  toast(`⏸️ Snoozed for ${labels[duration] || formatDurationMs(duration)}`, 'info');
+  renderInbox();
+  renderInboxContext();
+  hideSnoozeDropdown();
+}
+
+function snoozeSelectedItem(duration) {
+  if (inboxSelectedId) snoozeItem(inboxSelectedId, duration);
+}
+
+function formatDurationMs(ms) {
+  if (ms < 3600000) return Math.round(ms / 60000) + 'm';
+  if (ms < 86400000) return Math.round(ms / 3600000) + 'h';
+  return Math.round(ms / 86400000) + 'd';
+}
+
+// Check snoozed items every minute
+setInterval(() => {
+  const snoozed = JSON.parse(localStorage.getItem('inbox-snoozed') || '{}');
+  const now = Date.now();
+  let changed = false;
+  Object.entries(snoozed).forEach(([id, until]) => {
+    if (now >= until) {
+      delete snoozed[id];
+      changed = true;
+    }
+  });
+  if (changed) {
+    localStorage.setItem('inbox-snoozed', JSON.stringify(snoozed));
+    if (currentPage === 'inbox') fetchRealInboxItems().then(items => {
+      if (items && items.length > 0) { inboxItems = items; renderInbox(); }
+    });
+  }
+}, 60000);
+
+function showSnoozeDropdown() {
+  const dd = document.getElementById('inbox-snooze-dropdown');
+  if (!dd) return;
+  dd.classList.remove('hidden');
+  // Position near the snooze button in action bar
+  const btn = document.querySelector('.inbox-action-btn.snooze');
+  if (btn) {
+    const rect = btn.getBoundingClientRect();
+    dd.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    dd.style.left = rect.left + 'px';
+  }
+}
+
+function hideSnoozeDropdown() {
+  const dd = document.getElementById('inbox-snooze-dropdown');
+  if (dd) dd.classList.add('hidden');
+}
+
+// ── Init & Polling ─────────────────────────────────────────
+
 async function initInbox() {
-  // Check if user cleared inbox
   if (localStorage.getItem('inbox-cleared')) {
     inboxItems = [];
     renderInbox();
     return;
   }
-  // Try to fetch real data first
+  // Load labels from localStorage
+  try { inboxLabels = JSON.parse(localStorage.getItem('inbox-labels') || '{}'); } catch { inboxLabels = {}; }
+  try { inboxDoneItems = JSON.parse(localStorage.getItem('inbox-done') || '[]'); } catch { inboxDoneItems = []; }
+
   const realItems = await fetchRealInboxItems();
   if (realItems && realItems.length > 0) {
     inboxItems = realItems;
   } else if (inboxItems.length === 0) {
     inboxItems = seedInboxItems();
   }
-  renderInbox();
 
-  // Start polling every 15 seconds
+  // Filter out snoozed items
+  const snoozed = JSON.parse(localStorage.getItem('inbox-snoozed') || '{}');
+  const now = Date.now();
+  inboxItems = inboxItems.filter(i => !snoozed[i.id] || now >= snoozed[i.id]);
+
+  renderInbox();
+  renderInboxContext();
+
   if (!inboxPollTimer) {
     inboxPollTimer = setInterval(async () => {
       if (!shouldPoll()) return;
       if (currentPage !== 'inbox') return;
       const updated = await fetchRealInboxItems();
       if (updated && updated.length > 0) {
-        // Merge: keep read state of existing items
         const readIds = new Set(inboxItems.filter(i => !i.unread).map(i => i.id));
-        updated.forEach(item => {
-          if (readIds.has(item.id)) item.unread = false;
-        });
-        inboxItems = updated;
+        const snoozedNow = JSON.parse(localStorage.getItem('inbox-snoozed') || '{}');
+        updated.forEach(item => { if (readIds.has(item.id)) item.unread = false; });
+        inboxItems = updated.filter(i => !snoozedNow[i.id] || Date.now() >= snoozedNow[i.id]);
         renderInboxList();
       }
     }, 15000);
   }
 }
 
+// ── Render: Main ───────────────────────────────────────────
+
 function renderInbox() {
+  renderInboxCategoryTabs();
   renderInboxList();
   renderInboxDetail();
 }
 
+function renderInboxCategoryTabs() {
+  const container = document.getElementById('inbox-category-tabs');
+  if (!container) return;
+  const counts = getInboxCategoryCounts();
+  container.innerHTML = INBOX_CATEGORIES.map(c => `
+    <button class="inbox-cat-tab${inboxFilter === c.id ? ' active' : ''}" onclick="setInboxFilter('${c.id}')" data-cat="${c.id}">
+      <span class="inbox-cat-label">${c.label}</span>
+      ${counts[c.id] ? `<span class="inbox-cat-count">${counts[c.id]}</span>` : ''}
+    </button>
+  `).join('');
+}
+
 function getInboxCategoryCounts() {
-  const counts = { all: inboxItems.length };
+  const counts = { all: inboxItems.length, done: inboxDoneItems.length };
   INBOX_CATEGORIES.forEach(c => {
-    if (c.id !== 'all') counts[c.id] = inboxItems.filter(i => i.category === c.id).length;
+    if (c.id !== 'all' && c.id !== 'done') counts[c.id] = inboxItems.filter(i => getCategoryForItem(i) === c.id).length;
   });
   return counts;
 }
 
 function getFilteredInboxItems() {
-  let items = inboxItems;
+  // Done tab shows done items
+  if (inboxFilter === 'done') return inboxDoneItems;
+
+  let items = [...inboxItems];
+
+  // Filter by category
   if (inboxFilter !== 'all') {
-    items = items.filter(i => i.category === inboxFilter);
+    items = items.filter(i => getCategoryForItem(i) === inboxFilter);
   }
-  // Sort: unread first, then newest
-  items.sort((a, b) => {
-    if (a.unread !== b.unread) return b.unread ? 1 : -1;
-    return new Date(b.time) - new Date(a.time);
-  });
+
+  // Search filter
+  if (inboxSearchQuery) {
+    const q = inboxSearchQuery.toLowerCase();
+    items = items.filter(i =>
+      (i.subject || '').toLowerCase().includes(q) ||
+      (i.preview || '').toLowerCase().includes(q) ||
+      (i.agent || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Sort
+  switch (inboxSortMode) {
+    case 'priority':
+      items.sort((a, b) => {
+        const pa = (getItemPriority(a) || 'P3').charCodeAt(1);
+        const pb = (getItemPriority(b) || 'P3').charCodeAt(1);
+        if (pa !== pb) return pa - pb;
+        return new Date(b.time) - new Date(a.time);
+      });
+      break;
+    case 'agent':
+      items.sort((a, b) => (a.agent || '').localeCompare(b.agent || '') || new Date(b.time) - new Date(a.time));
+      break;
+    default: // newest
+      items.sort((a, b) => {
+        if (a.unread !== b.unread) return b.unread ? 1 : -1;
+        return new Date(b.time) - new Date(a.time);
+      });
+  }
   return items;
 }
 
 function renderInboxList() {
-  const container = document.getElementById('inbox-list-panel');
+  const container = document.getElementById('inbox-items-list');
   if (!container) return;
 
-  const counts = getInboxCategoryCounts();
   const filtered = getFilteredInboxItems();
-  const unreadCount = inboxItems.filter(i => i.unread).length;
+  const isDone = inboxFilter === 'done';
 
-  container.innerHTML = `
-    <div class="inbox-list-header">
-      <div class="inbox-filter-tabs">
-        ${INBOX_CATEGORIES.map(c => `
-          <button class="inbox-filter-tab${inboxFilter === c.id ? ' active' : ''}" onclick="setInboxFilter('${c.id}')">
-            ${c.label}
-            ${counts[c.id] ? `<span class="inbox-tab-badge">${counts[c.id]}</span>` : ''}
-          </button>
-        `).join('')}
+  if (filtered.length === 0) {
+    const emptyMsg = inboxSearchQuery
+      ? { icon: '🔍', title: 'No results', desc: `No items matching "${inboxSearchQuery}". Try a different search.` }
+      : isDone
+        ? { icon: '📭', title: 'No completed items', desc: 'Items you approve or dismiss will appear here.' }
+        : { icon: '🎉', title: 'All caught up!', desc: 'Your agents are handling everything.' };
+
+    container.innerHTML = `
+      <div class="inbox-empty-state">
+        <div class="inbox-empty-icon">${emptyMsg.icon}</div>
+        <div class="inbox-empty-title">${emptyMsg.title}</div>
+        <div class="inbox-empty-desc">${emptyMsg.desc}</div>
       </div>
-      <button class="inbox-mark-all-btn" onclick="markAllInboxRead()" title="Mark All Read">
-        ✓ Mark All Read ${unreadCount > 0 ? `(${unreadCount})` : ''}
-      </button>
-    </div>
-    <div class="inbox-items-list">
-      ${filtered.length === 0 ? `<div class="inbox-empty-state">
-        <div style="font-size:32px;margin-bottom:8px">📭</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text-dim)">Inbox zero!</div>
-        <div style="font-size:12px;color:var(--text-muted)">Nothing needs your attention right now.</div>
-      </div>` : filtered.map((item, idx) => {
-        const agent = iga(item.agent);
-        const timeStr = formatInboxTime(item.time);
-        const isSelected = item.id === inboxSelectedId;
-        const priorityDot = item.priority === 'urgent' ? '<span class="inbox-priority-dot urgent"></span>' : '';
-        return `
-          <div class="inbox-item${item.unread ? ' unread' : ''}${isSelected ? ' selected' : ''}" 
-               data-id="${item.id}" onclick="selectInboxItem('${item.id}')" data-idx="${idx}">
-            <div class="inbox-item-avatar" style="background:${agent.color}20;border-color:${agent.color}">${agent.emoji}</div>
-            <div class="inbox-item-body">
-              <div class="inbox-item-top-row">
-                <span class="inbox-item-subject">${item.subject}</span>
-                ${priorityDot}
-              </div>
-              <div class="inbox-item-preview">${item.preview}</div>
-            </div>
-            <div class="inbox-item-meta">
-              <span class="inbox-item-time">${timeStr}</span>
-            </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map((item, idx) => {
+    const agent = iga(item.agent);
+    const timeStr = formatInboxTime(item.time);
+    const isSelected = item.id === inboxSelectedId;
+    const isChecked = inboxSelectedIds.has(item.id);
+    const prio = INBOX_PRIORITIES[getItemPriority(item)] || INBOX_PRIORITIES.P3;
+    const catLabel = getCategoryForItem(item);
+    const labels = inboxLabels[item.id] || [];
+
+    return `
+      <div class="inbox-card${item.unread ? ' unread' : ''}${isSelected ? ' selected' : ''}${isDone ? ' done' : ''}"
+           data-id="${item.id}" data-idx="${idx}"
+           onclick="selectInboxItem('${item.id}')"
+           onmouseenter="this.querySelector('.inbox-card-actions').style.opacity='1'"
+           onmouseleave="this.querySelector('.inbox-card-actions').style.opacity='0'">
+        <div class="inbox-card-checkbox${isChecked ? ' checked' : ''}" onclick="event.stopPropagation();toggleInboxSelect('${item.id}')">
+          ${isChecked ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>' : ''}
+        </div>
+        <div class="inbox-card-content">
+          <div class="inbox-card-row1">
+            <span class="inbox-card-agent" style="color:${agent.color}">${agent.emoji} ${agent.name}</span>
+            <span class="inbox-card-time">${timeStr}</span>
           </div>
-        `;
-      }).join('')}
-    </div>
-  `;
+          <div class="inbox-card-row2">
+            ${item.unread ? '<span class="inbox-unread-dot"></span>' : ''}
+            <span class="inbox-card-subject">${item.subject}</span>
+          </div>
+          <div class="inbox-card-row3">${item.preview}</div>
+          <div class="inbox-card-row4">
+            <span class="inbox-priority-badge" style="background:${prio.bg};color:${prio.color}">${prio.label}</span>
+            <span class="inbox-cat-badge">${catLabel}</span>
+            ${labels.map(l => `<span class="inbox-label-badge">${l}</span>`).join('')}
+          </div>
+        </div>
+        <div class="inbox-card-actions" style="opacity:0">
+          <button class="inbox-qa" title="Approve (a)" onclick="event.stopPropagation();inboxAction('${item.id}','approve')">✅</button>
+          <button class="inbox-qa" title="Dismiss (x)" onclick="event.stopPropagation();inboxAction('${item.id}','dismiss')">❌</button>
+          <button class="inbox-qa" title="Snooze (s)" onclick="event.stopPropagation();snoozeItem('${item.id}',3600000)">⏸️</button>
+          <button class="inbox-qa" title="Delete (d)" onclick="event.stopPropagation();inboxAction('${item.id}','delete')">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Scroll selected into view
+  if (inboxSelectedId) {
+    const sel = container.querySelector('.inbox-card.selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 }
 
 function renderInboxDetail() {
@@ -368,36 +525,57 @@ function renderInboxDetail() {
   if (!inboxSelectedId) {
     container.innerHTML = `
       <div class="inbox-detail-empty">
-        <div style="font-size:48px;margin-bottom:12px">📬</div>
-        <div style="font-size:16px;font-weight:600;color:var(--text-dim)">Select an item</div>
-        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Click an item from the list to view details</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:16px">Keyboard: <kbd>j</kbd>/<kbd>k</kbd> navigate, <kbd>Enter</kbd> open, <kbd>a</kbd> approve, <kbd>r</kbd> reject</div>
+        <div class="inbox-detail-empty-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1" stroke-linecap="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+          </svg>
+        </div>
+        <div class="inbox-detail-empty-title">Select an item to view</div>
+        <div class="inbox-detail-empty-sub">Use <kbd>j</kbd>/<kbd>k</kbd> to navigate · <kbd>?</kbd> for all shortcuts</div>
       </div>
     `;
     return;
   }
 
-  const item = inboxItems.find(i => i.id === inboxSelectedId);
+  // Check both active and done items
+  let item = inboxItems.find(i => i.id === inboxSelectedId);
+  if (!item) item = inboxDoneItems.find(i => i.id === inboxSelectedId);
   if (!item) return;
 
   const agent = iga(item.agent);
   const timeStr = new Date(item.time).toLocaleString();
-
-  // Render markdown-ish body
+  const prio = INBOX_PRIORITIES[getItemPriority(item)] || INBOX_PRIORITIES.P3;
+  const catLabel = getCategoryForItem(item);
   const renderedBody = renderInboxMarkdown(item.body);
+
+  // Confidence bar
+  const confidenceHTML = item.confidence ? `
+    <div class="inbox-confidence-bar">
+      <span class="inbox-confidence-label">Confidence</span>
+      <div class="inbox-confidence-track">
+        <div class="inbox-confidence-fill" style="width:${Math.round(item.confidence * 100)}%;background:${item.confidence > 0.8 ? '#a6e3a1' : item.confidence > 0.6 ? '#f9e2af' : '#f38ba8'}"></div>
+      </div>
+      <span class="inbox-confidence-value">${Math.round(item.confidence * 100)}%</span>
+    </div>
+  ` : '';
 
   // Thread
   const threadHTML = (item.thread && item.thread.length > 0) ? `
     <div class="inbox-thread-section">
-      <div class="inbox-thread-title">💬 Thread (${item.thread.length})</div>
+      <div class="inbox-thread-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Thread (${item.thread.length})
+      </div>
       ${item.thread.map(t => {
-        const ta = iga(t.sender);
+        const ta = t.sender === 'user' ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : iga(t.sender);
         return `
           <div class="inbox-thread-msg">
-            <div class="inbox-thread-avatar" style="background:${ta.color}20;border-color:${ta.color}">${ta.emoji}</div>
+            <div class="inbox-thread-avatar" style="background:${ta.color}15;color:${ta.color}">${ta.emoji}</div>
             <div class="inbox-thread-body">
-              <span class="inbox-thread-name entity-link entity-agent" style="color:${ta.color}" onclick="event.stopPropagation();goToEntity('agent','${t.sender}','${ta.name}')">${ta.name}</span>
-              <span class="inbox-thread-time">${formatInboxTime(t.time)}</span>
+              <div class="inbox-thread-header">
+                <span class="inbox-thread-name" style="color:${ta.color}">${ta.name}</span>
+                <span class="inbox-thread-time">${formatInboxTime(t.time)}</span>
+              </div>
               <div class="inbox-thread-text">${t.content}</div>
             </div>
           </div>
@@ -406,35 +584,78 @@ function renderInboxDetail() {
     </div>
   ` : '';
 
+  // Linked items
+  const linkedHTML = (item.linkedItems && item.linkedItems.length > 0) ? `
+    <div class="inbox-linked-section">
+      <div class="inbox-linked-title">🔗 Linked Items</div>
+      ${item.linkedItems.map(l => `<div class="inbox-linked-item"><code>${l}</code></div>`).join('')}
+    </div>
+  ` : '';
+
+  const isDone = item._doneAction;
+
   container.innerHTML = `
-    <div class="inbox-detail-header">
-      <div class="inbox-detail-agent">
-        <div class="inbox-detail-avatar" style="background:${agent.color}20;border-color:${agent.color}">${agent.emoji}</div>
-        <div>
-          <div class="inbox-detail-agent-name entity-link entity-agent" style="color:${agent.color}" onclick="goToEntity('agent','${item.agent}','${agent.name}')">${agent.name}</div>
-          <div class="inbox-detail-time">${timeStr}</div>
+    <div class="inbox-detail-scroll">
+      <div class="inbox-detail-header">
+        <div class="inbox-detail-header-row1">
+          <div class="inbox-detail-agent-info">
+            <div class="inbox-detail-avatar" style="background:${agent.color}15;color:${agent.color}">${agent.emoji}</div>
+            <div class="inbox-detail-agent-meta">
+              <span class="inbox-detail-agent-name" style="color:${agent.color}">${agent.name}</span>
+              <span class="inbox-detail-time">${timeStr}</span>
+            </div>
+          </div>
+          <div class="inbox-detail-badges">
+            <span class="inbox-priority-badge" style="background:${prio.bg};color:${prio.color}">${prio.label}</span>
+            <span class="inbox-cat-badge">${catLabel}</span>
+            ${item.mission ? `<span class="inbox-mission-badge">🎯 ${item.mission}</span>` : ''}
+          </div>
         </div>
-        ${item.mission ? `<div class="inbox-detail-mission entity-link entity-mission" onclick="goToEntity('mission','${item.mission}','${item.mission}')">🎯 ${item.mission}</div>` : ''}
+        <h2 class="inbox-detail-subject">${item.subject}</h2>
       </div>
-      <h2 class="inbox-detail-subject">${item.subject}</h2>
-    </div>
-    <div class="inbox-detail-body">${renderedBody}</div>
-    ${threadHTML}
-    <div class="inbox-reply-section">
-      <div class="inbox-reply-input-row">
-        <input type="text" class="inbox-reply-input" id="inbox-reply-input" placeholder="Reply to ${agent.name}..." 
-               onkeydown="if(event.key==='Enter'){inboxReply('${item.id}');event.preventDefault();}">
-        <button class="inbox-reply-send" onclick="inboxReply('${item.id}')">Send</button>
+
+      ${confidenceHTML}
+
+      <div class="inbox-detail-body">${renderedBody}</div>
+
+      ${threadHTML}
+      ${linkedHTML}
+
+      <div class="inbox-reply-section">
+        <div class="inbox-reply-row">
+          <input type="text" class="inbox-reply-input" id="inbox-reply-input"
+            placeholder="Reply to ${agent.name}..."
+            onkeydown="if(event.key==='Enter'){inboxReply('${item.id}');event.preventDefault();}">
+          <button class="inbox-reply-send" onclick="inboxReply('${item.id}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
       </div>
     </div>
-    <div class="inbox-action-bar">
-      <button class="inbox-action-btn approve" onclick="inboxAction('${item.id}','approve')">✅ Approve</button>
-      <button class="inbox-action-btn reject" onclick="inboxAction('${item.id}','reject')">❌ Reject</button>
-      <button class="inbox-action-btn reply" onclick="document.getElementById('inbox-reply-input').focus()">💬 Reply</button>
-      <button class="inbox-action-btn forward" onclick="inboxAction('${item.id}','forward')">➡️ Forward</button>
-      <button class="inbox-action-btn pin" onclick="inboxAction('${item.id}','pin')">📌 Pin</button>
-      <button class="inbox-action-btn archive" onclick="inboxAction('${item.id}','archive')">🗑️ Archive</button>
-    </div>
+
+    ${isDone ? `<div class="inbox-action-bar done-bar">
+      <span class="inbox-done-label">${item._doneAction === 'approve' ? '✅ Approved' : item._doneAction === 'dismiss' ? '❌ Dismissed' : '🗑️ Deleted'}</span>
+    </div>` : `<div class="inbox-action-bar">
+      <button class="inbox-action-btn approve" onclick="inboxAction('${item.id}','approve')">
+        <span>✅ Approve</span><kbd>a</kbd>
+      </button>
+      <button class="inbox-action-btn dismiss" onclick="inboxAction('${item.id}','dismiss')">
+        <span>❌ Dismiss</span><kbd>x</kbd>
+      </button>
+      <button class="inbox-action-btn snooze" onclick="showSnoozeDropdown()">
+        <span>⏸️ Snooze</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+      <button class="inbox-action-btn reply-btn" onclick="document.getElementById('inbox-reply-input')?.focus()">
+        <span>↩️ Reply</span><kbd>r</kbd>
+      </button>
+      <button class="inbox-action-btn forward" onclick="inboxAction('${item.id}','forward')">
+        <span>→ Forward</span>
+      </button>
+      <button class="inbox-action-btn delete" onclick="inboxAction('${item.id}','delete')">
+        <span>🗑️</span><kbd>d</kbd>
+      </button>
+    </div>`}
   `;
 
   // Mark as read
@@ -442,30 +663,115 @@ function renderInboxDetail() {
     item.unread = false;
     renderInboxList();
   }
+
+  // Update context sidebar
+  renderInboxContext();
 }
+
+function renderInboxContext() {
+  const body = document.getElementById('inbox-context-body');
+  if (!body) return;
+
+  if (!inboxSelectedId) {
+    body.innerHTML = '<div class="inbox-ctx-empty">Select an item to see context</div>';
+    return;
+  }
+
+  let item = inboxItems.find(i => i.id === inboxSelectedId);
+  if (!item) item = inboxDoneItems.find(i => i.id === inboxSelectedId);
+  if (!item) return;
+
+  const agent = iga(item.agent);
+
+  // Agent reliability score (simulated)
+  const reliabilityScores = { righthand: 98, researcher: 92, coder: 95, ops: 97, devil: 89, utility: 88 };
+  const reliability = reliabilityScores[item.agent] || 85;
+
+  // Related items from same agent
+  const relatedFromAgent = inboxItems
+    .filter(i => i.agent === item.agent && i.id !== item.id)
+    .slice(0, 3);
+
+  // Timeline
+  const timelineEvents = [];
+  timelineEvents.push({ time: item.time, label: 'Created', icon: '📥' });
+  if (item.thread && item.thread.length > 0) {
+    item.thread.forEach(t => {
+      timelineEvents.push({ time: t.time, label: `${iga(t.sender).name} replied`, icon: '💬' });
+    });
+  }
+
+  const labels = inboxLabels[item.id] || [];
+
+  body.innerHTML = `
+    <div class="inbox-ctx-section">
+      <div class="inbox-ctx-section-title">Agent</div>
+      <div class="inbox-ctx-agent-card">
+        <div class="inbox-ctx-agent-avatar" style="background:${agent.color}15;color:${agent.color}">${agent.emoji}</div>
+        <div class="inbox-ctx-agent-info">
+          <div class="inbox-ctx-agent-name" style="color:${agent.color}">${agent.name}</div>
+          <div class="inbox-ctx-agent-reliability">
+            <span>Reliability</span>
+            <div class="inbox-ctx-reliability-bar"><div class="inbox-ctx-reliability-fill" style="width:${reliability}%;background:${reliability > 90 ? '#a6e3a1' : '#f9e2af'}"></div></div>
+            <span>${reliability}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${relatedFromAgent.length > 0 ? `
+    <div class="inbox-ctx-section">
+      <div class="inbox-ctx-section-title">Related (${agent.name})</div>
+      ${relatedFromAgent.map(r => `
+        <div class="inbox-ctx-related-item" onclick="selectInboxItem('${r.id}')">
+          <span class="inbox-ctx-related-subject">${r.subject.substring(0, 40)}${r.subject.length > 40 ? '...' : ''}</span>
+          <span class="inbox-ctx-related-time">${formatInboxTime(r.time)}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    <div class="inbox-ctx-section">
+      <div class="inbox-ctx-section-title">Timeline</div>
+      <div class="inbox-ctx-timeline">
+        ${timelineEvents.map(e => `
+          <div class="inbox-ctx-timeline-item">
+            <span class="inbox-ctx-timeline-icon">${e.icon}</span>
+            <span class="inbox-ctx-timeline-label">${e.label}</span>
+            <span class="inbox-ctx-timeline-time">${formatInboxTime(e.time)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="inbox-ctx-section">
+      <div class="inbox-ctx-section-title">Labels</div>
+      <div class="inbox-ctx-labels">
+        ${labels.map(l => `<span class="inbox-ctx-label">${l} <button onclick="removeInboxLabel('${item.id}','${l}')">×</button></span>`).join('')}
+        <button class="inbox-ctx-add-label" onclick="addInboxLabel('${item.id}')">+ Add label</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Markdown renderer ──────────────────────────────────────
 
 function renderInboxMarkdown(text) {
   if (!text) return '';
   let html = text;
-  // Headers
   html = html.replace(/^### (.+)$/gm, '<h4 class="inbox-md-h3">$1</h4>');
   html = html.replace(/^## (.+)$/gm, '<h3 class="inbox-md-h2">$1</h3>');
-  // Code blocks
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => `<pre class="inbox-md-code"><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;').trim()}</code></pre>`);
-  // Inline code
   html = html.replace(/`([^`]+)`/g, '<code class="inbox-md-inline">$1</code>');
-  // Bold
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  // Lists
   html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, match => `<ul>${match}</ul>`);
-  // Numbered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Newlines
   html = html.replace(/\n\n/g, '</p><p>');
   html = html.replace(/\n/g, '<br>');
   return `<p>${html}</p>`;
 }
+
+// ── Time formatter ─────────────────────────────────────────
 
 function formatInboxTime(isoStr) {
   if (!isoStr) return '';
@@ -478,35 +784,127 @@ function formatInboxTime(isoStr) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+// ── Search / Sort / Filter ─────────────────────────────────
+
+function filterInboxSearch(query) {
+  inboxSearchQuery = query;
+  renderInboxList();
+}
+
 function setInboxFilter(filter) {
   inboxFilter = filter;
   inboxSelectedId = null;
+  inboxSelectedIds.clear();
   renderInbox();
 }
+
+function setInboxSort(mode) {
+  inboxSortMode = mode;
+  document.querySelectorAll('.inbox-sort-option').forEach(el => {
+    el.classList.toggle('active', el.dataset.sort === mode);
+  });
+  toggleInboxSort(); // close menu
+  renderInboxList();
+}
+
+function toggleInboxSort() {
+  const menu = document.getElementById('inbox-sort-menu');
+  if (menu) menu.classList.toggle('hidden');
+}
+
+// ── Selection & Bulk Actions ───────────────────────────────
+
+function toggleInboxSelect(id) {
+  if (inboxSelectedIds.has(id)) inboxSelectedIds.delete(id);
+  else inboxSelectedIds.add(id);
+  updateBulkBar();
+  renderInboxList();
+}
+
+function inboxClearSelection() {
+  inboxSelectedIds.clear();
+  updateBulkBar();
+  renderInboxList();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('inbox-bulk-bar');
+  const count = document.getElementById('inbox-bulk-count');
+  if (!bar) return;
+  if (inboxSelectedIds.size > 0) {
+    bar.classList.remove('hidden');
+    if (count) count.textContent = `${inboxSelectedIds.size} selected`;
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+async function inboxBulkAction(action) {
+  const ids = [...inboxSelectedIds];
+  for (const id of ids) {
+    await inboxAction(id, action);
+  }
+  inboxSelectedIds.clear();
+  updateBulkBar();
+}
+
+// ── Select item ────────────────────────────────────────────
 
 function selectInboxItem(id) {
   inboxSelectedId = id;
   inboxFocusIdx = getFilteredInboxItems().findIndex(i => i.id === id);
-  renderInbox();
+  renderInboxDetail();
+  renderInboxList();
+  renderInboxContext();
 }
+
+// ── Mark all read ──────────────────────────────────────────
 
 function markAllInboxRead() {
   const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
   inboxItems.forEach(i => {
     i.unread = false;
-    // Notify server of read state
     fetch(`${baseUrl}/api/inbox/${i.id}/action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'mark-read' }),
     }).catch(() => {});
   });
-  toast('✓ All items marked as read', 'success');
+  toast('✓ All marked as read', 'success');
   renderInbox();
-  // Update badge
   const badge = document.getElementById('inbox-badge');
   if (badge) { badge.textContent = ''; badge.style.display = 'none'; }
 }
+
+// ── Labels ─────────────────────────────────────────────────
+
+function addInboxLabel(id) {
+  const label = prompt('Add label:');
+  if (!label || !label.trim()) return;
+  if (!inboxLabels[id]) inboxLabels[id] = [];
+  if (!inboxLabels[id].includes(label.trim())) {
+    inboxLabels[id].push(label.trim());
+    localStorage.setItem('inbox-labels', JSON.stringify(inboxLabels));
+    renderInboxContext();
+  }
+}
+
+function removeInboxLabel(id, label) {
+  if (!inboxLabels[id]) return;
+  inboxLabels[id] = inboxLabels[id].filter(l => l !== label);
+  localStorage.setItem('inbox-labels', JSON.stringify(inboxLabels));
+  renderInboxContext();
+}
+
+// ── Context sidebar toggle ─────────────────────────────────
+
+function toggleInboxContext() {
+  const panel = document.getElementById('inbox-context-panel');
+  if (!panel) return;
+  inboxContextVisible = !inboxContextVisible;
+  panel.classList.toggle('collapsed', !inboxContextVisible);
+}
+
+// ── Actions ────────────────────────────────────────────────
 
 async function inboxAction(id, action) {
   const item = inboxItems.find(i => i.id === id);
@@ -514,90 +912,108 @@ async function inboxAction(id, action) {
   const agent = iga(item.agent);
   const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
+  // Animate item out
+  const el = document.querySelector(`.inbox-card[data-id="${id}"]`);
+  if (el) {
+    el.style.transition = 'all 0.25s ease';
+    el.style.transform = 'translateX(60px)';
+    el.style.opacity = '0';
+    el.style.maxHeight = '0';
+    el.style.padding = '0';
+    el.style.margin = '0';
+  }
+
+  await new Promise(r => setTimeout(r, 250));
+
   switch (action) {
     case 'approve':
-      // If it's a real proposal, resolve via bridge
       if (item._proposalId || item._type === 'proposal') {
         try {
           await fetch(`${baseUrl}/api/proposals/${item._proposalId || id}/resolve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'approve' }),
           });
-          toast(`✅ Approved — ${agent.name} notified`, 'success');
-          addXP(10, 'inbox approve');
-          removeInboxItem(id);
-        } catch (e) {
-          toast(`❌ Approve failed: ${e.message}`, 'error');
-        }
+        } catch {}
       } else {
-        // Generic approval via inbox action endpoint
         fetch(`${baseUrl}/api/inbox/${id}/action`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'approve' }),
         }).catch(() => {});
-        toast(`✅ Approved — ${agent.name} notified`, 'success');
-        addXP(10, 'inbox approve');
-        removeInboxItem(id);
       }
+      toast(`✅ Approved — ${agent.name} notified`, 'success');
+      addXP(10, 'inbox approve');
+      moveInboxToDone(id, 'approve');
       break;
-    case 'reject':
+
+    case 'dismiss':
       if (item._proposalId || item._type === 'proposal') {
         try {
           await fetch(`${baseUrl}/api/proposals/${item._proposalId || id}/resolve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'dismiss' }),
           });
-          toast('❌ Rejected', 'info');
-          removeInboxItem(id);
-        } catch (e) {
-          toast(`❌ Reject failed: ${e.message}`, 'error');
-        }
+        } catch {}
       } else {
         fetch(`${baseUrl}/api/inbox/${id}/action`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'reject' }),
         }).catch(() => {});
-        toast('❌ Rejected', 'info');
-        removeInboxItem(id);
       }
+      toast('❌ Dismissed', 'info');
+      moveInboxToDone(id, 'dismiss');
       break;
+
     case 'forward':
-      // Create a dispatch task
       try {
         await fetch(`${baseUrl}/api/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: item.subject,
-            description: item.body || item.preview,
-            agent: null,
-            priority: item.priority === 'urgent' ? 'P1' : 'P3',
+            title: item.subject, description: item.body || item.preview,
+            agent: null, priority: item.priority === 'urgent' ? 'P1' : 'P3',
           }),
         });
-        toast(`➡️ Forwarded as dispatch task`, 'success');
-        removeInboxItem(id);
+        toast(`→ Forwarded as dispatch task`, 'success');
+        moveInboxToDone(id, 'forward');
       } catch (e) {
         toast(`❌ Forward failed: ${e.message}`, 'error');
       }
       break;
-    case 'pin':
-      toast('📌 Pinned to vault', 'success');
-      break;
-    case 'archive':
+
+    case 'delete':
       fetch(`${baseUrl}/api/inbox/${id}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'archive' }),
       }).catch(() => {});
-      toast('🗑️ Archived', 'info');
+      toast('🗑️ Deleted', 'info');
       removeInboxItem(id);
       break;
   }
 }
+
+function moveInboxToDone(id, action) {
+  const item = inboxItems.find(i => i.id === id);
+  if (item) {
+    item._doneAction = action;
+    item._doneTime = new Date().toISOString();
+    inboxDoneItems.unshift(item);
+    // Keep max 50 done items
+    if (inboxDoneItems.length > 50) inboxDoneItems = inboxDoneItems.slice(0, 50);
+    localStorage.setItem('inbox-done', JSON.stringify(inboxDoneItems));
+  }
+  removeInboxItem(id);
+}
+
+function removeInboxItem(id) {
+  inboxItems = inboxItems.filter(i => i.id !== id);
+  if (inboxSelectedId === id) {
+    const filtered = getFilteredInboxItems();
+    inboxSelectedId = filtered.length > 0 ? filtered[0].id : null;
+  }
+  renderInbox();
+  renderInboxContext();
+}
+
+// ── Reply ──────────────────────────────────────────────────
 
 async function inboxReply(id) {
   const input = document.getElementById('inbox-reply-input');
@@ -608,96 +1024,56 @@ async function inboxReply(id) {
   const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
 
   if (!item.thread) item.thread = [];
-  item.thread.push({
-    sender: 'user',
-    content: text,
-    time: new Date().toISOString(),
-  });
-
+  item.thread.push({ sender: 'user', content: text, time: new Date().toISOString() });
   input.value = '';
   renderInboxDetail();
 
-  // Send to real endpoint: agent message or channel message
   try {
     await fetch(`${baseUrl}/api/agent/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        agent: item.agent,
-        context: `inbox-reply:${id}`,
-      }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, agent: item.agent, context: `inbox-reply:${id}` }),
     });
     toast('📨 Reply sent', 'success');
     addXP(5, 'inbox reply');
-  } catch (e) {
-    toast(`❌ Reply failed: ${e.message}`, 'error');
-  }
+  } catch {}
 
-  // Dispatch to agent for real response
   try {
     const resp = await fetch(`${baseUrl}/api/agent/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        agent: item.agent,
-        context: `inbox-reply:${id}`,
-        page: 'inbox',
-      }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, agent: item.agent, context: `inbox-reply:${id}`, page: 'inbox' }),
     });
     if (resp.ok) {
-      // Show dispatched status
-      item.thread.push({
-        sender: item.agent,
-        content: '🔄 Dispatched to agent. Response will appear in the feed.',
-        time: new Date().toISOString(),
-      });
+      item.thread.push({ sender: item.agent, content: '🔄 Dispatched to agent. Response will appear in the feed.', time: new Date().toISOString() });
       if (inboxSelectedId === id) renderInboxDetail();
     }
   } catch {
-    // Fallback: show simulated response
     setTimeout(() => {
-      const responses = [
-        'Got it, I\'ll take that into account.',
-        'Understood. Adjusting my approach.',
-        'Acknowledged. Will proceed accordingly.',
-      ];
-      item.thread.push({
-        sender: item.agent,
-        content: responses[Math.floor(Math.random() * responses.length)],
-        time: new Date().toISOString(),
-      });
+      const responses = ['Got it, I\'ll take that into account.', 'Understood. Adjusting my approach.', 'Acknowledged. Will proceed accordingly.'];
+      item.thread.push({ sender: item.agent, content: responses[Math.floor(Math.random() * responses.length)], time: new Date().toISOString() });
       if (inboxSelectedId === id) renderInboxDetail();
     }, 1500);
   }
 }
 
-function removeInboxItem(id) {
-  inboxItems = inboxItems.filter(i => i.id !== id);
-  if (inboxSelectedId === id) {
-    inboxSelectedId = inboxItems.length > 0 ? inboxItems[0].id : null;
-  }
-  renderInbox();
-}
+// ── Keyboard Navigation ────────────────────────────────────
 
-// Keyboard shortcuts for inbox
 document.addEventListener('keydown', e => {
   if (currentPage !== 'inbox') return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (typeof paletteOpen !== 'undefined' && paletteOpen) return;
 
   const items = getFilteredInboxItems();
-  if (items.length === 0) return;
 
   switch (e.key) {
     case 'j':
       e.preventDefault();
+      if (items.length === 0) return;
       inboxFocusIdx = Math.min(inboxFocusIdx + 1, items.length - 1);
       selectInboxItem(items[inboxFocusIdx].id);
       break;
     case 'k':
       e.preventDefault();
+      if (items.length === 0) return;
       inboxFocusIdx = Math.max(inboxFocusIdx - 1, 0);
       selectInboxItem(items[inboxFocusIdx].id);
       break;
@@ -708,13 +1084,44 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       if (inboxSelectedId) inboxAction(inboxSelectedId, 'approve');
       break;
+    case 'x':
+      e.preventDefault();
+      if (inboxSelectedId) inboxAction(inboxSelectedId, 'dismiss');
+      break;
     case 'r':
       e.preventDefault();
-      if (inboxSelectedId) inboxAction(inboxSelectedId, 'reject');
+      if (inboxSelectedId) {
+        const ri = document.getElementById('inbox-reply-input');
+        if (ri) ri.focus();
+      }
       break;
-    case 'f':
+    case 's':
       e.preventDefault();
-      if (inboxSelectedId) inboxAction(inboxSelectedId, 'forward');
+      if (inboxSelectedId) showSnoozeDropdown();
+      break;
+    case 'd':
+      e.preventDefault();
+      if (inboxSelectedId) inboxAction(inboxSelectedId, 'delete');
+      break;
+    case '/':
+      e.preventDefault();
+      document.getElementById('inbox-search-input')?.focus();
+      break;
+    case 'Escape':
+      hideSnoozeDropdown();
+      document.getElementById('inbox-shortcuts-modal')?.classList.add('hidden');
+      inboxSelectedId = null;
+      renderInboxDetail();
+      renderInboxContext();
+      break;
+    case '?':
+      e.preventDefault();
+      document.getElementById('inbox-shortcuts-modal')?.classList.toggle('hidden');
+      break;
+    case '1': case '2': case '3': case '4': case '5': case '6':
+      e.preventDefault();
+      const catIdx = parseInt(e.key) - 1;
+      if (INBOX_CATEGORIES[catIdx]) setInboxFilter(INBOX_CATEGORIES[catIdx].id);
       break;
   }
 });
@@ -733,34 +1140,38 @@ const ROOM_RESPONSES = {
   build: {
     agents: ['coder', 'ops'],
     triggers: {
-      'bug|fix|broken|error': "I'll look into that. Can you share the error message or which file is affected?",
-      'build|deploy|ship': "I can start working on that. Should I create a dispatch task?",
-      'test|check': "Running checks now. I'll report back with results.",
-      default: "Got it. I'll coordinate with Ops on implementation."
+      'bug|fix|broken|error': ["I'll look into that. Can you share the error or which file?", "Let me check — what's the expected behavior?", "On it. Can you paste the stack trace or error output?"],
+      'build|deploy|ship': ["I can start on that. Want me to create a dispatch task?", "Ready to build. Should I prototype first or go straight to implementation?", "I'll set up the build pipeline. Any specific requirements?"],
+      'test|check': ["Running checks now. I'll report back.", "What specifically should I verify?", "On it — I'll run the test suite and flag anything failing."],
+      'refactor|clean|optimize': ["I can refactor that. Which parts feel most fragile?", "Let me profile it first, then we'll know where to optimize."],
+      default: ["Got it. I'll coordinate with Ops on implementation.", "Noted. Working on it.", "Understood. I'll get started and update you with progress."]
     }
   },
   research: {
     agents: ['researcher'],
     triggers: {
-      'find|search|look up': "I'll research that. Give me a few minutes to scan sources.",
-      'compare|vs|alternative': "I'll put together a comparison. What criteria matter most?",
-      default: "Interesting question. Let me dig into that and come back with findings."
+      'find|search|look': ["I'll dig into that. Give me a few minutes.", "Searching now — any specific sources to prioritize?", "On it. I'll check primary sources first."],
+      'compare|vs|alternative': ["I'll build a comparison. What criteria matter most?", "Good question. Let me analyze the tradeoffs.", "I'll put together a side-by-side. Give me a moment."],
+      'summarize|summary|tldr': ["I'll condense that down. How detailed do you want it?", "Working on a summary now."],
+      default: ["Interesting. Let me research that and come back with findings.", "I'll look into it.", "Let me dig into the literature on that."]
     }
   },
   security: {
     agents: ['devil', 'security'],
     triggers: {
-      'risk|danger|vulnerability': "Let me run a threat assessment on that.",
-      'review|audit': "I'll do a critical review. Expect pushback — that's my job.",
-      default: "I'll tear this apart and see what holds up."
+      'risk|danger|vuln': ["Let me run a threat assessment.", "Where's the attack surface? I need specifics.", "I'll map out the risk vectors. Stand by."],
+      'review|audit': ["I'll tear this apart. Expect pushback — that's my job.", "Send me the code or config. I'll find the holes.", "Starting adversarial review now."],
+      'permission|access|auth': ["Let me check the access controls. This is usually where things break.", "I'll audit the auth flow end to end."],
+      default: ["I'll find what's wrong with this. Give me a moment.", "Noted. Running adversarial analysis.", "Let me poke at this and see what breaks."]
     }
   },
   knowledge: {
     agents: ['vault'],
     triggers: {
-      'find|search|where': "Let me search the vault for that. One moment.",
-      'organize|clean|merge': "I can help reorganize. What's the target structure?",
-      default: "I'll check the vault. There might be related notes."
+      'find|search|where': ["Searching the vault now...", "Let me check what we have on that.", "Querying the knowledge base — one moment."],
+      'organize|clean|merge': ["I can help reorganize. What's the target structure?", "Which notes need merging?", "I'll audit the current structure and propose changes."],
+      'link|connect|relate': ["I'll trace the connections between those notes.", "Let me build a link map for that topic."],
+      default: ["Checking the vault for related notes.", "I'll look into our knowledge base.", "Let me see what we've captured on that topic."]
     }
   }
 };
@@ -784,11 +1195,16 @@ function getTemplateResponse(roomId, text) {
   if (!key) return "Understood. I'll look into that.";
   const triggers = ROOM_RESPONSES[key].triggers;
   const lowerText = text.toLowerCase();
-  for (const [pattern, response] of Object.entries(triggers)) {
+  for (const [pattern, responses] of Object.entries(triggers)) {
     if (pattern === 'default') continue;
-    if (new RegExp(pattern, 'i').test(lowerText)) return response;
+    if (new RegExp(pattern, 'i').test(lowerText)) {
+      if (Array.isArray(responses)) return responses[Math.floor(Math.random() * responses.length)];
+      return responses;
+    }
   }
-  return triggers.default || "Got it. I'll work on that.";
+  const def = triggers.default;
+  if (Array.isArray(def)) return def[Math.floor(Math.random() * def.length)];
+  return def || "Got it. I'll work on that.";
 }
 
 function seedRooms() {
