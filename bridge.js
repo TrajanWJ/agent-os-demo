@@ -40,6 +40,8 @@ const Bridge = {
 
   // ── Queue ───────────────────────────────────────────────
   async getQueue()           { return this.apiFetch('/api/queue'); },
+  async getProposals(status='pending') { return this.apiFetch(`/api/proposals?status=${status}`); },
+  async resolveProposal(id, action, option) { return this.apiFetch(`/api/proposals/${id}/resolve`, { method:'POST', body:JSON.stringify({action, option}) }); },
   async resolveQueueItem(id, status, resolution='') {
     return this.apiFetch(`/api/queue/${id}/resolve`, { method:'POST', body:JSON.stringify({status,resolution}) });
   },
@@ -238,27 +240,11 @@ async function bridgeGoLive() {
     console.error('[Bridge] Feed load failed:', e);
   }
 
-  // 3) Load queue
+  // 3) Load proposals (replaces old queue)
   try {
-    const liveQueue = await Bridge.getQueue();
-    if (liveQueue.length > 0) {
-      const converted = liveQueue.map(item => ({
-        id: item.id,
-        agent: item.source_agent || 'righthand',
-        type: item.type || 'review',
-        priority: item.priority || 'normal',
-        ttl: item.ttl_seconds || 300,
-        elapsed: 0,
-        remaining: item.ttl_seconds || 300,
-        question: item.title || item.description || '',
-        context: item.context || item.description || '',
-        options: item.options || null,
-      }));
-      // Prepend live queue items
-      queueCards = [...converted, ...queueCards];
-    }
+    await loadLiveProposals();
   } catch (e) {
-    console.error('[Bridge] Queue load failed:', e);
+    console.error('[Bridge] Proposals load failed:', e);
   }
 
   // 4) Re-render current view
@@ -332,9 +318,14 @@ async function bridgeGoLive() {
   });
 
   Bridge.on('queue', (msg) => {
-    if (currentPage === 'queue') renderQueue();
+    if (currentPage === 'queue') loadLiveProposals();
   });
 
+  Bridge.on('proposal', (msg) => {
+    loadLiveProposals(); // Refresh on any proposal change
+  });
+
+  startProposalRefresh();
   toast('🔗 Bridge connected — live data loaded', 'success');
 }
 
@@ -494,6 +485,88 @@ async function bridgeSendMessage() {
     }
     toast('Send failed: ' + e.message, 'error');
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// Proposals: Load, render, auto-refresh, resolve
+// ═══════════════════════════════════════════════════════════
+
+let _proposalRefreshTimer = null;
+
+async function loadLiveProposals() {
+  if (!Bridge.liveMode) return;
+  try {
+    const proposals = await Bridge.getProposals('pending');
+    // Convert to queueCards format
+    const converted = proposals.map(p => ({
+      id: p.id,
+      agent: p.source || 'righthand',
+      type: p.type === 'research' ? 'choice' : p.type === 'dispatch' ? 'approval' : 'freetext',
+      priority: (p.priority || 'P3').toLowerCase().replace('p','') <= 2 ? 'urgent' : 'normal',
+      ttl: 86400, // 24h
+      elapsed: Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000),
+      remaining: Math.max(0, 86400 - Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000)),
+      question: p.title || '',
+      context: p.body || '',
+      options: p.options ? Object.values(p.options).map(o => typeof o === 'string' ? o : o.label || String(o)) : null,
+      _proposalId: p.id,
+      _priority: p.priority || 'P3',
+      _source: p.source || 'unknown',
+      _type: p.type || 'idea',
+      _createdAt: p.created_at,
+    }));
+    
+    // Replace queueCards entirely with live proposals
+    if (typeof queueCards !== 'undefined') {
+      queueCards = converted;
+    }
+    
+    if (currentPage === 'queue' && typeof renderQueue === 'function') {
+      renderQueue();
+    }
+    
+    // Update badge count
+    const badge = document.getElementById('queue-badge');
+    if (badge) {
+      badge.textContent = String(converted.length);
+      badge.style.display = converted.length > 0 ? '' : 'none';
+    }
+    
+    console.log(`[Bridge] Loaded ${converted.length} proposals`);
+  } catch (e) {
+    console.error('[Bridge] Proposals load failed:', e);
+  }
+}
+
+function startProposalRefresh() {
+  if (_proposalRefreshTimer) return;
+  // Refresh proposals every 30s
+  _proposalRefreshTimer = setInterval(() => {
+    if (Bridge.liveMode) loadLiveProposals();
+  }, 30000);
+}
+
+function stopProposalRefresh() {
+  if (_proposalRefreshTimer) {
+    clearInterval(_proposalRefreshTimer);
+    _proposalRefreshTimer = null;
+  }
+}
+
+// Override answerQueue to resolve proposals via bridge
+if (typeof window !== 'undefined') {
+  const _origAnswerQueue = window.answerQueue;
+  window.answerQueue = function(qId, answer) {
+    if (Bridge.liveMode && qId?.startsWith('prop-')) {
+      Bridge.resolveProposal(qId, 'approve', answer).then(() => {
+        loadLiveProposals(); // Refresh after resolve
+        toast('✅ Proposal approved', 'success');
+      }).catch(e => toast('Failed: ' + e.message, 'error'));
+      return;
+    }
+    if (_origAnswerQueue) _origAnswerQueue.call(this, qId, answer);
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
