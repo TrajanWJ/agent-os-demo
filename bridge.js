@@ -113,6 +113,15 @@ function initBridgeUI() {
     if (lbl) lbl.textContent = connected ? 'Live' : 'Offline';
   });
 
+  // Auto-detect same-origin: if served from /app and no token saved, try fetching config
+  if (!Bridge.token && location.pathname.startsWith('/app')) {
+    // Prompt user to enter token via the config modal on first load
+    const dot = document.getElementById('bridge-dot');
+    const lbl = document.getElementById('bridge-label');
+    if (dot) dot.style.background = '#f9e2af';
+    if (lbl) lbl.textContent = 'Setup needed';
+  }
+
   // Auto-connect
   if (Bridge.isConfigured()) {
     const lbl = document.getElementById('bridge-label');
@@ -408,7 +417,7 @@ function bridgeMsgToLocal(msg) {
   if (isBot) {
     // Map bot display names to agent IDs
     const nameLower = authorName.toLowerCase();
-    if (nameLower.includes('right hand') || nameLower.includes('traclaw')) agentId = 'righthand';
+    if (nameLower.includes('right hand') || nameLower.includes('traclaw') || nameLower.includes('traclaw1')) agentId = 'righthand';
     else if (nameLower.includes('research')) agentId = 'researcher';
     else if (nameLower.includes('coder')) agentId = 'coder';
     else if (nameLower.includes('ops')) agentId = 'ops';
@@ -422,7 +431,7 @@ function bridgeMsgToLocal(msg) {
     text: msg.content || '',
     time: new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
     ts: new Date(msg.timestamp).getTime() / 1000,
-    reactions: (msg.reactions || []).map(r => ({ emoji: r.emoji, users: r.count || 1 })),
+    reactions: (msg.reactions || []).map(r => ({ e: r.emoji, n: r.count || 1 })),
     replyTo: msg.referenced_message?.id || null,
     embed: msg.embeds?.[0] ? {
       title: msg.embeds[0].title || '',
@@ -446,11 +455,18 @@ const _origSendMessage = typeof sendMessage === 'function' ? sendMessage : null;
 if (typeof window !== 'undefined' && typeof window.sendMessage === 'function') {
   const _realSendMessage = window.sendMessage;
   window.sendMessage = function() {
-    if (Bridge.liveMode && /^\d+$/.test(currentChannel)) {
-      bridgeSendMessage();
-    } else {
-      _realSendMessage.call(this);
+    if (Bridge.liveMode) {
+      // Resolve channel name to ID if needed
+      if (!/^\d+$/.test(currentChannel) && _liveChannelData?.flat) {
+        const match = _liveChannelData.flat.find(c => c.name === currentChannel || c.name.includes(currentChannel));
+        if (match) currentChannel = match.id;
+      }
+      if (/^\d+$/.test(currentChannel)) {
+        bridgeSendMessage();
+        return;
+      }
     }
+    _realSendMessage.call(this);
   };
 }
 

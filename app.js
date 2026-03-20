@@ -45,6 +45,16 @@ function nav(page) {
 
   // Lazy init pages
   if (page === 'feed')     renderDashboard();
+  if (page === 'talk' && typeof Bridge !== 'undefined' && Bridge.liveMode && typeof _liveChannelData !== 'undefined') {
+    // Ensure currentChannel is a numeric Discord ID when bridge is live
+    if (!/^\d+$/.test(currentChannel) && _liveChannelData?.flat?.length) {
+      const match = _liveChannelData.flat.find(c => c.name === currentChannel || c.name.includes(currentChannel));
+      if (match) currentChannel = match.id;
+      else currentChannel = _liveChannelData.flat[0].id;
+    }
+    if (typeof renderChannelList === 'function') renderChannelList();
+    if (typeof loadLiveMessages === 'function') loadLiveMessages(currentChannel);
+  }
   if (page === 'mind')     initMind();
   if (page === 'pulse')    renderPulse();
   if (page === 'plans')    renderPlans();
@@ -1052,6 +1062,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
   const group = document.createElement('div');
   group.className = `msg-group${collapsed ? ' collapsed' : ''}${isUser ? ' msg-user' : ''}`;
   group.id = `msg-${msg.id}`;
+  group.setAttribute('data-msg-id', msg.id);
 
   // Reply reference
   let replyHTML = '';
