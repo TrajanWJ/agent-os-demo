@@ -17,7 +17,8 @@ const PAGE_TITLES = {
   feed: 'Home', queue: 'Queue', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
-  schedule: 'Schedule', missions: 'Missions', explore: 'Explore'
+  schedule: 'Schedule', missions: 'Missions', explore: 'Explore',
+  plans: 'Plans'
 };
 
 // ── Navigation ────────────────────────────────────────────
@@ -53,6 +54,7 @@ function nav(page) {
   if (page === 'schedule') renderSchedule();
   if (page === 'missions') renderMissions();
   if (page === 'explore')  renderExplore();
+  if (page === 'plans')    { if (typeof renderPlansPage === 'function') renderPlansPage(); }
 
   // Update quick actions for new page
   if (typeof updateQuickActions === 'function') updateQuickActions();
@@ -1596,4 +1598,184 @@ document.addEventListener('click', e => {
 function initTalk() {
   renderChannelList();
   switchChannel('bridge');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SMART ROUTER — Ambient Agent Chat (FAB)
+// ═══════════════════════════════════════════════════════════
+
+const AGENT_ROUTES = [
+  { id: 'researcher', emoji: '🔬', name: 'Researcher', keywords: ['research','analyze','compare','study','find','search','look up','investigate'] },
+  { id: 'coder',      emoji: '💻', name: 'Coder',      keywords: ['build','fix','code','implement','deploy','script','debug','refactor','test'] },
+  { id: 'ops',        emoji: '⚙️', name: 'Ops',        keywords: ['check','status','restart','health','disk','memory','cpu','service','uptime'] },
+  { id: 'devil',      emoji: '😈', name: "Devil's Advocate", keywords: ['review','critique','challenge','risk','flaw','weakness','premortem'] },
+  { id: 'utility',    emoji: '🔧', name: 'Utility',    keywords: ['cleanup','organize','scan','vault','security','index','backup'] },
+  { id: 'righthand',  emoji: '🤝', name: 'Right Hand', keywords: [] },
+];
+
+let agentChatOpen = false;
+let agentChatOverrideIdx = -1; // -1 = auto-detect
+
+function detectAgentRoute(text) {
+  if (agentChatOverrideIdx >= 0) return AGENT_ROUTES[agentChatOverrideIdx];
+  const lower = text.toLowerCase();
+  for (const route of AGENT_ROUTES) {
+    if (route.keywords.some(kw => lower.includes(kw))) return route;
+  }
+  return AGENT_ROUTES[AGENT_ROUTES.length - 1]; // default: Right Hand
+}
+
+function cycleAgentRoute() {
+  agentChatOverrideIdx = (agentChatOverrideIdx + 1) % AGENT_ROUTES.length;
+  const route = AGENT_ROUTES[agentChatOverrideIdx];
+  const badge = document.getElementById('agent-route-badge');
+  if (badge) {
+    badge.textContent = `→ ${route.emoji} ${route.name}`;
+    badge.dataset.agent = route.id;
+  }
+}
+
+function initAgentChatFAB() {
+  // Create FAB button
+  const fab = document.createElement('button');
+  fab.id = 'agent-chat-fab';
+  fab.className = 'agent-chat-fab';
+  fab.textContent = '🧠';
+  fab.onclick = toggleAgentChat;
+  document.body.appendChild(fab);
+
+  // Create chat panel
+  const panel = document.createElement('div');
+  panel.id = 'agent-chat-panel';
+  panel.className = 'agent-chat-panel';
+  panel.innerHTML = `
+    <div class="agent-chat-header">
+      <div class="agent-chat-header-left">
+        <span class="agent-chat-title">🧠 Agent</span>
+        <span class="agent-chat-subtitle">auto-routes to the best specialist</span>
+      </div>
+      <button class="agent-chat-close" onclick="toggleAgentChat()">✕</button>
+    </div>
+    <div class="agent-chat-messages" id="agent-chat-messages"></div>
+    <div class="agent-chat-input-area">
+      <input type="text" class="agent-chat-input" id="agent-chat-input"
+        placeholder="Ask anything..."
+        oninput="onAgentChatInput(this.value)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();sendAgentChat();}">
+      <button class="agent-route-badge" id="agent-route-badge" data-agent="righthand" onclick="cycleAgentRoute()">→ 🤝 Right Hand</button>
+      <button class="agent-chat-send" onclick="sendAgentChat()">▶</button>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  // Load history from localStorage
+  loadAgentChatHistory();
+}
+
+function toggleAgentChat() {
+  agentChatOpen = !agentChatOpen;
+  const fab = document.getElementById('agent-chat-fab');
+  const panel = document.getElementById('agent-chat-panel');
+  fab.classList.toggle('open', agentChatOpen);
+  fab.textContent = agentChatOpen ? '✕' : '🧠';
+  panel.classList.toggle('open', agentChatOpen);
+  if (agentChatOpen) {
+    document.getElementById('agent-chat-input').focus();
+  }
+}
+
+function onAgentChatInput(val) {
+  if (agentChatOverrideIdx >= 0) return; // user overrode, don't auto-detect
+  const route = detectAgentRoute(val);
+  const badge = document.getElementById('agent-route-badge');
+  if (badge) {
+    badge.textContent = `→ ${route.emoji} ${route.name}`;
+    badge.dataset.agent = route.id;
+  }
+}
+
+function sendAgentChat() {
+  const input = document.getElementById('agent-chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const route = detectAgentRoute(text);
+  const container = document.getElementById('agent-chat-messages');
+
+  // Add user bubble
+  const userBubble = document.createElement('div');
+  userBubble.className = 'agent-chat-bubble user';
+  userBubble.textContent = text;
+  container.appendChild(userBubble);
+
+  // POST to bridge
+  const payload = {
+    message: text,
+    agent: route.id,
+    context: `page=${currentPage}`,
+    page: currentPage,
+  };
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agent/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(r => r.json()).then(data => {
+    // Agent response bubble
+    const agentBubble = document.createElement('div');
+    agentBubble.className = 'agent-chat-bubble agent';
+    agentBubble.innerHTML = `<span class="bubble-agent-label" style="color:${getAgentColor(route.id)}">${route.emoji} ${route.name}</span>📨 Message sent to ${route.emoji} ${route.name}. They'll respond in the feed.`;
+    container.appendChild(agentBubble);
+    container.scrollTop = container.scrollHeight;
+  }).catch(() => {
+    // Fallback if bridge not available
+    const agentBubble = document.createElement('div');
+    agentBubble.className = 'agent-chat-bubble agent';
+    agentBubble.innerHTML = `<span class="bubble-agent-label" style="color:${getAgentColor(route.id)}">${route.emoji} ${route.name}</span>📨 Message queued for ${route.emoji} ${route.name}. They'll respond in the feed.`;
+    container.appendChild(agentBubble);
+    container.scrollTop = container.scrollHeight;
+  });
+
+  // Save to localStorage
+  saveAgentChatMessage({ role: 'user', text, agent: route.id, ts: Date.now() });
+  saveAgentChatMessage({ role: 'agent', text: `📨 Message sent to ${route.emoji} ${route.name}. They'll respond in the feed.`, agent: route.id, agentEmoji: route.emoji, agentName: route.name, ts: Date.now() });
+
+  input.value = '';
+  agentChatOverrideIdx = -1; // reset override
+  onAgentChatInput(''); // reset badge
+  container.scrollTop = container.scrollHeight;
+
+  toast(`📨 Routed to ${route.emoji} ${route.name}`, 'success', 2000);
+}
+
+function getAgentColor(agentId) {
+  const colors = { researcher:'#89b4fa', coder:'#a6e3a1', ops:'#fab387', devil:'#f38ba8', utility:'#94e2d5', righthand:'#E8A838' };
+  return colors[agentId] || '#cba6f7';
+}
+
+function saveAgentChatMessage(msg) {
+  const history = JSON.parse(localStorage.getItem('agentOS-chatHistory') || '[]');
+  history.push(msg);
+  // Keep last 100 messages
+  if (history.length > 100) history.splice(0, history.length - 100);
+  localStorage.setItem('agentOS-chatHistory', JSON.stringify(history));
+}
+
+function loadAgentChatHistory() {
+  const history = JSON.parse(localStorage.getItem('agentOS-chatHistory') || '[]');
+  const container = document.getElementById('agent-chat-messages');
+  if (!container) return;
+  container.innerHTML = '';
+  history.forEach(msg => {
+    const bubble = document.createElement('div');
+    bubble.className = `agent-chat-bubble ${msg.role}`;
+    if (msg.role === 'agent') {
+      bubble.innerHTML = `<span class="bubble-agent-label" style="color:${getAgentColor(msg.agent)}">${msg.agentEmoji || '🤝'} ${msg.agentName || 'Agent'}</span>${msg.text}`;
+    } else {
+      bubble.textContent = msg.text;
+    }
+    container.appendChild(bubble);
+  });
+  container.scrollTop = container.scrollHeight;
 }

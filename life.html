@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🧬 Life OS</title>
-<script src="bridge.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -401,7 +400,27 @@ input[type="range"]::-webkit-slider-thumb {
 <script>
 'use strict';
 
+// ── Bridge API Client ──────────────────────────────
+const Bridge = {
+  async _fetch(path, opts = {}) {
+    const resp = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    return resp.json();
+  },
+  getLifeDashboard()        { return this._fetch('/api/life/dashboard'); },
+  getLifeGoals()            { return this._fetch('/api/life/goals'); },
+  getLifeFocus()            { return this._fetch('/api/life/focus'); },
+  getLifeBrainDumps()       { return this._fetch('/api/life/brain-dumps'); },
+  getLifeEnergy()           { return this._fetch('/api/life/energy'); },
+  postLifeFocusStart(task, duration) { return this._fetch('/api/life/focus/start', { method:'POST', body: JSON.stringify({task, duration}) }); },
+  postLifeFocusStop()       { return this._fetch('/api/life/focus/stop', { method:'POST', body: '{}' }); },
+  postLifeEnergy(energy, focus, mood) { return this._fetch('/api/life/energy', { method:'POST', body: JSON.stringify({energy, focus, mood}) }); },
+  postLifeBrainDump(text)   { return this._fetch('/api/life/brain-dump', { method:'POST', body: JSON.stringify({text}) }); },
+};
+
 // ── State ──────────────────────────────────────────
+let allGoals = [];
+let allTasks = [];
 let dashboardData = null;
 let focusActive = false;
 let focusEndTime = 0;
@@ -420,7 +439,25 @@ async function init() {
 
 async function loadDashboard() {
   try {
-    dashboardData = await Bridge.getLifeDashboard();
+    const [dash, goals, focus, dumps, energy] = await Promise.all([
+      Bridge.getLifeDashboard(),
+      Bridge.getLifeGoals(),
+      Bridge.getLifeFocus(),
+      Bridge.getLifeBrainDumps(),
+      Bridge.getLifeEnergy(),
+    ]);
+    // Merge into a unified data object the renderers expect
+    dashboardData = {
+      ...dash,
+      goals: goals.goals || [],
+      projects: goals.projects || [],
+      tasks: goals.tasks || [],
+      focus: focus,
+      brain_dumps: Array.isArray(dumps) ? dumps : dumps?.dumps || [],
+      reminders: dash.dueReminders || [],
+      initiatives: dash.initiatives || [],
+      energy: { readings: Array.isArray(energy) ? energy : energy?.readings || [] },
+    };
     document.getElementById('offlineBanner').classList.remove('show');
     renderPlan(dashboardData);
     renderFocusStats(dashboardData);
@@ -443,12 +480,13 @@ function renderPlan(d) {
 
   // Intentions
   const intentEl = document.getElementById('planIntentions');
-  if (plans.length && plans[0].intentions) {
+  const dailyPlan = d.dailyPlan;
+  if (dailyPlan?.intentions?.length) {
+    intentEl.textContent = Array.isArray(dailyPlan.intentions) ? dailyPlan.intentions.join(' · ') : dailyPlan.intentions;
+  } else if (plans.length && plans[0]?.intentions) {
     intentEl.textContent = plans[0].intentions;
-  } else if (plans.length && plans[0].morning_intention) {
-    intentEl.textContent = plans[0].morning_intention;
   } else {
-    intentEl.textContent = 'No intentions set for today';
+    intentEl.textContent = 'No intentions set for today.';
   }
 
   // Reminder badge
@@ -503,22 +541,25 @@ function formatTime(t) {
 // ── Focus Timer ────────────────────────────────────
 function renderFocusStats(d) {
   const focus = d.focus || {};
-  const sessions = focus.sessions || focus.today_sessions || [];
-  const totalMin = sessions.reduce((s, f) => s + (f.duration || 0), 0);
-  document.getElementById('deepWorkMin').textContent = totalMin;
-  document.getElementById('sessionCount').textContent = sessions.length;
+  const sessions = focus.sessions || [];
+  const stats = d.focusStats || {};
+  const deepMin = stats.deepWorkMin || sessions.reduce((s, f) => s + (f.actual_min || f.duration_min || 0), 0);
+  document.getElementById('deepWorkMin').textContent = deepMin;
+  document.getElementById('sessionCount').textContent = stats.sessionsToday || sessions.length;
 
   // If there's an active session from the server
-  if (focus.active && !focusActive) {
-    const remaining = focus.active.remaining || 0;
+  const current = focus.current;
+  if (current && !focusActive) {
+    const endsAt = new Date(current.ends_at).getTime();
+    const remaining = endsAt - Date.now();
     if (remaining > 0) {
       focusActive = true;
-      focusEndTime = Date.now() + remaining * 60000;
-      document.getElementById('timerTaskLabel').textContent = focus.active.task || '';
+      focusEndTime = endsAt;
+      document.getElementById('timerTaskLabel').textContent = current.task || '';
       document.getElementById('timerRing').classList.add('active');
       document.getElementById('focusStart').style.display = 'none';
       document.getElementById('focusStop').style.display = 'flex';
-      startTimerInterval(focus.active.duration || 25);
+      startTimerInterval(current.duration_min || 25);
     }
   }
 }
@@ -572,50 +613,63 @@ async function stopFocus() {
 
 // ── Goal Tree ──────────────────────────────────────
 function renderGoals(d) {
+  // Data is flat: d.goals[], d.projects[] (with goal_id), d.tasks[] (with project_id)
   const goals = d.goals || [];
+  const projects = d.projects || [];
+  const tasks = d.tasks || [];
+  allGoals = goals;
+  allTasks = tasks;
   const container = document.getElementById('goalTree');
   if (!goals.length) { container.innerHTML = '<div class="empty">No goals defined</div>'; return; }
-  container.innerHTML = goals.map((g, i) => renderGoalItem(g, `g${i}`)).join('');
-}
 
-function renderGoalItem(g, id) {
-  const children = g.projects || g.children || g.tasks || [];
-  const progress = g.progress != null ? g.progress : calcProgress(children);
-  const status = g.status || 'active';
-  const statusColor = status === 'blocked' ? 'var(--red)' : status === 'active' ? 'var(--green)' : 'var(--overlay)';
-  const hasChildren = children.length > 0;
+  container.innerHTML = goals.map((g, gi) => {
+    const gProjects = projects.filter(p => p.goal_id === g.id || (g.children || []).includes(p.id));
+    const status = g.status || 'active';
+    const statusColor = status === 'blocked' ? 'var(--red)' : status === 'active' ? 'var(--green)' : 'var(--overlay)';
+    const gId = `g${gi}`;
 
-  let html = `<div class="goal-item">
-    <div class="goal-header" onclick="toggleGoal('${id}')">
-      ${hasChildren ? `<span class="goal-chevron" id="chev-${id}">▶</span>` : '<span style="width:14px"></span>'}
-      <span class="status-dot ${status}"></span>
-      <span class="goal-name">${g.name || g.title || 'Goal'}</span>
-      <div class="goal-progress-bar"><div class="fill" style="width:${progress}%;background:${statusColor}"></div></div>
-    </div>`;
+    let projHtml = '';
+    let totalTasks = 0, doneTasks = 0;
 
-  if (hasChildren) {
-    html += `<div class="goal-children" id="children-${id}">`;
-    children.forEach((c, i) => {
-      if (c.tasks || c.children || c.projects) {
-        html += renderGoalItem(c, `${id}-${i}`);
-      } else {
-        const done = c.status === 'done' || c.completed;
-        html += `<div class="task-item ${done ? 'done' : ''}" onclick="this.classList.toggle('done')">
+    gProjects.forEach((proj, pi) => {
+      const pTasks = tasks.filter(t => t.project_id === proj.id || (proj.children || []).includes(t.id));
+      const pDone = pTasks.filter(t => t.status === 'completed' || t.status === 'done').length;
+      totalTasks += pTasks.length;
+      doneTasks += pDone;
+      const pPct = pTasks.length ? Math.round((pDone / pTasks.length) * 100) : 0;
+      const pId = `${gId}-p${pi}`;
+
+      const taskHtml = pTasks.map(t => {
+        const done = t.status === 'completed' || t.status === 'done';
+        return `<div class="task-item ${done ? 'done' : ''}">
           <div class="task-check"></div>
-          <span class="task-name">${c.name || c.title || 'Task'}</span>
+          <span class="task-name">${escHtml(t.title || t.name || 'Task')}</span>
         </div>`;
-      }
-    });
-    html += '</div>';
-  }
-  html += '</div>';
-  return html;
-}
+      }).join('');
 
-function calcProgress(items) {
-  if (!items || !items.length) return 0;
-  const done = items.filter(i => i.status === 'done' || i.completed).length;
-  return Math.round((done / items.length) * 100);
+      projHtml += `<div class="goal-item" style="margin-left:12px">
+        <div class="goal-header" onclick="toggleGoal('${pId}')">
+          ${pTasks.length ? `<span class="goal-chevron" id="chev-${pId}">▶</span>` : '<span style="width:14px"></span>'}
+          <span class="goal-name">${escHtml(proj.title || proj.name || 'Project')}</span>
+          <div class="goal-progress-bar"><div class="fill" style="width:${pPct}%;background:var(--accent)"></div></div>
+          <span style="font-size:11px;color:var(--text-muted);margin-left:6px">${pPct}%</span>
+        </div>
+        ${pTasks.length ? `<div class="goal-children" id="children-${pId}">${taskHtml}</div>` : ''}
+      </div>`;
+    });
+
+    const gPct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    return `<div class="goal-item">
+      <div class="goal-header" onclick="toggleGoal('${gId}')">
+        ${gProjects.length ? `<span class="goal-chevron" id="chev-${gId}">▶</span>` : '<span style="width:14px"></span>'}
+        <span class="status-dot ${status}"></span>
+        <span class="goal-name">${escHtml(g.title || g.name || 'Goal')}</span>
+        <div class="goal-progress-bar"><div class="fill" style="width:${gPct}%;background:${statusColor}"></div></div>
+      </div>
+      <div class="goal-children" id="children-${gId}">${projHtml}</div>
+    </div>`;
+  }).join('');
 }
 
 function toggleGoal(id) {
@@ -629,17 +683,27 @@ function toggleGoal(id) {
 // ── Energy Tracker ─────────────────────────────────
 function renderEnergy(d) {
   const energy = d.energy || {};
-  const readings = energy.readings || energy.history || [];
+  const readings = energy.readings || d.energyTrend || [];
   renderSparklines(readings);
 
   // Insight
   const insight = document.getElementById('energyInsight');
-  if (energy.pattern || energy.insight) {
-    insight.textContent = energy.pattern || energy.insight;
-  } else if (readings.length >= 3) {
-    const recent = readings.slice(-3);
-    const avgE = (recent.reduce((s,r) => s + (r.energy || 3), 0) / 3).toFixed(1);
-    insight.textContent = `Recent avg energy: ${avgE}/5`;
+  if (readings.length >= 3) {
+    // Find peak hour
+    const byHour = {};
+    readings.forEach(r => {
+      const h = r.hour != null ? r.hour : new Date(r.timestamp).getUTCHours();
+      if (!byHour[h]) byHour[h] = [];
+      byHour[h].push(r.energy || 3);
+    });
+    let peakHour = 0, peakAvg = 0;
+    for (const [h, vals] of Object.entries(byHour)) {
+      const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+      if (avg > peakAvg) { peakAvg = avg; peakHour = parseInt(h); }
+    }
+    const label = peakHour > 12 ? `${peakHour - 12}pm` : peakHour === 12 ? '12pm' : `${peakHour}am`;
+    const avgE = (readings.slice(-3).reduce((s,r) => s + (r.energy || 3), 0) / Math.min(3, readings.length)).toFixed(1);
+    insight.textContent = `Peak performance around ${label} — energy ${avgE}/5, focus ${(readings.slice(-3).reduce((s,r) => s + (r.focus || 3), 0) / Math.min(3, readings.length)).toFixed(0)}/5`;
   } else {
     insight.textContent = readings.length ? 'Log more readings for pattern insights' : 'No readings yet — start logging!';
   }
@@ -766,39 +830,24 @@ function toggleMatrix() {
 function renderMatrix() {
   if (!dashboardData) return;
   const goals = dashboardData.goals || [];
-  const allTasks = [];
-
-  // Flatten tasks from goal tree
-  function flatten(items, depth = 0) {
-    (items || []).forEach(item => {
-      const children = item.tasks || item.children || item.projects || [];
-      if (children.length && depth < 3) {
-        flatten(children, depth + 1);
-      } else {
-        allTasks.push(item);
-      }
-    });
-  }
-  flatten(goals);
-
-  // Also add schedule items as tasks
-  (dashboardData.schedule || []).forEach(b => {
-    allTasks.push({ name: b.task || b.title || 'Block', priority: b.priority, deadline: b.end_time || b.end });
+  const projects = dashboardData.projects || [];
+  const matrixTasks = (dashboardData.tasks || []).filter(t => t.status !== 'completed' && t.status !== 'done').map(t => {
+    const proj = projects.find(p => p.id === t.project_id);
+    const goal = proj ? goals.find(g => g.id === proj.goal_id || (g.children || []).includes(proj.id)) : null;
+    return { ...t, _goalActive: goal?.status === 'active' };
   });
 
   const now = Date.now();
   const day = 24 * 60 * 60 * 1000;
 
   const doQ = [], scheduleQ = [], delegateQ = [], deleteQ = [];
-  allTasks.forEach(t => {
-    const pri = (t.priority || '').toString().toLowerCase();
+  matrixTasks.forEach(t => {
     const deadline = t.deadline || t.due || '';
-    const isUrgent = pri === 'p0' || pri === 'p1' || pri === 'high' || pri === 'urgent' ||
-      (deadline && (new Date(deadline).getTime() - now) < day);
-    const isImportant = pri === 'p0' || pri === 'p1' || pri === 'p2' || pri === 'high' || pri === 'medium';
+    const isUrgent = deadline && (new Date(deadline).getTime() - now) < day;
+    const isImportant = t._goalActive;
 
     const item = `<div class="matrix-task">
-      ${t.name || t.title || 'Task'}
+      ${escHtml(t.title || t.name || 'Task')}
       ${deadline ? `<div class="deadline">${relativeTime(deadline)}</div>` : ''}
     </div>`;
 

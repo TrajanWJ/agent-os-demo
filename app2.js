@@ -966,3 +966,345 @@ function addStreamEvent(event) {
   streamEvents.unshift(event);
   if (currentPage === 'stream') renderStreamLog();
 }
+
+// ═══════════════════════════════════════════════════════════
+// PLANS PAGE — Kanban with Agent Action Buttons
+// ═══════════════════════════════════════════════════════════
+
+let plansData = [];
+let currentPlanId = null;
+let currentPlanData = null;
+let planChatContext = null; // { plan, task? }
+
+async function renderPlansPage() {
+  const selector = $('plans-selector');
+  const container = $('plans-kanban-container');
+  if (!selector || !container) return;
+
+  // Load plans from bridge
+  try {
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+      plansData = await Bridge.getPlans();
+    }
+  } catch (e) {
+    console.warn('[Plans] Bridge load failed:', e.message);
+  }
+
+  // Fallback seed data if no plans loaded
+  if (!plansData || plansData.length === 0) {
+    plansData = [
+      { id: 'plan-agent-os-frontend', name: 'Agent OS Frontend', description: 'Native frontend with agent interaction', status: 'active', task_count: 6 },
+      { id: 'plan-system-improvements', name: 'System Improvements', description: 'Infrastructure and reliability', status: 'active', task_count: 4 },
+    ];
+  }
+
+  // Render plan selector tabs
+  selector.innerHTML = plansData.map(p =>
+    `<button class="chip${currentPlanId === p.id ? ' active' : ''}" onclick="selectPlan('${p.id}')">${p.name}</button>`
+  ).join('');
+
+  // Auto-select first plan if none selected
+  if (!currentPlanId && plansData.length > 0) {
+    selectPlan(plansData[0].id);
+  } else if (currentPlanId) {
+    await renderPlanKanban(currentPlanId);
+  }
+}
+
+async function selectPlan(planId) {
+  currentPlanId = planId;
+  // Update selector active state
+  const selector = $('plans-selector');
+  if (selector) {
+    selector.querySelectorAll('.chip').forEach(c => {
+      c.classList.toggle('active', c.textContent === plansData.find(p => p.id === planId)?.name);
+    });
+  }
+  await renderPlanKanban(planId);
+}
+
+async function renderPlanKanban(planId) {
+  const container = $('plans-kanban-container');
+  if (!container) return;
+
+  let plan = null;
+  try {
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+      plan = await Bridge.getPlan(planId);
+    }
+  } catch (e) {
+    console.warn('[Plans] Plan load failed:', e.message);
+  }
+
+  // Fallback seed data
+  if (!plan) {
+    plan = getSeedPlan(planId);
+  }
+
+  currentPlanData = plan;
+  if (!plan) {
+    container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Plan not found</div>';
+    return;
+  }
+
+  const columns = plan.columns || [
+    { id: 'backlog', name: 'Backlog', color: '#6c7086' },
+    { id: 'active', name: 'In Progress', color: '#f9e2af' },
+    { id: 'review', name: 'Review', color: '#89b4fa' },
+    { id: 'done', name: 'Done', color: '#a6e3a1' },
+  ];
+
+  container.innerHTML = `
+    <div class="kanban-board" style="flex:1;display:flex;gap:12px;padding:8px 16px 16px;overflow-x:auto;overflow-y:hidden">
+      ${columns.map(col => {
+        const tasks = (plan.tasks || []).filter(t => t.column === col.id);
+        return `
+          <div class="kanban-col">
+            <div class="kanban-col-header" style="border-top:2px solid ${col.color}">
+              <span style="color:${col.color}">${col.name}</span>
+              <span class="col-count">${tasks.length}</span>
+            </div>
+            <div class="kanban-cards" id="plan-cards-${col.id}">
+              ${tasks.map(task => makePlanTaskCard(task, col, plan)).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div class="plan-agent-toolbar" id="plan-agent-toolbar">
+      <button class="plan-toolbar-btn" onclick="openPlanChat()">💬 Discuss Plan</button>
+    </div>
+  `;
+}
+
+function makePlanTaskCard(task, col, plan) {
+  const agentObj = task.agent ? (ga(task.agent) || { emoji: '🤖' }) : { emoji: '⬜' };
+  const pCls = (task.priority || 'P3').toLowerCase();
+  const isDone = col.id === 'done' || col.id === 'shipped';
+
+  // Determine which agent buttons to show
+  let agentBtns = `<button class="task-agent-btn ask-btn" onclick="event.stopPropagation();openTaskChat('${task.id}','${plan.id}')">❓ Ask</button>`;
+
+  if (!isDone) {
+    agentBtns += `<button class="task-agent-btn" onclick="event.stopPropagation();dispatchImplement('${task.id}','${plan.id}')">🚀 Implement</button>`;
+  }
+  if (isDone) {
+    agentBtns += `<button class="task-agent-btn review-btn" onclick="event.stopPropagation();dispatchReview('${task.id}','${plan.id}')">🔍 Review</button>`;
+  }
+
+  return `
+    <div class="board-card plan-task-card" onclick="openPlanTaskDetail('${task.id}','${plan.id}')" data-task-id="${task.id}">
+      <div class="board-card-title">${task.title}</div>
+      <div class="board-card-meta">
+        <span class="priority-badge ${pCls}">${task.priority || 'P3'}</span>
+        <span class="board-card-agent">${agentObj.emoji}</span>
+      </div>
+      ${(task.labels || []).length ? `<div class="board-tags">${task.labels.map(l => `<span class="board-tag">${l}</span>`).join('')}</div>` : ''}
+      <div class="task-card-agent-actions">${agentBtns}</div>
+    </div>
+  `;
+}
+
+function getSeedPlan(planId) {
+  const now = new Date().toISOString();
+  const seedPlans = {
+    'plan-agent-os-frontend': {
+      id: 'plan-agent-os-frontend', name: 'Agent OS Frontend',
+      description: 'Native frontend to replace Discord as the primary interface.',
+      columns: [
+        { id: 'backlog', name: 'Backlog', color: '#6c7086' },
+        { id: 'active', name: 'In Progress', color: '#f9e2af' },
+        { id: 'review', name: 'Review', color: '#89b4fa' },
+        { id: 'done', name: 'Done', color: '#a6e3a1' },
+      ],
+      tasks: [
+        { id: 'task-dashboard', title: 'Dashboard home page redesign', description: 'Replace flat feed with mission control layout.', column: 'done', agent: 'coder', priority: 'P2', labels: ['frontend','ux'] },
+        { id: 'task-bidi-sync', title: 'Bidirectional Discord sync', description: 'Messages flow both ways: WebUI→Discord via bot POST.', column: 'done', agent: 'righthand', priority: 'P2', labels: ['bridge','sync'] },
+        { id: 'task-plans-page', title: 'Plans page — Kanban board', description: 'Agent-managed Kanban with multiple plans.', column: 'active', agent: 'coder', priority: 'P1', labels: ['frontend','new-page'] },
+        { id: 'task-agent-chat', title: 'Agent interaction buttons', description: 'Smart router chat + plan action buttons.', column: 'active', agent: 'coder', priority: 'P1', labels: ['frontend','agents'] },
+        { id: 'task-mobile', title: 'Mobile optimization pass', description: 'Responsive nav, touch-friendly cards.', column: 'backlog', agent: null, priority: 'P3', labels: ['frontend','mobile'] },
+        { id: 'task-notifications', title: 'Notification system', description: 'Browser notifications for task completions.', column: 'backlog', agent: null, priority: 'P3', labels: ['frontend','ux'] },
+      ],
+    },
+    'plan-system-improvements': {
+      id: 'plan-system-improvements', name: 'System Improvements',
+      description: 'Infrastructure, performance, and reliability improvements.',
+      columns: [
+        { id: 'ideas', name: 'Ideas', color: '#cba6f7' },
+        { id: 'planned', name: 'Planned', color: '#89b4fa' },
+        { id: 'active', name: 'Active', color: '#f9e2af' },
+        { id: 'shipped', name: 'Shipped', color: '#a6e3a1' },
+      ],
+      tasks: [
+        { id: 'task-ws-gateway', title: 'Discord Gateway WebSocket', description: 'Replace REST polling with real-time events.', column: 'planned', agent: null, priority: 'P3', labels: ['bridge','performance'] },
+        { id: 'task-bridge-health', title: 'Bridge health dashboard', description: 'Expose /api/health with uptime.', column: 'active', agent: 'ops', priority: 'P2', labels: ['bridge','monitoring'] },
+        { id: 'task-vault-perf', title: 'Vault search performance', description: 'Sub-100ms search via QMD cache.', column: 'ideas', agent: null, priority: 'P3', labels: ['vault','performance'] },
+        { id: 'task-agent-metrics', title: 'Agent performance metrics', description: 'Track success rates per agent.', column: 'ideas', agent: null, priority: 'P3', labels: ['agents','analytics'] },
+      ],
+    },
+  };
+  return seedPlans[planId] || null;
+}
+
+function openPlanTaskDetail(taskId, planId) {
+  const plan = currentPlanData;
+  if (!plan) return;
+  const task = plan.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const agent = task.agent ? (ga(task.agent) || { emoji:'🤖', name:task.agent, color:'#cba6f7' }) : { emoji:'⬜', name:'Unassigned', color:'#6c7086' };
+  const col = (plan.columns || []).find(c => c.id === task.column);
+
+  const modal = $('card-modal-content');
+  modal.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span class="priority-badge ${(task.priority||'P3').toLowerCase()}" style="font-size:14px;padding:4px 12px">${task.priority||'P3'}</span>
+      <div style="font-weight:700;font-size:16px;flex:1">${task.title}</div>
+      <button onclick="closeModal()" style="color:var(--text-muted);font-size:18px;background:none;border:none;cursor:pointer">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:22px;border:2px solid ${agent.color};border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">${agent.emoji}</span>
+      <div>
+        <div style="font-weight:600">${agent.name}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${col?.name || task.column}</div>
+      </div>
+    </div>
+    ${task.description ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:16px;line-height:1.6">${task.description}</div>` : ''}
+    ${(task.labels||[]).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${task.labels.map(l => `<span style="background:var(--bg-raised);padding:3px 10px;border-radius:10px;font-size:12px">${l}</span>`).join('')}</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="task-agent-btn" onclick="dispatchImplement('${taskId}','${planId}');closeModal()" style="padding:8px 14px;font-size:13px">🚀 Implement</button>
+      <button class="task-agent-btn review-btn" onclick="dispatchReview('${taskId}','${planId}');closeModal()" style="padding:8px 14px;font-size:13px">🔍 Review</button>
+      <button class="task-agent-btn ask-btn" onclick="openTaskChat('${taskId}','${planId}');closeModal()" style="padding:8px 14px;font-size:13px">❓ Ask Agent</button>
+    </div>
+  `;
+  $('card-modal').classList.remove('hidden');
+}
+
+// ── Agent Action Dispatchers ──────────────────────────────
+
+function dispatchImplement(taskId, planId) {
+  const plan = currentPlanData;
+  if (!plan) return;
+  const task = plan.tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const payload = {
+    action: 'implement',
+    task: task.title,
+    plan: plan.name,
+    description: task.description || '',
+  };
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agent/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: JSON.stringify(payload), context: 'plan-action', plan: plan.name, task: task.title }),
+  }).catch(() => {});
+
+  toast(`🚀 Dispatched to Coder: ${task.title}`, 'success', 3000);
+  addXP(10, 'dispatch implement');
+}
+
+function dispatchReview(taskId, planId) {
+  const plan = currentPlanData;
+  if (!plan) return;
+  const task = plan.tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const payload = { action: 'review', task: task.title };
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agent/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: JSON.stringify(payload), context: 'plan-action', plan: plan.name, task: task.title }),
+  }).catch(() => {});
+
+  toast(`🔍 Review requested: ${task.title}`, 'success', 3000);
+  addXP(10, 'dispatch review');
+}
+
+// ── Plan Chat (slide-out) ─────────────────────────────────
+
+function openPlanChat() {
+  const plan = currentPlanData;
+  if (!plan) { toast('No plan selected', 'error'); return; }
+
+  planChatContext = { plan: plan.name, planId: plan.id };
+
+  $('plan-chat-title').textContent = `💬 Discuss: ${plan.name}`;
+  $('plan-chat-context').innerHTML = `<strong>📋 ${plan.name}</strong>${plan.description || ''}`;
+  $('plan-chat-messages').innerHTML = '';
+  $('plan-chat-overlay').classList.remove('hidden');
+  $('plan-chat-panel').classList.add('open');
+  setTimeout(() => $('plan-chat-input').focus(), 300);
+}
+
+function closePlanChat() {
+  $('plan-chat-overlay').classList.add('hidden');
+  $('plan-chat-panel').classList.remove('open');
+  planChatContext = null;
+}
+
+function sendPlanChatMessage() {
+  const input = $('plan-chat-input');
+  const text = input.value.trim();
+  if (!text || !planChatContext) return;
+
+  const container = $('plan-chat-messages');
+
+  // User bubble
+  const userBubble = document.createElement('div');
+  userBubble.className = 'agent-chat-bubble user';
+  userBubble.textContent = text;
+  container.appendChild(userBubble);
+
+  // Send to bridge
+  const payload = {
+    message: text,
+    context: 'plan-discuss',
+    plan: planChatContext.plan,
+    task: planChatContext.task || null,
+  };
+
+  const bridgeUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
+  fetch(`${bridgeUrl}/api/agent/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(r => r.json()).then(data => {
+    const reply = document.createElement('div');
+    reply.className = 'agent-chat-bubble agent';
+    reply.innerHTML = `<span class="bubble-agent-label" style="color:#E8A838">🤝 Right Hand</span>📨 Message received (${data.id || 'queued'}). I'll review and respond.`;
+    container.appendChild(reply);
+    container.scrollTop = container.scrollHeight;
+  }).catch(() => {
+    const reply = document.createElement('div');
+    reply.className = 'agent-chat-bubble agent';
+    reply.innerHTML = `<span class="bubble-agent-label" style="color:#E8A838">🤝 Right Hand</span>📨 Message queued. I'll respond when the bridge is available.`;
+    container.appendChild(reply);
+    container.scrollTop = container.scrollHeight;
+  });
+
+  input.value = '';
+  container.scrollTop = container.scrollHeight;
+}
+
+// ── Task Inline Chat ──────────────────────────────────────
+
+function openTaskChat(taskId, planId) {
+  const plan = currentPlanData;
+  if (!plan) return;
+  const task = plan.tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  // Open the plan chat panel pre-filled with task context
+  planChatContext = { plan: plan.name, planId: plan.id, task: task.title, taskId: task.id };
+
+  $('plan-chat-title').textContent = `❓ Ask about: ${task.title}`;
+  $('plan-chat-context').innerHTML = `<strong>📋 ${plan.name} → ${task.title}</strong>${task.description || ''}`;
+  $('plan-chat-messages').innerHTML = '';
+  $('plan-chat-overlay').classList.remove('hidden');
+  $('plan-chat-panel').classList.add('open');
+  setTimeout(() => $('plan-chat-input').focus(), 300);
+}

@@ -974,6 +974,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Init Quick Actions
   updateQuickActions();
+
+  // Init Agent Chat FAB
+  if (typeof initAgentChatFAB === 'function') initAgentChatFAB();
 });
 
 // ═══════════════════════════════════════════════════════════
