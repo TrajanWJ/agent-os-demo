@@ -650,7 +650,13 @@ async function autoGenerateProposal() {
   try {
     if (Bridge.liveMode) {
       const result = await Bridge.apiFetch('/api/proposals/generate', { method: 'POST' });
-      toast(`⚡ Generated ${result.created} new proposals`, 'success');
+      if (result.created > 0) {
+        toast(`⚡ Generated ${result.created} new proposals`, 'success');
+      } else if (result.totalPending > 0) {
+        toast(`✅ ${result.totalPending} proposals already pending — nothing new to generate`, 'info');
+      } else {
+        toast('No proposals to generate right now — dispatch queue may be empty', 'info');
+      }
       await loadLiveProposals();
     } else {
       toast('⚡ Connect bridge first to generate proposals', 'error');
