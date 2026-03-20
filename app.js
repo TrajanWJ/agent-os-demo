@@ -1026,10 +1026,9 @@ function filterProposals(filter) {
 
 function applyProposalFilter(cards) {
   if (_proposalFilter === 'all') return cards;
-  if (_proposalFilter === 'high') return cards.filter(q => { const p = getNormalizedPriority(q); return p === 'P0' || p === 'P1'; });
-  if (_proposalFilter === 'review') return cards.filter(q => q._triageVerdict === 'escalate' || q._status === 'pending');
-  if (_proposalFilter === 'auto') return cards.filter(q => q._triageVerdict === 'auto-execute' || q._status === 'auto-approved');
-  if (_proposalFilter === 'deferred') return cards.filter(q => q._status === 'deferred');
+  if (_proposalFilter === 'pending') return cards.filter(q => (q._status || 'pending') === 'pending');
+  if (_proposalFilter === 'approved') return cards.filter(q => q._status === 'approved' || q._status === 'auto-approved');
+  if (_proposalFilter === 'dismissed') return cards.filter(q => q._status === 'dismissed' || q._status === 'rejected');
   return cards;
 }
 

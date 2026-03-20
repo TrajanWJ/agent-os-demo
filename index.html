@@ -303,52 +303,19 @@
             </div>
             <div class="proposals-filter-chips" id="proposals-filter-chips">
               <button class="filter-chip active" data-filter="all" onclick="filterProposals('all')">All</button>
-              <button class="filter-chip" data-filter="high" onclick="filterProposals('high')">High Priority</button>
-              <button class="filter-chip" data-filter="review" onclick="filterProposals('review')">Review</button>
-              <button class="filter-chip" data-filter="auto" onclick="filterProposals('auto')">Auto-Approved</button>
-              <button class="filter-chip" data-filter="deferred" onclick="filterProposals('deferred')">Deferred</button>
+              <button class="filter-chip" data-filter="pending" onclick="filterProposals('pending')">Pending</button>
+              <button class="filter-chip" data-filter="approved" onclick="filterProposals('approved')">Approved</button>
+              <button class="filter-chip" data-filter="dismissed" onclick="filterProposals('dismissed')">Dismissed</button>
             </div>
           </div>
 
           <!-- Pipeline Visualization -->
           <div class="proposals-pipeline" id="proposals-pipeline"></div>
 
-          <!-- Main Content -->
-          <div class="proposals-main">
-            <!-- Section 1: Needs Decision -->
-            <div class="proposals-section" id="proposals-needs-decision">
-              <div class="proposals-section-header">
-                <h3>🔴 Needs Decision</h3>
-                <button class="proposals-batch-approve-btn" id="batch-approve-safe" onclick="batchApproveSafe()">✅ Approve all safe</button>
-              </div>
-              <div class="proposals-cards" id="proposals-cards-pending"></div>
-            </div>
-
-            <!-- Section 2: Recently Resolved -->
-            <div class="proposals-section proposals-resolved-section" id="proposals-resolved-section">
-              <div class="proposals-section-header proposals-collapsible" onclick="toggleResolvedSection()">
-                <h3>✅ Recently Resolved <span class="proposals-resolved-count" id="proposals-resolved-count"></span></h3>
-                <span class="proposals-collapse-icon" id="proposals-collapse-icon">▸</span>
-              </div>
-              <div class="proposals-resolved-list hidden" id="proposals-resolved-list"></div>
-            </div>
-
-            <!-- Section 3: Stats -->
-            <div class="proposals-section proposals-stats-section" id="proposals-stats-section">
-              <div class="proposals-section-header">
-                <h3>📊 Proposal Engine Stats</h3>
-              </div>
-              <div class="proposals-stats-content" id="proposals-stats-content"></div>
-            </div>
-          </div>
-
-          <!-- Task Tracker Section -->
-          <div class="proposals-section" id="task-tracker-wrapper">
-            <div class="proposals-section-header">
-              <h3>🚀 Task Tracker</h3>
-              <span class="task-tracker-refresh-hint">Auto-refreshes every 10s</span>
-            </div>
-            <div id="task-tracker-section"></div>
+          <!-- Main Content: Split layout with cards + detail -->
+          <div class="proposals-main" id="proposals-main">
+            <div class="proposals-list" id="proposals-list"></div>
+            <div class="proposals-detail-panel hidden" id="proposals-detail-panel"></div>
           </div>
 
           <!-- Empty state -->

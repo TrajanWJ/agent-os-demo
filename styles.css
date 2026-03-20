@@ -14074,17 +14074,13 @@ textarea:focus-visible,
   inset: 0;
   background: rgba(0,0,0,0.6);
   backdrop-filter: blur(4px);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
 }
 .task-modal-overlay.visible {
-  opacity: 1;
-  pointer-events: auto;
+  display: flex;
 }
 .task-modal {
   background: #1e1e2e;
