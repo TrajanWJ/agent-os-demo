@@ -9,11 +9,12 @@ const Bridge = {
   reconnectTimer: null,
   listeners: {},
   liveMode: false,
+  _sameOrigin: false, // Set true when /api is available on same origin (local-server proxy or /app)
 
   // ── Config ──────────────────────────────────────────────
   setToken(t) { this.token = t; localStorage.setItem('bridge_token', t); },
   setBaseUrl(u) { this.baseUrl = u.replace(/\/$/, ''); localStorage.setItem('bridge_url', u); },
-  isConfigured() { return !!(this.baseUrl && (this.token || this.baseUrl === location.origin)); },
+  isConfigured() { return !!(this._sameOrigin || (this.baseUrl && (this.token || this.baseUrl === location.origin))); },
 
   // ── HTTP ────────────────────────────────────────────────
   async apiFetch(path, opts = {}) {
@@ -147,6 +148,13 @@ function initBridgeUI() {
   });
 
   // Auto-detect same-origin: if served from /app and no token saved, try fetching config
+  // Auto-detect same-origin API (works when served from /app or via local-server proxy)
+  if (!Bridge.baseUrl || Bridge.baseUrl === location.origin) {
+    fetch('/health', { signal: AbortSignal.timeout(2000) })
+      .then(r => { if (r.ok) { Bridge._sameOrigin = true; if (!Bridge.baseUrl) Bridge.baseUrl = location.origin; if (!Bridge.liveMode) { Bridge.connect(); bridgeGoLive(); } } })
+      .catch(() => {});
+  }
+
   // Auto-connect (same-origin /app doesn't need a token)
   if (Bridge.isConfigured()) {
     const lbl = document.getElementById('bridge-label');

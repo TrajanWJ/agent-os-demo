@@ -1163,7 +1163,7 @@ function renderProposalStats(cards) {
 
 function resolveProposalAction(qId, action) {
   if (action === 'defer') {
-    if (Bridge.liveMode) {
+    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
       Bridge.resolveProposal(qId, 'defer').then(() => {
         loadLiveProposals();
         toast('💤 Proposal deferred', 'info');
