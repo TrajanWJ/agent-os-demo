@@ -920,8 +920,9 @@ document.addEventListener('DOMContentLoaded', () => {
   addNotification('Deploy complete', 'cross-channel-backlinker.sh live', '✅');
   addNotification('Queue pending', `${QUEUE_QUESTIONS.length} questions need answers`, '❓');
 
-  // Render Feed (home page)
-  renderFeed();
+  // Render Dashboard (home page)
+  if (typeof renderDashboard === 'function') renderDashboard();
+  else renderFeed();
 
   // Render Queue (preload)
   renderQueue();
