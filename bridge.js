@@ -515,6 +515,8 @@ async function loadLiveProposals() {
       _source: p.source || 'unknown',
       _type: p.type || 'idea',
       _createdAt: p.created_at,
+      _triageVerdict: p.triage_verdict || null,
+      _triageReason: p.triage_reason || null,
     }));
     
     // Replace queueCards entirely with live proposals

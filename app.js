@@ -552,8 +552,10 @@ function makeQueueCard(q) {
         <div class="queue-agent-name" style="color:${agent.color}">${agent.name}</div>
         <div style="font-size:10px;color:var(--text-muted)">${q.type}</div>
       </div>
-      <span class="queue-priority-badge">${q.priority}</span>
+      <span class="queue-priority-badge">${q._priority || q.priority}</span>
+      ${q._triageVerdict ? `<span style="font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;background:${q._triageVerdict==='escalate'?'#f9e2af33':'#a6e3a133'};color:${q._triageVerdict==='escalate'?'#f9e2af':'#a6e3a1'};">${q._triageVerdict==='escalate'?'⚠️ Needs Review':'✅ Safe'}</span>` : ''}
     </div>
+    ${q._source ? `<div style="font-size:10px;color:var(--text-muted);margin:-4px 0 6px 46px;">via ${q._source}${q._type ? ' · ' + q._type : ''}</div>` : ''}
     <div class="queue-question">${q.question}</div>
     <div class="queue-context">${q.context}</div>
     <div class="queue-answer-area">${answerHTML}</div>
