@@ -656,11 +656,11 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(updateFlowFromSee
 
 function startProposalRefresh() {
   if (_proposalRefreshTimer) return;
-  // Refresh proposals every 30s
+  // Refresh proposals every 15s
   _proposalRefreshTimer = setInterval(() => {
     if (!shouldPoll()) return;
     if (Bridge.liveMode) loadLiveProposals();
-  }, 30000);
+  }, 15000);
 }
 
 function stopProposalRefresh() {
