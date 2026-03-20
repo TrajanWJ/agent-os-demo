@@ -309,35 +309,64 @@ function renderDashMetrics() {
 function renderDashPulse() {
   const el = $('dash-pulse');
   if (!el) return;
+
+  // Show demo data initially, then overlay with live
   el.innerHTML = `
     <div class="dash-pulse-title"><i data-lucide="heart-pulse"></i> System Pulse</div>
     <div class="dash-pulse-row">
       <span class="dash-pulse-label">Gateway</span>
-      <span class="dash-pulse-value"><span class="dash-pulse-dot green"></span> Healthy</span>
+      <span class="dash-pulse-value" id="dp-gateway"><span class="dash-pulse-dot green"></span> Loading...</span>
     </div>
     <div class="dash-pulse-row">
       <span class="dash-pulse-label">Uptime</span>
-      <span class="dash-pulse-value">4d 7h 23m</span>
-    </div>
-    <div class="dash-pulse-divider"></div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Last Dispatch</span>
-      <span class="dash-pulse-value">2m ago</span>
-    </div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Cron Jobs</span>
-      <span class="dash-pulse-value"><span class="dash-pulse-dot yellow"></span> 6/7 OK</span>
+      <span class="dash-pulse-value" id="dp-uptime">—</span>
     </div>
     <div class="dash-pulse-divider"></div>
     <div class="dash-pulse-row">
       <span class="dash-pulse-label">Memory</span>
-      <span class="dash-pulse-value">6.2 / 14 GB</span>
+      <span class="dash-pulse-value" id="dp-memory">—</span>
     </div>
     <div class="dash-pulse-row">
       <span class="dash-pulse-label">Disk</span>
-      <span class="dash-pulse-value"><span class="dash-pulse-dot ${94 > 90 ? 'red' : 'green'}"></span> 94% used</span>
+      <span class="dash-pulse-value" id="dp-disk">—</span>
+    </div>
+    <div class="dash-pulse-divider"></div>
+    <div class="dash-pulse-row">
+      <span class="dash-pulse-label">Load</span>
+      <span class="dash-pulse-value" id="dp-load">—</span>
     </div>
   `;
+
+  // Fetch live data if bridge is connected
+  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
+    Bridge.getSystemOverview().then(data => {
+      const gw = $('dp-gateway');
+      const up = $('dp-uptime');
+      const mem = $('dp-memory');
+      const disk = $('dp-disk');
+      const load = $('dp-load');
+      if (gw) {
+        const gwStatus = data.services?.['openclaw-gateway'] || 'unknown';
+        const isActive = gwStatus === 'active';
+        gw.innerHTML = `<span class="dash-pulse-dot ${isActive ? 'green' : 'red'}"></span> ${isActive ? 'Healthy' : gwStatus}`;
+      }
+      if (up) up.textContent = data.uptime || 'unknown';
+      if (mem && data.memory) {
+        const usedGB = (data.memory.used / 1024).toFixed(1);
+        const totalGB = (data.memory.total / 1024).toFixed(1);
+        mem.textContent = `${usedGB} / ${totalGB} GB`;
+      }
+      if (disk && data.disk) {
+        const pct = parseInt(data.disk.percent);
+        disk.innerHTML = `<span class="dash-pulse-dot ${pct > 90 ? 'red' : pct > 75 ? 'yellow' : 'green'}"></span> ${data.disk.percent} used`;
+      }
+      if (load && data.load) {
+        const l1 = data.load.avg1;
+        const color = l1 < 2 ? 'green' : l1 < 4 ? 'yellow' : 'red';
+        load.innerHTML = `<span class="dash-pulse-dot ${color}"></span> ${l1.toFixed(2)}`;
+      }
+    }).catch(() => {});
+  }
 }
 
 function applyDashFeedLimit() {
