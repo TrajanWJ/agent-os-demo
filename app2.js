@@ -1478,6 +1478,7 @@ async function renderPlans() {
   if (!v) return;
 
   if (!Bridge.liveMode) {
+    stopPlansPolling();
     v.innerHTML = `<div class="plans-empty"><div class="empty-icon">📋</div><div class="empty-title">Connect bridge to view plans</div><div class="empty-desc">Configure bridge connection to load your Kanban boards</div></div>`;
     return;
   }
@@ -1485,13 +1486,49 @@ async function renderPlans() {
   v.innerHTML = `<div class="plans-loading"><span class="plans-spinner"></span> Loading plans...</div>`;
 
   try {
-    plansData = await Bridge.getPlans();
-    if (!Array.isArray(plansData)) plansData = plansData.plans || [];
+    await loadFullPlans();
     plansLoaded = true;
-    if (!currentPlanId && plansData.length > 0) currentPlanId = plansData[0].id;
     renderPlansUI();
+    startPlansPolling();
   } catch (e) {
     v.innerHTML = `<div class="plans-empty"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load plans</div><div class="empty-desc">${e.message}</div></div>`;
+  }
+}
+
+async function loadFullPlans() {
+  const summaries = await Bridge.getPlans();
+  const list = Array.isArray(summaries) ? summaries : (summaries.plans || []);
+  // Fetch full plan data for each (needed for tasks, cross-refs)
+  const full = await Promise.all(list.map(async s => {
+    try { return await Bridge.getPlan(s.id); } catch { return s; }
+  }));
+  plansData = full;
+  plansLastSyncTime = Date.now();
+}
+
+function startPlansPolling() {
+  stopPlansPolling();
+  plansPollingInterval = setInterval(async () => {
+    if (!Bridge.liveMode) { stopPlansPolling(); return; }
+    try {
+      const prev = JSON.stringify(plansData.map(p => ({ id: p.id, updated_at: p.updated_at, tc: (p.tasks||[]).length })));
+      await loadFullPlans();
+      const next = JSON.stringify(plansData.map(p => ({ id: p.id, updated_at: p.updated_at, tc: (p.tasks||[]).length })));
+      if (prev !== next) renderPlansUI();
+      else updateSyncIndicator();
+    } catch { /* silent */ }
+  }, 10000);
+}
+
+function stopPlansPolling() {
+  if (plansPollingInterval) { clearInterval(plansPollingInterval); plansPollingInterval = null; }
+}
+
+function updateSyncIndicator() {
+  const el = document.querySelector('.plans-sync-indicator');
+  if (el && plansLastSyncTime) {
+    const ago = Math.floor((Date.now() - plansLastSyncTime) / 1000);
+    el.textContent = ago < 5 ? 'Synced just now' : `Synced ${ago}s ago`;
   }
 }
 
@@ -1499,85 +1536,222 @@ function renderPlansUI() {
   const v = $('view-plans');
   if (!v) return;
 
-  const plan = plansData.find(p => p.id === currentPlanId);
+  // Sync indicator text
+  const syncText = plansLastSyncTime ? (() => {
+    const ago = Math.floor((Date.now() - plansLastSyncTime) / 1000);
+    return ago < 5 ? 'Synced just now' : `Synced ${ago}s ago`;
+  })() : '';
 
-  // Top bar: plan tabs + new plan button
+  // Top bar: "All Plans" pill + plan tabs + sync indicator + new plan button
   let html = `<div class="plans-topbar">
-    <div class="plans-tabs">`;
+    <div class="plans-tabs-scroll">
+      <button class="plans-tab${currentPlanId === null ? ' active' : ''}" onclick="switchPlan(null)">📋 All Plans</button>`;
   plansData.forEach(p => {
     const active = p.id === currentPlanId ? ' active' : '';
     const statusCls = p.status || 'active';
-    html += `<button class="plans-tab${active}" onclick="switchPlan('${p.id}')">${p.name || 'Untitled'}<span class="plan-status-dot ${statusCls}"></span></button>`;
+    const taskCount = (p.tasks || []).length;
+    html += `<button class="plans-tab${active}" onclick="switchPlan('${p.id}')">${p.name || 'Untitled'}<span class="plans-tab-count">${taskCount}</span><span class="plan-status-dot ${statusCls}"></span></button>`;
   });
   html += `</div>
+    <span class="plans-sync-indicator">${syncText}</span>
     <button class="plans-new-btn" onclick="showNewPlanModal()">+ New Plan</button>
   </div>`;
 
-  if (!plan) {
+  if (plansData.length === 0) {
     html += `<div class="plans-empty"><div class="empty-icon">📋</div><div class="empty-title">No plans yet</div><div class="empty-desc">Create your first plan to get started</div></div>`;
     v.innerHTML = html;
     lucide.createIcons();
     return;
   }
 
-  // Status badge
-  const statusLabel = plan.status || 'active';
-  html += `<div class="plan-info-bar"><span class="plan-status-badge ${statusLabel}">${statusLabel.charAt(0).toUpperCase()+statusLabel.slice(1)}</span>`;
-  if (plan.description) html += `<span class="plan-desc">${plan.description}</span>`;
-  html += `</div>`;
-
-  // Kanban columns
-  const columns = plan.columns || DEFAULT_COLUMNS;
-  const tasks = plan.tasks || [];
-
-  html += `<div class="kanban-container">`;
-  columns.forEach((col, ci) => {
-    const colTasks = tasks.filter(t => t.column === col || t.status === col);
-    const colColors = ['#89b4fa','#fab387','#cba6f7','#a6e3a1'];
-    const colColor = colColors[ci % colColors.length];
-
-    html += `<div class="kanban-column" data-col="${col}">
-      <div class="kanban-col-header" style="border-top:3px solid ${colColor}">
-        <span class="kanban-col-title">${col}</span>
-        <span class="kanban-col-count">${colTasks.length}</span>
-      </div>
-      <div class="kanban-col-body">`;
-
-    colTasks.forEach(task => {
-      const agent = ga(task.agent);
-      const agentColor = agent ? agent.color : '#6c7086';
-      const agentEmoji = agent ? agent.emoji : '🤖';
-      const agentName = agent ? agent.name : (task.agent || 'Unassigned');
-      const prio = task.priority || 'P3';
-      const prioColor = PLAN_PRIORITY_COLORS[prio] || '#6c7086';
-      const labels = task.labels || [];
-
-      html += `<div class="kanban-card" style="border-left:3px solid ${agentColor}" onclick="openTaskDetail('${plan.id}','${task.id}')">
-        <div class="kanban-card-top">
-          <span class="kanban-card-agent">${agentEmoji} ${agentName}</span>
-          <span class="kanban-card-prio" style="background:${prioColor}">${prio}</span>
-        </div>
-        <div class="kanban-card-title">${task.title || 'Untitled'}</div>`;
-      if (labels.length) {
-        html += `<div class="kanban-card-labels">${labels.map(l => `<span class="kanban-label">${l}</span>`).join('')}</div>`;
-      }
-      html += `<div class="kanban-card-time">${timeAgo(task.updated_at || task.created_at)}</div>
-      </div>`;
-    });
-
-    html += `</div>
-      <button class="kanban-add-btn" onclick="showQuickCreate('${plan.id}','${col}',this)">+ Add task</button>
-    </div>`;
-  });
-  html += `</div>`;
+  // "All Plans" overview or single plan kanban
+  if (currentPlanId === null) {
+    html += renderAllPlansOverview();
+  } else {
+    const plan = plansData.find(p => p.id === currentPlanId);
+    if (!plan) { currentPlanId = null; html += renderAllPlansOverview(); }
+    else html += renderSinglePlanKanban(plan);
+  }
 
   v.innerHTML = html;
   lucide.createIcons();
 }
 
+function renderAllPlansOverview() {
+  let html = `<div class="plans-overview-grid">`;
+  plansData.forEach(p => {
+    const tasks = p.tasks || [];
+    const columns = p.columns || DEFAULT_COLUMNS;
+    const statusLabel = p.status || 'active';
+    const totalTasks = tasks.length;
+    const doneTasks = tasks.filter(t => {
+      const lastCol = columns[columns.length - 1];
+      return taskInCol(t, lastCol);
+    }).length;
+    const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    html += `<div class="plans-overview-card" onclick="switchPlan('${p.id}')">
+      <div class="plans-ov-header">
+        <span class="plans-ov-name">${p.name || 'Untitled'}</span>
+        <span class="plan-status-badge ${statusLabel}">${statusLabel}</span>
+      </div>`;
+    if (p.description) html += `<div class="plans-ov-desc">${p.description}</div>`;
+
+    // Column summary chips
+    html += `<div class="plans-ov-cols">`;
+    columns.forEach((col, ci) => {
+      const count = tasks.filter(t => taskInCol(t, col)).length;
+      html += `<span class="plans-ov-col-chip" style="border-color:${colColor(col, ci)}">${colName(col)} <strong>${count}</strong></span>`;
+    });
+    html += `</div>`;
+
+    // Progress bar
+    html += `<div class="plans-ov-progress">
+      <div class="plans-ov-progress-bar" style="width:${progress}%"></div>
+    </div>
+    <div class="plans-ov-footer">
+      <span>${totalTasks} tasks · ${doneTasks} done</span>
+      <span class="plans-ov-arrow">→</span>
+    </div>`;
+
+    // Cross-references from this plan
+    const refs = getCrossRefsForPlan(p);
+    if (refs.length > 0) {
+      html += `<div class="plans-ov-refs">`;
+      refs.forEach(r => {
+        html += `<span class="plans-cross-ref" onclick="event.stopPropagation();switchPlan('${r.planId}')">🔗 ${r.planName}</span>`;
+      });
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderSinglePlanKanban(plan) {
+  let html = '';
+  const statusLabel = plan.status || 'active';
+  html += `<div class="plan-info-bar"><span class="plan-status-badge ${statusLabel}">${statusLabel.charAt(0).toUpperCase()+statusLabel.slice(1)}</span>`;
+  if (plan.description) html += `<span class="plan-desc">${plan.description}</span>`;
+  html += `</div>`;
+
+  const columns = plan.columns || DEFAULT_COLUMNS;
+  const tasks = plan.tasks || [];
+
+  html += `<div class="kanban-container">`;
+  columns.forEach((col, ci) => {
+    const cId = colId(col);
+    const cName = colName(col);
+    const cColor = colColor(col, ci);
+    const colTasks = tasks.filter(t => taskInCol(t, col));
+
+    html += `<div class="kanban-column" data-col="${cId}">
+      <div class="kanban-col-header" style="border-top:3px solid ${cColor}">
+        <span class="kanban-col-title">${cName}</span>
+        <span class="kanban-col-count">${colTasks.length}</span>
+      </div>
+      <div class="kanban-col-body">`;
+
+    colTasks.forEach(task => {
+      html += renderKanbanCard(plan, task);
+    });
+
+    html += `</div>
+      <button class="kanban-add-btn" onclick="showQuickCreate('${plan.id}','${cId}',this)">+ Add task</button>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Cross-references section
+  const refs = getCrossRefsForPlan(plan);
+  if (refs.length > 0) {
+    html += `<div class="plans-related-section">
+      <div class="plans-related-title">🔗 Related Plans</div>
+      <div class="plans-related-list">`;
+    refs.forEach(r => {
+      html += `<div class="plans-related-item" onclick="switchPlan('${r.planId}')">
+        <span class="plans-related-name">${r.planName}</span>
+        <span class="plans-related-detail">${r.refs.length} cross-reference${r.refs.length > 1 ? 's' : ''}</span>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  return html;
+}
+
+function renderKanbanCard(plan, task) {
+  const agent = ga(task.agent);
+  const agentColor = agent ? agent.color : '#6c7086';
+  const agentEmoji = agent ? agent.emoji : '🤖';
+  const agentName = agent ? agent.name : (task.agent || 'Unassigned');
+  const prio = task.priority || 'P3';
+  const prioColor = PLAN_PRIORITY_COLORS[prio] || '#6c7086';
+  const labels = task.labels || [];
+  const blockedBy = task.blockedBy || [];
+
+  let cardHtml = `<div class="kanban-card" style="border-left:3px solid ${agentColor}" onclick="openTaskDetail('${plan.id}','${task.id}')">
+    <div class="kanban-card-top">
+      <span class="kanban-card-agent">${agentEmoji} ${agentName}</span>
+      <span class="kanban-card-prio" style="background:${prioColor}">${prio}</span>
+    </div>
+    <div class="kanban-card-title">${task.title || 'Untitled'}</div>`;
+
+  // Cross-reference badges
+  if (blockedBy.length > 0) {
+    cardHtml += `<div class="kanban-card-xrefs">`;
+    blockedBy.forEach(ref => {
+      const refPlan = plansData.find(p => p.id === ref.planId);
+      const refName = refPlan ? refPlan.name : ref.planId;
+      cardHtml += `<span class="kanban-xref-badge" title="Blocked by: [${refName}] ${ref.taskTitle || ref.taskId}">🔗 ${ref.taskTitle || ref.taskId}</span>`;
+    });
+    cardHtml += `</div>`;
+  }
+
+  if (labels.length) {
+    cardHtml += `<div class="kanban-card-labels">${labels.map(l => `<span class="kanban-label">${l}</span>`).join('')}</div>`;
+  }
+  cardHtml += `<div class="kanban-card-time">${timeAgo(task.updated_at || task.created_at)}</div>
+  </div>`;
+  return cardHtml;
+}
+
+// Cross-reference helpers
+function getCrossRefsForPlan(plan) {
+  const tasks = plan.tasks || [];
+  const refMap = new Map(); // planId → { planName, refs: [] }
+  tasks.forEach(t => {
+    const blockedBy = t.blockedBy || [];
+    blockedBy.forEach(ref => {
+      if (ref.planId && ref.planId !== plan.id) {
+        if (!refMap.has(ref.planId)) {
+          const other = plansData.find(p => p.id === ref.planId);
+          refMap.set(ref.planId, { planId: ref.planId, planName: other ? other.name : ref.planId, refs: [] });
+        }
+        refMap.get(ref.planId).refs.push({ taskId: t.id, taskTitle: t.title, refTaskId: ref.taskId });
+      }
+    });
+    // Also check relatedPlans field
+    const related = plan.relatedPlans || [];
+    related.forEach(rp => {
+      const rpId = typeof rp === 'string' ? rp : rp.id;
+      if (rpId && !refMap.has(rpId)) {
+        const other = plansData.find(p => p.id === rpId);
+        if (other) refMap.set(rpId, { planId: rpId, planName: other.name, refs: [{ note: 'Related plan' }] });
+      }
+    });
+  });
+  return Array.from(refMap.values());
+}
+
 function switchPlan(id) {
   currentPlanId = id;
   renderPlansUI();
+  // Scroll top of plans view
+  const v = $('view-plans');
+  if (v) v.scrollTop = 0;
 }
 
 // ── Quick Create (inline) ──────────────────────────────────
@@ -1691,7 +1865,7 @@ function openTaskDetail(planId, taskId) {
         <div class="task-field-group">
           <label>Column</label>
           <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','column',this.value)">
-            ${columns.map(c => `<option value="${c}" ${c===task.column||c===task.status?'selected':''}>${c}</option>`).join('')}
+            ${columns.map(c => { const cid = colId(c), cn = colName(c); return `<option value="${cid}" ${cid===task.column||cn===task.column||cid===task.status||cn===task.status?'selected':''}>${cn}</option>`; }).join('')}
           </select>
         </div>
         <div class="task-field-group">

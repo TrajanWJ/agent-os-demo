@@ -1517,3 +1517,4 @@ function handleExploreSearch(q) {
     toast(`🔍 Found ${Math.floor(Math.random()*20+5)} results for "${q}"`, 'info', 1500);
   }
 }
+

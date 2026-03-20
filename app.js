@@ -17,7 +17,7 @@ const PAGE_TITLES = {
   feed: 'Home', queue: 'Proposals', plans: 'Plans', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
-  schedule: 'Schedule', missions: 'Missions', life: 'Life', explore: 'Explore'
+  schedule: 'Schedule', missions: 'Missions', explore: 'Explore'
 };
 
 // ── Navigation ────────────────────────────────────────────
