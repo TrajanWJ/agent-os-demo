@@ -343,9 +343,17 @@ if (typeof window !== 'undefined') {
     // Call original to handle UI state (active classes, header, etc.)
     if (_realSwitchChannel) _realSwitchChannel.call(this, chId);
     
-    // If bridge is live and this is a real Discord channel ID (numeric), load real messages
-    if (Bridge.liveMode && /^\d+$/.test(chId)) {
-      loadLiveMessages(chId);
+    // Always try to load real messages for numeric channel IDs
+    // (Bridge auto-connects on page load if configured, and channels are real IDs now)
+    if (/^\d+$/.test(chId)) {
+      if (Bridge.liveMode) {
+        loadLiveMessages(chId);
+      } else if (Bridge.isConfigured()) {
+        // Try connecting first, then load
+        Bridge.checkHealth().then(ok => {
+          if (ok) { Bridge.connect(); bridgeGoLive(); }
+        });
+      }
     }
   };
 }
