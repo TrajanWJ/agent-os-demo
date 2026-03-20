@@ -560,12 +560,37 @@
             </div>
           </div>
 
-          <!-- System Logs -->
+          <!-- Process Monitor -->
+          <div class="sys-section" id="sys-process-section">
+            <div class="sys-section-header">
+              <span class="sys-section-icon">📊</span>
+              <span class="sys-section-title">Process Monitor</span>
+              <span class="sys-section-badge" style="font-size:10px;color:var(--text-muted)">top 15 · auto 30s</span>
+            </div>
+            <div id="sys-process-monitor"></div>
+          </div>
+
+          <!-- Live Log Viewer -->
+          <div class="sys-section hidden" id="sys-live-log-section">
+            <div class="sys-section-header">
+              <span class="sys-section-icon">🖥️</span>
+              <span class="sys-section-title" id="sys-live-log-title">Live Logs</span>
+              <div class="sys-live-log-controls">
+                <input type="text" class="sys-log-filter-input" placeholder="🔍 Filter logs..." oninput="filterLogs(this.value)">
+                <button class="sys-log-pause-btn" onclick="refreshLogsNow()">🔄 Refresh</button>
+                <button class="sys-log-pause-btn" id="sys-log-pause" onclick="toggleLogPause()">⏸ Pause</button>
+                <button class="sys-log-pause-btn" onclick="closeLogViewer()" title="Close">✕</button>
+              </div>
+            </div>
+            <div class="sys-terminal-container" id="sys-live-log-output"></div>
+          </div>
+
+          <!-- System Logs (stream) -->
           <div class="sys-section" id="sys-logs-section">
             <div class="sys-section-header">
               <span class="sys-section-icon">📜</span>
               <span class="sys-section-title">System Logs</span>
-              <button class="sys-log-pause-btn" id="sys-log-pause" onclick="toggleLogPause()">⏸ Pause</button>
+              <button class="sys-log-pause-btn" onclick="toggleLogPause()">⏸ Pause</button>
             </div>
             <div class="sys-logs-container" id="sys-logs"></div>
           </div>
@@ -1124,6 +1149,7 @@
   <script src="projects.js?v=1773994200"></script>
   <script src="notifications.js?v=1773994300"></script>
   <script src="bridge.js?v=1773993468"></script>
+  <script src="system.js?v=1773993468"></script>
   <script src="live.js?v=1773993468"></script>
   <script src="explore.js?v=1773994200"></script>
   <script src="help.js?v=1773994100"></script>

@@ -3745,3 +3745,83 @@ function updateSidebarAgentCount() {
 
 updateSidebarAgentCount();
 setInterval(updateSidebarAgentCount, 5000);
+
+// ═══════════════════════════════════════════════════════════
+// MISSING FUNCTION STUBS — Referenced in index.html but undefined
+// ═══════════════════════════════════════════════════════════
+
+function addBoardCard() {
+  toast('📋 New card — this board is legacy; use Tasks or Plans instead', 'info');
+}
+
+function closeModal() {
+  const modal = $('card-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function closeModalIfOutside(event) {
+  if (event.target.id === 'card-modal') closeModal();
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelectorAll('.theme-option').forEach(el => {
+    el.classList.toggle('active', el.textContent.trim().toLowerCase() === theme);
+  });
+  try { localStorage.setItem('agentOS-theme', theme); } catch {}
+  toast(`🎨 Theme: ${theme}`, 'info', 2000);
+}
+
+// Restore saved theme on load
+(function() {
+  try {
+    const saved = localStorage.getItem('agentOS-theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+  } catch {}
+})();
+
+function toggleLevelFilter(level, btn) {
+  if (btn) btn.classList.toggle('active');
+  // Filter stream log entries by level
+  const activelevels = new Set();
+  document.querySelectorAll('.level-chip.active').forEach(c => activelevels.add(c.dataset.level));
+  document.querySelectorAll('#stream-log .log-line').forEach(line => {
+    const lineLevel = line.dataset?.level || 'info';
+    line.style.display = activelevels.has(lineLevel) ? '' : 'none';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// HASH-BASED ROUTING — URL hash updates on page switch
+// ═══════════════════════════════════════════════════════════
+
+// Patch nav to update URL hash
+const _origNavHash = nav;
+nav = function(page) {
+  _origNavHash(page);
+  if (page && page !== 'feed') {
+    history.replaceState(null, '', '#' + page);
+  } else {
+    history.replaceState(null, '', location.pathname);
+  }
+};
+
+// On load, navigate to hash page if present
+(function() {
+  const hash = location.hash.replace('#', '');
+  if (hash && PAGE_TITLES[hash]) {
+    // Defer to after DOMContentLoaded / init
+    setTimeout(() => nav(hash), 100);
+  }
+})();
+
+// Handle browser back/forward
+window.addEventListener('hashchange', () => {
+  const hash = location.hash.replace('#', '');
+  if (hash && PAGE_TITLES[hash] && hash !== currentPage) {
+    // Use _origNavHash to avoid pushing another hash
+    _origNavHash(hash);
+  } else if (!hash && currentPage !== 'feed') {
+    _origNavHash('feed');
+  }
+});
