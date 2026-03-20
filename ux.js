@@ -229,11 +229,14 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // ── ? — show keyboard help ──
+  // ── ? — show keyboard help (skip on inbox which has its own ? handler) ──
   if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-    e.preventDefault();
-    showShortcutOverlay();
-    return;
+    const cp2 = typeof currentPage !== 'undefined' ? currentPage : '';
+    if (cp2 !== 'inbox') {
+      e.preventDefault();
+      showShortcutOverlay();
+      return;
+    }
   }
 
   // ── Number keys — page navigation (only when not on pages that use numbers) ──

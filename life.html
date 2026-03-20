@@ -73,23 +73,23 @@ body {
 }
 .page {
   display: none; padding: 28px 32px; min-height: 100%;
-  opacity: 0; transform: translateY(6px);
-  transition: opacity .25s ease, transform .25s ease;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .35s cubic-bezier(.4,0,.2,1), transform .35s cubic-bezier(.4,0,.2,1);
 }
 .page.active { display: block; opacity: 1; transform: translateY(0); }
 .page.fade-in { opacity: 1; transform: translateY(0); }
 
 .page-header { margin-bottom: 24px; }
-.page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-.page-header .subtitle { font-size: 14px; color: var(--subtext0); }
+.page-header h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; letter-spacing: -.3px; }
+.page-header .subtitle { font-size: 13px; color: var(--subtext0); }
 
 /* ── Cards ────────────────────────────────────── */
 .card {
   background: var(--surface0); border: 1px solid var(--surface1);
-  border-radius: 8px; padding: 18px; margin-bottom: 16px;
-  transition: border-color .2s, box-shadow .2s;
+  border-radius: 12px; padding: 18px; margin-bottom: 16px;
+  transition: border-color .25s ease, box-shadow .25s ease, transform .2s ease;
 }
-.card:hover { border-color: var(--surface2); }
+.card:hover { border-color: var(--surface2); box-shadow: 0 4px 16px rgba(0,0,0,.15); transform: translateY(-1px); }
 .card h3 {
   font-size: 13px; text-transform: uppercase; letter-spacing: .6px;
   color: var(--subtext0); margin-bottom: 14px; display: flex;
