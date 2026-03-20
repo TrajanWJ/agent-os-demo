@@ -1719,62 +1719,57 @@ let mcFeed = [...MISSION_FEED_DATA];
 let mcDecisions = [...MISSION_DECISIONS_DATA];
 let mcBlocking = [...MISSION_BLOCKING_DATA];
 let mcPlans = [...MISSION_PLANS_DATA];
+let _missionsRefreshTimer = null;
 
-async function renderMissions() {
-  // Try loading from bridge
+async function fetchMissionsFromBridge() {
+  if (typeof Bridge === 'undefined' || !Bridge.liveMode) return false;
   try {
-    if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
-      const [goals, feed, proposals, plans] = await Promise.all([
-        Bridge.getMissionsGoals().catch(() => null),
-        Bridge.getMissionsFeed(50).catch(() => null),
-        Bridge.getProposals('pending').catch(() => null),
-        Bridge.getPlans().catch(() => null),
-      ]);
-      if (goals && Array.isArray(goals) && goals.length > 0) {
-        mcMissions = goals.map(g => ({
-          id: g.id, icon: g.icon || '🎯', title: g.title || g.name,
-          desc: g.description || g.desc || '', progress: g.progress || 0,
-          status: g.status || 'active', goal: g.goal || g.category || '',
-          target_date: g.target_date || g.deadline || '',
-          success_criteria: g.success_criteria || '',
-          agents_active: g.agents_active || 0, blocking_items: g.blocking_items || 0,
-          velocity: g.velocity || 0, tasks_done: g.tasks_done || 0,
-          tasks_total: g.tasks_total || 0, days_active: g.days_active || 0,
-          milestones: g.milestones || [],
-        }));
-      }
-      if (feed && Array.isArray(feed)) {
-        mcFeed = feed.map(f => ({
-          ts: f.timestamp || f.ts, agent: f.agent_emoji || f.agent || '🤖',
-          type: f.type || 'task', text: f.text || f.message || f.description,
-          mission: f.mission_id || f.mission || '',
-        }));
-      }
-      if (proposals && Array.isArray(proposals)) {
-        mcBlocking = proposals.filter(p => p.status === 'pending').map(p => ({
-          mission: p.mission_id || p.goal_id || '', type: 'proposal',
-          title: p.title || p.description, source: p.agent || 'Agent',
-        }));
-      }
-      if (plans && Array.isArray(plans)) {
-        mcPlans = plans.map(p => {
-          const tasks = p.tasks || [];
-          return {
-            id: p.id, name: p.name, mission: p.mission_id || p.goal_id || '',
-            backlog: tasks.filter(t => t.column === 'backlog').length,
-            active: tasks.filter(t => t.column === 'active' || t.column === 'in_progress').length,
-            done: tasks.filter(t => t.column === 'done').length,
-            agents: [...new Set(tasks.map(t => t.agent).filter(Boolean))].map(a => {
-              const ag = typeof ga === 'function' ? ga(a) : null;
-              return ag ? ag.emoji : '🤖';
-            }),
-          };
-        });
-      }
+    const [missions, feed, proposals, plans] = await Promise.all([
+      Bridge.apiFetch('/api/missions').catch(() => null),
+      Bridge.getMissionsFeed(50).catch(() => null),
+      Bridge.getProposals('pending').catch(() => null),
+      Bridge.getPlans().catch(() => null),
+    ]);
+    if (missions && Array.isArray(missions) && missions.length > 0) {
+      mcMissions = missions;
     }
+    if (feed && Array.isArray(feed)) {
+      mcFeed = feed.map(f => ({
+        ts: f.timestamp || f.ts, agent: f.agent_emoji || f.agent || '🤖',
+        type: f.type || 'task', text: f.text || f.message || f.description || f.content || '',
+        mission: f.mission_id || f.mission || '',
+      }));
+    }
+    if (proposals && Array.isArray(proposals)) {
+      mcBlocking = proposals.filter(p => p.status === 'pending').map(p => ({
+        mission: p.mission_id || p.goal_id || '', type: 'proposal',
+        title: p.title || p.description, source: p.agent || p.source || 'Agent',
+      }));
+    }
+    if (plans && Array.isArray(plans)) {
+      mcPlans = plans.map(p => {
+        const tasks = p.tasks || [];
+        return {
+          id: p.id, name: p.name, mission: p.mission_id || p.goal_id || '',
+          backlog: tasks.filter(t => t.column === 'backlog').length,
+          active: tasks.filter(t => t.column === 'active' || t.column === 'in_progress').length,
+          done: tasks.filter(t => t.column === 'done').length,
+          agents: [...new Set(tasks.map(t => t.agent).filter(Boolean))].map(a => {
+            const ag = typeof ga === 'function' ? ga(a) : null;
+            return ag ? ag.emoji : '🤖';
+          }),
+        };
+      });
+    }
+    return true;
   } catch (e) {
     console.warn('[MissionControl] Bridge load failed, using seed data:', e.message);
+    return false;
   }
+}
+
+async function renderMissions() {
+  await fetchMissionsFromBridge();
 
   renderMCSidebar();
   if (mcSelectedMission) {
@@ -1782,6 +1777,29 @@ async function renderMissions() {
   } else {
     renderMCOverviewGrid();
   }
+  
+  // Start auto-refresh every 30s
+  startMissionsRefresh();
+}
+
+function startMissionsRefresh() {
+  if (_missionsRefreshTimer) return;
+  _missionsRefreshTimer = setInterval(async () => {
+    if (currentPage !== 'missions') { stopMissionsRefresh(); return; }
+    const updated = await fetchMissionsFromBridge();
+    if (updated) {
+      renderMCSidebar();
+      if (mcSelectedMission) {
+        renderMCDetail(mcSelectedMission);
+      } else {
+        renderMCOverviewGrid();
+      }
+    }
+  }, 30000);
+}
+
+function stopMissionsRefresh() {
+  if (_missionsRefreshTimer) { clearInterval(_missionsRefreshTimer); _missionsRefreshTimer = null; }
 }
 
 function renderMCSidebar() {
@@ -1831,7 +1849,7 @@ function renderMCSidebar() {
     ${renderGroup('ACTIVE', grouped.active, 'active', true)}
     ${renderGroup('PLANNED', grouped.planned, 'planned', false)}
     ${renderGroup('COMPLETED', grouped.completed, 'completed', false)}
-    <button class="mc-new-mission-btn" onclick="toast('New mission creation coming soon','info')">＋ New Mission</button>
+    <button class="mc-new-mission-btn" onclick="showNewMissionModal()">＋ New Mission</button>
   `;
 }
 
