@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🧬 Life OS</title>
+<script src="bridge.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --base: #1e1e2e; --mantle: #181825; --crust: #11111b;
+  --surface0: #313244; --surface1: #45475a; --surface2: #585b70;
+  --text: #cdd6f4; --subtext: #a6adc8; --overlay: #6c7086;
+  --blue: #89b4fa; --green: #a6e3a1; --red: #f38ba8;
+  --purple: #cba6f7; --yellow: #f9e2af; --peach: #fab387;
+  --teal: #94e2d5; --pink: #f5c2e7;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--base); color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────── */
+.header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 24px; background: var(--mantle);
+  border-bottom: 1px solid var(--surface1);
+  position: sticky; top: 0; z-index: 100;
+}
+.header .back { color: var(--subtext); text-decoration: none; font-size: 14px; }
+.header .back:hover { color: var(--text); }
+.header .title { font-size: 20px; font-weight: 700; flex: 1; }
+.header .matrix-btn {
+  background: var(--surface0); border: 1px solid var(--surface1);
+  color: var(--text); padding: 6px 14px; border-radius: 8px;
+  cursor: pointer; font-size: 14px; transition: background .15s;
+}
+.header .matrix-btn:hover { background: var(--surface1); }
+.header .matrix-btn.active { background: var(--blue); color: var(--crust); border-color: var(--blue); }
+
+/* ── Offline Banner ─────────────────────────────── */
+.offline-banner {
+  display: none; background: var(--red); color: var(--crust);
+  text-align: center; padding: 8px; font-size: 13px; font-weight: 600;
+}
+.offline-banner.show { display: block; }
+
+/* ── Grid ───────────────────────────────────────── */
+.grid {
+  display: grid; gap: 16px; padding: 20px 24px; max-width: 1400px; margin: 0 auto;
+  grid-template-columns: repeat(2, 1fr);
+}
+.grid.matrix-mode {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr 1fr;
+  height: calc(100vh - 100px);
+}
+.card {
+  background: var(--surface0); border: 1px solid var(--surface1);
+  border-radius: 12px; padding: 18px; overflow: hidden;
+}
+.card.wide { grid-column: span 2; }
+.card h3 {
+  font-size: 14px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--subtext); margin-bottom: 14px; display: flex;
+  align-items: center; gap: 8px;
+}
+.card h3 .badge {
+  background: var(--red); color: var(--crust); border-radius: 10px;
+  padding: 1px 7px; font-size: 11px; font-weight: 700;
+}
+
+/* ── Today's Plan ───────────────────────────────── */
+.intentions { color: var(--subtext); font-size: 13px; margin-bottom: 12px; font-style: italic; }
+.timeline { display: flex; flex-direction: column; gap: 4px; }
+.time-block {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-radius: 6px; font-size: 13px;
+  background: var(--mantle); border-left: 3px solid var(--surface2);
+  transition: all .2s;
+}
+.time-block.current {
+  border-left-color: var(--blue); background: rgba(137,180,250,.1);
+  box-shadow: 0 0 12px rgba(137,180,250,.15);
+}
+.time-block .time { color: var(--overlay); min-width: 90px; font-size: 12px; font-family: monospace; }
+.time-block .label { flex: 1; }
+.time-block .cat {
+  font-size: 10px; padding: 2px 6px; border-radius: 4px;
+  background: var(--surface1); color: var(--subtext);
+}
+
+/* ── Focus Timer ────────────────────────────────── */
+.focus-widget { text-align: center; }
+.timer-ring { margin: 0 auto 12px; }
+.timer-ring circle { fill: none; stroke-linecap: round; }
+.timer-ring .bg { stroke: var(--surface1); }
+.timer-ring .fg { stroke: var(--surface2); transition: stroke-dashoffset .5s linear; }
+.timer-ring.active .fg { stroke: var(--purple); }
+@keyframes pulse-ring { 0%,100%{ opacity:.6; } 50%{ opacity:1; } }
+.timer-ring.active .fg { animation: pulse-ring 2s ease-in-out infinite; }
+.timer-text { font-size: 28px; font-weight: 700; font-family: monospace; }
+.timer-task { color: var(--purple); font-size: 13px; margin-top: 2px; }
+.focus-controls { display: flex; gap: 8px; margin-top: 12px; justify-content: center; flex-wrap: wrap; }
+.focus-controls input, .focus-controls select {
+  background: var(--mantle); border: 1px solid var(--surface1);
+  color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 13px;
+}
+.focus-controls input { flex: 1; min-width: 100px; max-width: 160px; }
+.focus-controls select { width: 70px; }
+.btn {
+  background: var(--blue); color: var(--crust); border: none;
+  padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: opacity .15s;
+}
+.btn:hover { opacity: .85; }
+.btn.danger { background: var(--red); }
+.btn.green { background: var(--green); }
+.focus-stats {
+  display: flex; justify-content: center; gap: 20px;
+  margin-top: 14px; font-size: 12px; color: var(--subtext);
+}
+.focus-stats span { font-weight: 700; color: var(--text); }
+
+/* ── Goal Tree ──────────────────────────────────── */
+.goal-tree { max-height: 380px; overflow-y: auto; }
+.goal-item { margin-bottom: 6px; }
+.goal-header {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; padding: 5px 8px; border-radius: 6px;
+  font-size: 13px; transition: background .15s;
+}
+.goal-header:hover { background: var(--mantle); }
+.goal-chevron {
+  font-size: 10px; color: var(--overlay); transition: transform .2s;
+  width: 14px; text-align: center;
+}
+.goal-chevron.open { transform: rotate(90deg); }
+.goal-name { flex: 1; }
+.goal-progress-bar {
+  width: 60px; height: 6px; background: var(--mantle);
+  border-radius: 3px; overflow: hidden;
+}
+.goal-progress-bar .fill { height: 100%; border-radius: 3px; transition: width .3s; }
+.goal-children { padding-left: 20px; display: none; }
+.goal-children.open { display: block; }
+.task-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; font-size: 12px; border-radius: 4px;
+  cursor: pointer;
+}
+.task-item:hover { background: var(--mantle); }
+.task-check { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--surface2); }
+.task-item.done .task-check { background: var(--green); border-color: var(--green); }
+.task-item.done .task-name { text-decoration: line-through; color: var(--overlay); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.status-dot.active { background: var(--green); }
+.status-dot.blocked { background: var(--red); }
+.status-dot.pending { background: var(--overlay); }
+
+/* ── Energy Tracker ─────────────────────────────── */
+.slider-group { margin-bottom: 10px; }
+.slider-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--subtext); margin-bottom: 4px; }
+.slider-label .val { color: var(--text); font-weight: 700; }
+input[type="range"] {
+  -webkit-appearance: none; width: 100%; height: 6px;
+  background: var(--mantle); border-radius: 3px; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--blue); cursor: pointer;
+}
+.sparkline-container { margin-top: 12px; }
+.sparkline-container svg { width: 100%; height: 50px; }
+.sparkline-container path { fill: none; stroke-width: 1.5; stroke-linecap: round; }
+.energy-insight { font-size: 11px; color: var(--overlay); margin-top: 6px; font-style: italic; }
+
+/* ── Brain Dump ─────────────────────────────────── */
+.dump-input { display: flex; gap: 8px; margin-bottom: 12px; }
+.dump-input input {
+  flex: 1; background: var(--mantle); border: 1px solid var(--surface1);
+  color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 13px;
+}
+.dump-list { max-height: 260px; overflow-y: auto; }
+.dump-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px; border-radius: 6px; margin-bottom: 4px;
+  background: var(--mantle); font-size: 13px;
+}
+.dump-item .text { flex: 1; }
+.dump-item .ts { font-size: 10px; color: var(--overlay); white-space: nowrap; }
+.dump-item .actions { display: flex; gap: 4px; }
+.dump-item button {
+  background: none; border: none; color: var(--overlay);
+  cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 3px;
+}
+.dump-item button:hover { color: var(--text); background: var(--surface1); }
+
+/* ── Reminders + Initiatives ────────────────────── */
+.section-toggle {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: var(--subtext); margin-bottom: 8px; padding: 4px 0;
+  border: none; background: none; width: 100%;
+}
+.section-toggle:hover { color: var(--text); }
+.section-toggle .chevron { font-size: 10px; transition: transform .2s; }
+.section-toggle .chevron.open { transform: rotate(90deg); }
+.section-content { display: none; margin-bottom: 14px; }
+.section-content.open { display: block; }
+.reminder-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; font-size: 13px; border-radius: 4px;
+  margin-bottom: 2px;
+}
+.reminder-item:hover { background: var(--mantle); }
+.priority-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.priority-dot.high { background: var(--red); }
+.priority-dot.medium { background: var(--yellow); }
+.priority-dot.low { background: var(--green); }
+.reminder-msg { flex: 1; }
+.reminder-due { font-size: 11px; color: var(--overlay); white-space: nowrap; }
+.initiative-item {
+  padding: 6px 8px; font-size: 13px; border-radius: 4px;
+  margin-bottom: 2px; color: var(--subtext);
+}
+
+/* ── Eisenhower Matrix ──────────────────────────── */
+.matrix-grid { display: none; }
+.matrix-grid.show {
+  display: grid; grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr; gap: 12px;
+  padding: 20px 24px; max-width: 1400px; margin: 0 auto;
+  height: calc(100vh - 60px);
+}
+.matrix-cell {
+  border-radius: 12px; padding: 16px; overflow-y: auto;
+  border: 1px solid var(--surface1);
+}
+.matrix-cell h3 { font-size: 14px; margin-bottom: 10px; }
+.matrix-cell.do { background: rgba(243,139,168,.08); border-color: rgba(243,139,168,.3); }
+.matrix-cell.schedule { background: rgba(137,180,250,.08); border-color: rgba(137,180,250,.3); }
+.matrix-cell.delegate { background: rgba(249,226,175,.08); border-color: rgba(249,226,175,.3); }
+.matrix-cell.delete-q { background: rgba(88,91,112,.15); border-color: var(--surface1); }
+.matrix-task {
+  padding: 6px 8px; font-size: 13px; border-radius: 4px;
+  margin-bottom: 4px; background: rgba(0,0,0,.2);
+}
+.matrix-task .deadline { font-size: 10px; color: var(--overlay); }
+
+/* ── Empty State ────────────────────────────────── */
+.empty { color: var(--overlay); font-size: 13px; text-align: center; padding: 20px 0; font-style: italic; }
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 3px; }
+
+/* ── Responsive ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .grid { grid-template-columns: 1fr; }
+  .card.wide { grid-column: span 1; }
+  .matrix-grid.show { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+  .header { padding: 12px 16px; }
+  .grid { padding: 12px 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="offline-banner" id="offlineBanner">⚠ Bridge offline — data may be stale</div>
+
+<div class="header">
+  <a href="/app/" class="back">← Back to Agent OS</a>
+  <div class="title">🧬 Life OS</div>
+  <button class="matrix-btn" id="matrixToggle" onclick="toggleMatrix()">📊 Matrix</button>
+</div>
+
+<div class="grid" id="widgetGrid">
+  <!-- Today's Plan -->
+  <div class="card wide" id="planCard">
+    <h3>📅 Today's Plan <span class="badge" id="reminderBadge" style="display:none">0</span></h3>
+    <div class="intentions" id="planIntentions">Loading...</div>
+    <div class="timeline" id="planTimeline"></div>
+  </div>
+
+  <!-- Focus Timer -->
+  <div class="card" id="focusCard">
+    <h3>🎯 Focus Timer</h3>
+    <div class="focus-widget">
+      <svg class="timer-ring" id="timerRing" width="176" height="176" viewBox="0 0 176 176">
+        <circle class="bg" cx="88" cy="88" r="78" stroke-width="8"/>
+        <circle class="fg" id="timerArc" cx="88" cy="88" r="78" stroke-width="8"
+          stroke-dasharray="490" stroke-dashoffset="0"
+          transform="rotate(-90 88 88)"/>
+        <text x="88" y="82" text-anchor="middle" fill="var(--text)" class="timer-text" font-size="28" font-weight="700" font-family="monospace" id="timerDisplay">00:00</text>
+        <text x="88" y="102" text-anchor="middle" fill="var(--purple)" font-size="13" id="timerTaskLabel"></text>
+      </svg>
+      <div class="focus-controls" id="focusStart">
+        <input type="text" id="focusTaskInput" placeholder="Task name...">
+        <select id="focusDuration">
+          <option value="25">25m</option>
+          <option value="45">45m</option>
+          <option value="90">90m</option>
+        </select>
+        <button class="btn" onclick="startFocus()">Start</button>
+      </div>
+      <div class="focus-controls" id="focusStop" style="display:none">
+        <button class="btn danger" onclick="stopFocus()">Stop</button>
+      </div>
+      <div class="focus-stats">
+        <div>Deep work: <span id="deepWorkMin">0</span> min</div>
+        <div>Sessions: <span id="sessionCount">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Goal Tree -->
+  <div class="card" id="goalCard">
+    <h3>🏆 Goal Tree</h3>
+    <div class="goal-tree" id="goalTree"><div class="empty">Loading goals...</div></div>
+  </div>
+
+  <!-- Energy Tracker -->
+  <div class="card" id="energyCard">
+    <h3>⚡ Energy Tracker</h3>
+    <div class="slider-group">
+      <div class="slider-label"><span>🔋 Energy</span><span class="val" id="energyVal">3</span></div>
+      <input type="range" min="1" max="5" value="3" id="energySlider" oninput="document.getElementById('energyVal').textContent=this.value">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>🎯 Focus</span><span class="val" id="focusVal">3</span></div>
+      <input type="range" min="1" max="5" value="3" id="focusSlider" oninput="document.getElementById('focusVal').textContent=this.value">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>😊 Mood</span><span class="val" id="moodVal">3</span></div>
+      <input type="range" min="1" max="5" value="3" id="moodSlider" oninput="document.getElementById('moodVal').textContent=this.value">
+    </div>
+    <button class="btn green" onclick="logEnergy()" style="width:100%">Log</button>
+    <div class="sparkline-container" id="sparklines">
+      <svg viewBox="0 0 200 50" preserveAspectRatio="none">
+        <path id="sparkEnergy" stroke="var(--yellow)" d=""/>
+        <path id="sparkFocus" stroke="var(--blue)" d=""/>
+        <path id="sparkMood" stroke="var(--pink)" d=""/>
+      </svg>
+    </div>
+    <div class="energy-insight" id="energyInsight"></div>
+  </div>
+
+  <!-- Brain Dump -->
+  <div class="card" id="brainCard">
+    <h3>🧠 Brain Dump</h3>
+    <div class="dump-input">
+      <input type="text" id="dumpInput" placeholder="Capture a thought..." onkeydown="if(event.key==='Enter')captureDump()">
+      <button class="btn" onclick="captureDump()">Capture</button>
+    </div>
+    <div class="dump-list" id="dumpList"><div class="empty">No unprocessed thoughts</div></div>
+  </div>
+
+  <!-- Reminders + Initiatives -->
+  <div class="card" id="remindersCard">
+    <h3>🔔 Reminders & Initiatives</h3>
+    <button class="section-toggle" onclick="toggleSection('reminders')">
+      <span class="chevron open" id="remindersChevron">▶</span> Reminders
+    </button>
+    <div class="section-content open" id="remindersContent">
+      <div class="empty">No active reminders</div>
+    </div>
+    <button class="section-toggle" onclick="toggleSection('initiatives')">
+      <span class="chevron" id="initiativesChevron">▶</span> Initiatives
+    </button>
+    <div class="section-content" id="initiativesContent">
+      <div class="empty">No queued initiatives</div>
+    </div>
+  </div>
+</div>
+
+<!-- Eisenhower Matrix -->
+<div class="matrix-grid" id="matrixGrid">
+  <div class="matrix-cell do">
+    <h3>🔴 DO — Urgent & Important</h3>
+    <div id="matrixDo"></div>
+  </div>
+  <div class="matrix-cell schedule">
+    <h3>🔵 SCHEDULE — Important</h3>
+    <div id="matrixSchedule"></div>
+  </div>
+  <div class="matrix-cell delegate">
+    <h3>🟡 DELEGATE — Urgent</h3>
+    <div id="matrixDelegate"></div>
+  </div>
+  <div class="matrix-cell delete-q">
+    <h3>⚫ DELETE — Neither</h3>
+    <div id="matrixDelete"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────
+let dashboardData = null;
+let focusActive = false;
+let focusEndTime = 0;
+let focusInterval = null;
+let matrixVisible = false;
+const CIRCUMFERENCE = 2 * Math.PI * 78; // ~490
+
+// ── Init ───────────────────────────────────────────
+document.getElementById('timerArc').setAttribute('stroke-dasharray', CIRCUMFERENCE);
+document.getElementById('timerArc').setAttribute('stroke-dashoffset', '0');
+
+async function init() {
+  await loadDashboard();
+  setInterval(loadDashboard, 30000);
+}
+
+async function loadDashboard() {
+  try {
+    dashboardData = await Bridge.getLifeDashboard();
+    document.getElementById('offlineBanner').classList.remove('show');
+    renderPlan(dashboardData);
+    renderFocusStats(dashboardData);
+    renderGoals(dashboardData);
+    renderEnergy(dashboardData);
+    renderBrainDumps(dashboardData);
+    renderReminders(dashboardData);
+    if (matrixVisible) renderMatrix();
+  } catch (e) {
+    console.error('Dashboard load failed:', e);
+    document.getElementById('offlineBanner').classList.add('show');
+  }
+}
+
+// ── Today's Plan ───────────────────────────────────
+function renderPlan(d) {
+  const schedule = d.schedule || [];
+  const reminders = d.reminders || [];
+  const plans = d.plans || d.daily_plans || [];
+
+  // Intentions
+  const intentEl = document.getElementById('planIntentions');
+  if (plans.length && plans[0].intentions) {
+    intentEl.textContent = plans[0].intentions;
+  } else if (plans.length && plans[0].morning_intention) {
+    intentEl.textContent = plans[0].morning_intention;
+  } else {
+    intentEl.textContent = 'No intentions set for today';
+  }
+
+  // Reminder badge
+  const badge = document.getElementById('reminderBadge');
+  if (reminders.length > 0) {
+    badge.textContent = reminders.length;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  // Timeline
+  const timeline = document.getElementById('planTimeline');
+  if (!schedule.length) {
+    timeline.innerHTML = '<div class="empty">No time blocks scheduled</div>';
+    return;
+  }
+  const now = new Date();
+  timeline.innerHTML = schedule.map(b => {
+    const start = b.start_time || b.start || '';
+    const end = b.end_time || b.end || '';
+    const isCurrent = isCurrentBlock(start, end, now);
+    const cat = b.category || b.type || '';
+    return `<div class="time-block${isCurrent ? ' current' : ''}">
+      <span class="time">${formatTime(start)} – ${formatTime(end)}</span>
+      <span class="label">${b.task || b.title || b.label || 'Block'}</span>
+      ${cat ? `<span class="cat">${cat}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function isCurrentBlock(start, end, now) {
+  try {
+    const s = parseTime(start), e = parseTime(end);
+    const mins = now.getHours() * 60 + now.getMinutes();
+    return mins >= s && mins < e;
+  } catch { return false; }
+}
+
+function parseTime(t) {
+  if (!t) return 0;
+  const m = t.match(/(\d{1,2}):(\d{2})/);
+  return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : 0;
+}
+
+function formatTime(t) {
+  if (!t) return '--:--';
+  const m = t.match(/(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2,'0')}:${m[2]}` : t;
+}
+
+// ── Focus Timer ────────────────────────────────────
+function renderFocusStats(d) {
+  const focus = d.focus || {};
+  const sessions = focus.sessions || focus.today_sessions || [];
+  const totalMin = sessions.reduce((s, f) => s + (f.duration || 0), 0);
+  document.getElementById('deepWorkMin').textContent = totalMin;
+  document.getElementById('sessionCount').textContent = sessions.length;
+
+  // If there's an active session from the server
+  if (focus.active && !focusActive) {
+    const remaining = focus.active.remaining || 0;
+    if (remaining > 0) {
+      focusActive = true;
+      focusEndTime = Date.now() + remaining * 60000;
+      document.getElementById('timerTaskLabel').textContent = focus.active.task || '';
+      document.getElementById('timerRing').classList.add('active');
+      document.getElementById('focusStart').style.display = 'none';
+      document.getElementById('focusStop').style.display = 'flex';
+      startTimerInterval(focus.active.duration || 25);
+    }
+  }
+}
+
+async function startFocus() {
+  const task = document.getElementById('focusTaskInput').value.trim() || 'Deep work';
+  const duration = parseInt(document.getElementById('focusDuration').value);
+  try {
+    await Bridge.postLifeFocusStart(task, duration);
+    focusActive = true;
+    focusEndTime = Date.now() + duration * 60000;
+    document.getElementById('timerTaskLabel').textContent = task;
+    document.getElementById('timerRing').classList.add('active');
+    document.getElementById('focusStart').style.display = 'none';
+    document.getElementById('focusStop').style.display = 'flex';
+    startTimerInterval(duration);
+  } catch (e) {
+    console.error('Focus start failed:', e);
+  }
+}
+
+function startTimerInterval(totalMin) {
+  const totalMs = totalMin * 60000;
+  if (focusInterval) clearInterval(focusInterval);
+  focusInterval = setInterval(() => {
+    const remaining = Math.max(0, focusEndTime - Date.now());
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('timerDisplay').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    const progress = 1 - (remaining / totalMs);
+    document.getElementById('timerArc').setAttribute('stroke-dashoffset', CIRCUMFERENCE * (1 - progress));
+    if (remaining <= 0) {
+      stopFocus();
+    }
+  }, 500);
+}
+
+async function stopFocus() {
+  if (focusInterval) clearInterval(focusInterval);
+  focusInterval = null;
+  focusActive = false;
+  document.getElementById('timerDisplay').textContent = '00:00';
+  document.getElementById('timerArc').setAttribute('stroke-dashoffset', '0');
+  document.getElementById('timerRing').classList.remove('active');
+  document.getElementById('timerTaskLabel').textContent = '';
+  document.getElementById('focusStart').style.display = 'flex';
+  document.getElementById('focusStop').style.display = 'none';
+  try { await Bridge.postLifeFocusStop(); } catch(e) { console.error('Focus stop failed:', e); }
+  loadDashboard();
+}
+
+// ── Goal Tree ──────────────────────────────────────
+function renderGoals(d) {
+  const goals = d.goals || [];
+  const container = document.getElementById('goalTree');
+  if (!goals.length) { container.innerHTML = '<div class="empty">No goals defined</div>'; return; }
+  container.innerHTML = goals.map((g, i) => renderGoalItem(g, `g${i}`)).join('');
+}
+
+function renderGoalItem(g, id) {
+  const children = g.projects || g.children || g.tasks || [];
+  const progress = g.progress != null ? g.progress : calcProgress(children);
+  const status = g.status || 'active';
+  const statusColor = status === 'blocked' ? 'var(--red)' : status === 'active' ? 'var(--green)' : 'var(--overlay)';
+  const hasChildren = children.length > 0;
+
+  let html = `<div class="goal-item">
+    <div class="goal-header" onclick="toggleGoal('${id}')">
+      ${hasChildren ? `<span class="goal-chevron" id="chev-${id}">▶</span>` : '<span style="width:14px"></span>'}
+      <span class="status-dot ${status}"></span>
+      <span class="goal-name">${g.name || g.title || 'Goal'}</span>
+      <div class="goal-progress-bar"><div class="fill" style="width:${progress}%;background:${statusColor}"></div></div>
+    </div>`;
+
+  if (hasChildren) {
+    html += `<div class="goal-children" id="children-${id}">`;
+    children.forEach((c, i) => {
+      if (c.tasks || c.children || c.projects) {
+        html += renderGoalItem(c, `${id}-${i}`);
+      } else {
+        const done = c.status === 'done' || c.completed;
+        html += `<div class="task-item ${done ? 'done' : ''}" onclick="this.classList.toggle('done')">
+          <div class="task-check"></div>
+          <span class="task-name">${c.name || c.title || 'Task'}</span>
+        </div>`;
+      }
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function calcProgress(items) {
+  if (!items || !items.length) return 0;
+  const done = items.filter(i => i.status === 'done' || i.completed).length;
+  return Math.round((done / items.length) * 100);
+}
+
+function toggleGoal(id) {
+  const children = document.getElementById(`children-${id}`);
+  const chev = document.getElementById(`chev-${id}`);
+  if (!children) return;
+  children.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+// ── Energy Tracker ─────────────────────────────────
+function renderEnergy(d) {
+  const energy = d.energy || {};
+  const readings = energy.readings || energy.history || [];
+  renderSparklines(readings);
+
+  // Insight
+  const insight = document.getElementById('energyInsight');
+  if (energy.pattern || energy.insight) {
+    insight.textContent = energy.pattern || energy.insight;
+  } else if (readings.length >= 3) {
+    const recent = readings.slice(-3);
+    const avgE = (recent.reduce((s,r) => s + (r.energy || 3), 0) / 3).toFixed(1);
+    insight.textContent = `Recent avg energy: ${avgE}/5`;
+  } else {
+    insight.textContent = readings.length ? 'Log more readings for pattern insights' : 'No readings yet — start logging!';
+  }
+}
+
+function renderSparklines(readings) {
+  if (!readings.length) return;
+  const last = readings.slice(-20);
+  const w = 200, h = 50, pad = 4;
+  const xStep = last.length > 1 ? (w - pad * 2) / (last.length - 1) : 0;
+
+  ['energy', 'focus', 'mood'].forEach(key => {
+    const pathEl = document.getElementById(`spark${key.charAt(0).toUpperCase() + key.slice(1)}`);
+    const vals = last.map(r => r[key] || 3);
+    const points = vals.map((v, i) => `${pad + i * xStep},${h - pad - ((v - 1) / 4) * (h - pad * 2)}`);
+    pathEl.setAttribute('d', 'M' + points.join(' L'));
+  });
+}
+
+async function logEnergy() {
+  const e = parseInt(document.getElementById('energySlider').value);
+  const f = parseInt(document.getElementById('focusSlider').value);
+  const m = parseInt(document.getElementById('moodSlider').value);
+  try {
+    await Bridge.postLifeEnergy(e, f, m);
+    loadDashboard();
+  } catch (err) { console.error('Energy log failed:', err); }
+}
+
+// ── Brain Dump ─────────────────────────────────────
+function renderBrainDumps(d) {
+  const dumps = d.brain_dumps || d.brainDumps || [];
+  const list = document.getElementById('dumpList');
+  if (!dumps.length) { list.innerHTML = '<div class="empty">No unprocessed thoughts</div>'; return; }
+  list.innerHTML = dumps.map((dump, i) => {
+    const ts = dump.timestamp || dump.created_at || '';
+    const relative = ts ? relativeTime(ts) : '';
+    return `<div class="dump-item" id="dump-${i}">
+      <div class="text">${escHtml(dump.text || dump.content || '')}</div>
+      <div class="ts">${relative}</div>
+      <div class="actions">
+        <button title="Convert to task" onclick="alert('Convert to task: coming soon')">→</button>
+        <button title="Dismiss" onclick="dismissDump(${i})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function captureDump() {
+  const input = document.getElementById('dumpInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  try {
+    await Bridge.postLifeBrainDump(text);
+    loadDashboard();
+  } catch (e) { console.error('Brain dump failed:', e); }
+}
+
+function dismissDump(i) {
+  const el = document.getElementById(`dump-${i}`);
+  if (el) el.remove();
+  // Check if list is now empty
+  const list = document.getElementById('dumpList');
+  if (!list.children.length) list.innerHTML = '<div class="empty">No unprocessed thoughts</div>';
+}
+
+// ── Reminders + Initiatives ────────────────────────
+function renderReminders(d) {
+  const reminders = d.reminders || [];
+  const initiatives = d.initiatives || d.queue || [];
+
+  const rc = document.getElementById('remindersContent');
+  if (!reminders.length) {
+    rc.innerHTML = '<div class="empty">No active reminders</div>';
+  } else {
+    rc.innerHTML = reminders.map(r => {
+      const pri = r.priority || 'medium';
+      const due = r.due || r.due_at || r.time || '';
+      return `<div class="reminder-item">
+        <span class="priority-dot ${pri}"></span>
+        <span class="reminder-msg">${escHtml(r.message || r.text || '')}</span>
+        <span class="reminder-due">${due ? relativeTime(due) : ''}</span>
+      </div>`;
+    }).join('');
+  }
+
+  const ic = document.getElementById('initiativesContent');
+  if (!initiatives.length) {
+    ic.innerHTML = '<div class="empty">No queued initiatives</div>';
+  } else {
+    ic.innerHTML = initiatives.map(i =>
+      `<div class="initiative-item">${escHtml(i.text || i.observation || i.message || '')}</div>`
+    ).join('');
+  }
+}
+
+function toggleSection(name) {
+  const content = document.getElementById(`${name}Content`);
+  const chevron = document.getElementById(`${name}Chevron`);
+  content.classList.toggle('open');
+  chevron.classList.toggle('open');
+}
+
+// ── Eisenhower Matrix ──────────────────────────────
+function toggleMatrix() {
+  matrixVisible = !matrixVisible;
+  const btn = document.getElementById('matrixToggle');
+  const grid = document.getElementById('widgetGrid');
+  const matrix = document.getElementById('matrixGrid');
+
+  if (matrixVisible) {
+    btn.classList.add('active');
+    grid.style.display = 'none';
+    matrix.classList.add('show');
+    renderMatrix();
+  } else {
+    btn.classList.remove('active');
+    grid.style.display = 'grid';
+    matrix.classList.remove('show');
+  }
+}
+
+function renderMatrix() {
+  if (!dashboardData) return;
+  const goals = dashboardData.goals || [];
+  const allTasks = [];
+
+  // Flatten tasks from goal tree
+  function flatten(items, depth = 0) {
+    (items || []).forEach(item => {
+      const children = item.tasks || item.children || item.projects || [];
+      if (children.length && depth < 3) {
+        flatten(children, depth + 1);
+      } else {
+        allTasks.push(item);
+      }
+    });
+  }
+  flatten(goals);
+
+  // Also add schedule items as tasks
+  (dashboardData.schedule || []).forEach(b => {
+    allTasks.push({ name: b.task || b.title || 'Block', priority: b.priority, deadline: b.end_time || b.end });
+  });
+
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+
+  const doQ = [], scheduleQ = [], delegateQ = [], deleteQ = [];
+  allTasks.forEach(t => {
+    const pri = (t.priority || '').toString().toLowerCase();
+    const deadline = t.deadline || t.due || '';
+    const isUrgent = pri === 'p0' || pri === 'p1' || pri === 'high' || pri === 'urgent' ||
+      (deadline && (new Date(deadline).getTime() - now) < day);
+    const isImportant = pri === 'p0' || pri === 'p1' || pri === 'p2' || pri === 'high' || pri === 'medium';
+
+    const item = `<div class="matrix-task">
+      ${t.name || t.title || 'Task'}
+      ${deadline ? `<div class="deadline">${relativeTime(deadline)}</div>` : ''}
+    </div>`;
+
+    if (isUrgent && isImportant) doQ.push(item);
+    else if (!isUrgent && isImportant) scheduleQ.push(item);
+    else if (isUrgent && !isImportant) delegateQ.push(item);
+    else deleteQ.push(item);
+  });
+
+  document.getElementById('matrixDo').innerHTML = doQ.join('') || '<div class="empty">Nothing urgent & important</div>';
+  document.getElementById('matrixSchedule').innerHTML = scheduleQ.join('') || '<div class="empty">Nothing to schedule</div>';
+  document.getElementById('matrixDelegate').innerHTML = delegateQ.join('') || '<div class="empty">Nothing to delegate</div>';
+  document.getElementById('matrixDelete').innerHTML = deleteQ.join('') || '<div class="empty">Nothing to delete</div>';
+}
+
+// ── Utilities ──────────────────────────────────────
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function relativeTime(ts) {
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    const diff = d.getTime() - Date.now();
+    const absDiff = Math.abs(diff);
+    const mins = Math.floor(absDiff / 60000);
+    const hours = Math.floor(absDiff / 3600000);
+    const days = Math.floor(absDiff / 86400000);
+
+    let label;
+    if (mins < 1) label = 'now';
+    else if (mins < 60) label = `${mins}m`;
+    else if (hours < 24) label = `${hours}h`;
+    else label = `${days}d`;
+
+    return diff < 0 ? `${label} ago` : `in ${label}`;
+  } catch { return ts; }
+}
+
+// ── Boot ───────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

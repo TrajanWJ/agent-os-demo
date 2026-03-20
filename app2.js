@@ -2,7 +2,7 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
-// MIND PAGE — Vault Integration
+// MIND PAGE
 // ═══════════════════════════════════════════════════════════
 
 let mindMode = 'cards'; // default to cards (most usable on mobile)
@@ -17,24 +17,10 @@ let selectedNode = null;
 let draggingNode = null;
 let graphAnimId = null;
 
-// Live vault data caches
-let _vaultSearchResults = [];
-let _vaultRecentNotes = [];
-let _vaultStats = null;
-let _vaultGraphData = null;
-let _vaultSearchDebounce = null;
-
-const MIND_TYPES = ['all','Research','Architecture','Vision','Operations','Report','Code',
-  'Projects','Security','Tools','System','Agents','Skills','Decisions','Reference','Templates'];
+const MIND_TYPES = ['all','Research','Architecture','Vision','Operations','Report','Code'];
 const TYPE_COLORS = {
-  Research:'#5B8AF0', Architecture:'#D4A574', Vision:'#D4A574',
-  Operations:'#F39C12', Report:'#E74C3C', Code:'#4CAF50',
-  Projects:'#9B59B6', Security:'#E74C3C', Tools:'#1ABC9C',
-  System:'#95A5A6', Agents:'#E8A838', Skills:'#2ECC71',
-  Decisions:'#F1C40F', Reference:'#3498DB', Templates:'#BDC3C7',
-  'Agent Knowledge':'#E8A838', 'Claude-Code-Memory':'#D4A574',
-  'Claude-Code-Bot':'#D4A574', 'Daily Notes':'#95A5A6', Inbox:'#F39C12',
-  Reports:'#E74C3C', Trajan:'#9B59B6'
+  Research:'#89b4fa', Architecture:'#f9e2af', Vision:'#cba6f7',
+  Operations:'#fab387', Report:'#f38ba8', Code:'#a6e3a1'
 };
 
 function initMind() {
@@ -44,11 +30,6 @@ function initMind() {
   }
   renderMindFilterPills();
   setMindMode(mindMode);
-  // Load live vault data if bridge is connected
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
-    loadVaultRecent();
-    loadVaultStats();
-  }
 }
 
 function renderMindFilterPills() {
@@ -127,10 +108,22 @@ function setMindMode(mode) {
 }
 
 // ── Force-Directed Graph ──────────────────────────────────
-async function initGraph() {
+let _graphResizeHandler = null;
+function initGraph() {
   graphCanvas = $('graph-canvas');
   if (!graphCanvas) return;
   graphCtx = graphCanvas.getContext('2d');
+
+  // Remove old resize listener before adding new one
+  if (_graphResizeHandler) window.removeEventListener('resize', _graphResizeHandler);
+  _graphResizeHandler = () => {
+    if (mindMode !== 'graph' || !graphCanvas) return;
+    const p = graphCanvas.parentElement;
+    graphCanvas.width = p.clientWidth || 800;
+    graphCanvas.height = p.clientHeight || 500;
+    if (graphSettled) drawGraph();
+  };
+  window.addEventListener('resize', _graphResizeHandler);
 
   const parent = graphCanvas.parentElement;
   graphCanvas.width = parent.clientWidth || 800;
@@ -139,59 +132,48 @@ async function initGraph() {
   const W = graphCanvas.width;
   const H = graphCanvas.height;
 
-  // Try to load live graph data from vault
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode && !_vaultGraphData) {
-    try {
-      _vaultGraphData = await Bridge.vaultGraph(100);
-    } catch (err) {
-      console.error('[mind] graph load error:', err);
-    }
-  }
-
-  if (_vaultGraphData && _vaultGraphData.nodes.length > 0) {
-    // Use live vault data
-    const nodeIndex = new Map();
-    _vaultGraphData.nodes.forEach((n, i) => nodeIndex.set(n.id, i));
-    graphNodes = _vaultGraphData.nodes.map((n, i) => ({
-      id: i,
-      label: n.title || n.id.split('/').pop().replace('.md', ''),
-      type: n.category || 'root',
-      hex: TYPE_COLORS[n.category] || '#D4A574',
-      vaultPath: n.id,
-      x: W / 2 + (Math.random() - 0.5) * 200,
-      y: H / 2 + (Math.random() - 0.5) * 150,
-      vx: 0, vy: 0,
-      r: 10,
-    }));
-    graphEdges = _vaultGraphData.edges
-      .map(e => ({ source: nodeIndex.get(e.source), target: nodeIndex.get(e.target) }))
-      .filter(e => e.source !== undefined && e.target !== undefined);
-
-    // Size nodes by connection count
-    const connCount = new Map();
-    graphEdges.forEach(e => {
-      connCount.set(e.source, (connCount.get(e.source) || 0) + 1);
-      connCount.set(e.target, (connCount.get(e.target) || 0) + 1);
-    });
-    graphNodes.forEach((n, i) => {
-      n.r = Math.max(6, Math.min(20, 8 + (connCount.get(i) || 0) * 2));
-    });
-  } else {
-    // Fall back to demo data
-    graphNodes = GNODES.map(n => ({
-      ...n,
-      x: W / 2 + (Math.random() - 0.5) * 200,
-      y: H / 2 + (Math.random() - 0.5) * 150,
-      vx: 0, vy: 0,
-      r: n.size || 12,
-    }));
-    graphEdges = GEDGES.map(([a, b]) => ({ source: a, target: b }));
-  }
+  graphNodes = GNODES.map(n => ({
+    ...n,
+    x: W / 2 + (Math.random() - 0.5) * 200,
+    y: H / 2 + (Math.random() - 0.5) * 150,
+    vx: 0, vy: 0,
+    r: n.size || 12,
+  }));
+  graphEdges = GEDGES.map(([a, b]) => ({ source: a, target: b }));
 
   graphCanvas.onmousemove = graphMouseMove;
   graphCanvas.onmousedown = graphMouseDown;
   graphCanvas.onmouseup = graphMouseUp;
   graphCanvas.onclick = graphClick;
+
+  // Touch support for mobile
+  graphCanvas.addEventListener('touchstart', e => {
+    const touch = e.touches[0];
+    const rect = graphCanvas.getBoundingClientRect();
+    const n = hitTestNode(touch.clientX - rect.left, touch.clientY - rect.top);
+    if (n) { draggingNode = n; e.preventDefault(); }
+  }, { passive: false });
+  graphCanvas.addEventListener('touchmove', e => {
+    if (!draggingNode) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = graphCanvas.getBoundingClientRect();
+    draggingNode.x = touch.clientX - rect.left;
+    draggingNode.y = touch.clientY - rect.top;
+    draggingNode.vx = 0; draggingNode.vy = 0;
+    if (graphSettled) drawGraph();
+  }, { passive: false });
+  graphCanvas.addEventListener('touchend', e => {
+    if (draggingNode && graphSettled) {
+      graphSettled = false; graphSimTick = 0; runGraphSim();
+    }
+    // Tap to select
+    if (draggingNode) {
+      selectedNode = draggingNode;
+      showGraphDetail(draggingNode);
+    }
+    draggingNode = null;
+  });
 
   if (graphAnimId) cancelAnimationFrame(graphAnimId);
   graphSimTick = 0;
@@ -276,7 +258,7 @@ function drawGraph() {
   const ctx = graphCtx;
   const W = graphCanvas.width, H = graphCanvas.height;
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#0f0f12';
+  ctx.fillStyle = '#1e1e2e';
   ctx.fillRect(0, 0, W, H);
 
   // Edges
@@ -292,16 +274,18 @@ function drawGraph() {
   });
 
   // Nodes
+  const isMobileGraph = window.innerWidth <= 768;
   graphNodes.forEach(n => {
     const isH = n === hoveredNode;
     const isS = n === selectedNode;
-    const r = n.r + (isH ? 4 : 0);
+    const baseR = isMobileGraph ? Math.max(n.r, 14) : n.r;
+    const r = baseR + (isH ? 4 : 0);
 
     if (n.glow || isS) {
       ctx.beginPath();
       ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2);
       const gr = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r + 8);
-      gr.addColorStop(0, (n.hex || '#D4A574') + '60');
+      gr.addColorStop(0, (n.hex || '#cba6f7') + '60');
       gr.addColorStop(1, 'transparent');
       ctx.fillStyle = gr;
       ctx.fill();
@@ -309,7 +293,7 @@ function drawGraph() {
 
     ctx.beginPath();
     ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = n.hex || '#D4A574';
+    ctx.fillStyle = n.hex || '#cba6f7';
     ctx.fill();
     ctx.strokeStyle = isS ? '#fff' : 'rgba(255,255,255,0.25)';
     ctx.lineWidth = isS ? 2 : 1;
@@ -323,10 +307,11 @@ function drawGraph() {
 }
 
 function hitTestNode(mx, my) {
+  const hitPad = window.innerWidth <= 768 ? 22 : 6;
   for (let i = graphNodes.length - 1; i >= 0; i--) {
     const n = graphNodes[i];
     const dx = mx - n.x, dy = my - n.y;
-    if (dx * dx + dy * dy < (n.r + 6) * (n.r + 6)) return n;
+    if (dx * dx + dy * dy < (n.r + hitPad) * (n.r + hitPad)) return n;
   }
   return null;
 }
@@ -378,28 +363,21 @@ function graphClick(e) {
 
 function showGraphDetail(node) {
   const panel = $('graph-detail');
-  const nodeIdx = graphNodes.indexOf(node);
-  const conns = graphEdges.filter(e => e.source === nodeIdx || e.target === nodeIdx)
-    .map(e => graphNodes[e.source === nodeIdx ? e.target : e.source]?.label)
+  const note = GNOTES_MAP[node.id];
+  const conns = graphEdges.filter(e => e.source === node.id || e.target === node.id)
+    .map(e => graphNodes[e.source === node.id ? e.target : e.source]?.label)
     .filter(Boolean);
-
-  // If this is a live vault node, offer to open it
-  const openBtn = node.vaultPath ?
-    `<button onclick="openLiveVaultNote('${node.vaultPath.replace(/'/g, "\\'")}')" style="margin-top:8px;padding:4px 12px;background:var(--accent);border:none;border-radius:6px;color:var(--bg-base);cursor:pointer;font-size:11px;font-weight:600">Open Note</button>` : '';
-
-  const note = typeof GNOTES_MAP !== 'undefined' ? GNOTES_MAP[node.id] : null;
 
   panel.innerHTML = `
     <button class="graph-detail-close" onclick="$('graph-detail').classList.add('hidden');selectedNode=null">✕</button>
-    <div class="graph-detail-title" style="color:${node.hex}">${escHtml(node.label)}</div>
+    <div class="graph-detail-title" style="color:${node.hex}">${node.label}</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${node.type} · ${conns.length} connections</div>
-    <div class="graph-detail-body">${note || (node.vaultPath ? node.vaultPath : 'Click a node to see details.')}</div>
+    <div class="graph-detail-body">${note || 'Click a node to see details.'}</div>
     ${conns.length ? `
       <div style="margin-top:10px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Connected to</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">${conns.slice(0, 8).map(c => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">${escHtml(c)}</span>`).join('')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${conns.slice(0, 8).map(c => `<span style="background:var(--bg-raised);padding:2px 8px;border-radius:10px;font-size:11px">${c}</span>`).join('')}</div>
       </div>` : ''}
-    ${openBtn}
   `;
   panel.classList.remove('hidden');
 }
@@ -407,42 +385,6 @@ function showGraphDetail(node) {
 // ── Vault Cards ───────────────────────────────────────────
 function renderVaultCards() {
   const grid = $('vault-cards-grid');
-  if (!grid) return;
-
-  // If we have live search results, show those
-  if (_vaultSearchResults.length > 0) {
-    renderLiveSearchResults(_vaultSearchResults);
-    return;
-  }
-
-  // If bridge is live and we have recent notes but no search, show recent
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode && _vaultRecentNotes.length > 0) {
-    grid.innerHTML = '';
-    updateNoteCount(_vaultRecentNotes.length);
-    _vaultRecentNotes.forEach(n => {
-      const name = n.path.split('/').pop().replace('.md', '');
-      const cat = n.path.split('/')[0] || 'root';
-      const typeColor = TYPE_COLORS[cat] || 'var(--text-dim)';
-      const ago = relativeTime(n.modified);
-      const card = document.createElement('div');
-      card.className = 'vault-card';
-      card.onclick = () => openLiveVaultNote(n.path);
-      card.innerHTML = `
-        <div class="vault-card-header">
-          <div class="vault-card-title">${escHtml(name)}</div>
-          <span class="vault-card-type" style="color:${typeColor};border-color:${typeColor}40">${cat}</span>
-        </div>
-        <div class="vault-card-summary" style="color:var(--text-muted);font-size:12px">${escHtml(n.path)}</div>
-        <div class="vault-card-meta">
-          <span class="vault-date">${ago}</span>
-        </div>
-      `;
-      grid.appendChild(card);
-    });
-    return;
-  }
-
-  // Fall back to demo data
   const list = getFilteredNotes();
   grid.innerHTML = '';
   updateNoteCount(list.length);
@@ -541,248 +483,8 @@ function closeModal() { $('card-modal').classList.add('hidden'); }
 function closeModalIfOutside(e) { if (e.target === $('card-modal')) closeModal(); }
 
 function searchMind(query) {
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode && query.trim().length >= 2) {
-    // Live search with debounce
-    clearTimeout(_vaultSearchDebounce);
-    _vaultSearchDebounce = setTimeout(() => liveVaultSearch(query.trim()), 300);
-    return;
-  }
-  // Fall back to demo data filter
   if (mindMode === 'cards') renderVaultCards();
   else if (mindMode === 'timeline') renderTimeline();
-}
-
-// ── Live Vault API Functions ──────────────────────────────
-
-async function liveVaultSearch(query) {
-  try {
-    const results = await Bridge.vaultSearch(query, 20);
-    _vaultSearchResults = results;
-    renderLiveSearchResults(results);
-  } catch (err) {
-    console.error('[mind] vault search error:', err);
-  }
-}
-
-function renderLiveSearchResults(results) {
-  const grid = $('vault-cards-grid');
-  if (!grid) return;
-
-  // Switch to cards mode to show results
-  if (mindMode !== 'cards') setMindMode('cards');
-
-  grid.innerHTML = '';
-  updateNoteCount(results.length);
-
-  if (results.length === 0) {
-    grid.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;">No vault notes found</div>';
-    return;
-  }
-
-  results.forEach(r => {
-    const category = r.path.split('/')[0] || 'root';
-    const typeColor = TYPE_COLORS[category] || 'var(--text-dim)';
-    const title = r.title || r.path.split('/').pop().replace('.md', '');
-    const snippet = (r.snippet || '').replace(/@@ .* @@\n?/, '').substring(0, 120);
-
-    const card = document.createElement('div');
-    card.className = 'vault-card';
-    card.onclick = () => openLiveVaultNote(r.path);
-    card.innerHTML = `
-      <div class="vault-card-header">
-        <div class="vault-card-title">${escHtml(title)}</div>
-        <span class="vault-card-type" style="color:${typeColor};border-color:${typeColor}40">${category}</span>
-      </div>
-      <div class="vault-card-summary">${escHtml(snippet)}</div>
-      <div class="vault-card-meta">
-        <span class="vault-card-path" style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${escHtml(r.path)}</span>
-      </div>
-    `;
-    grid.appendChild(card);
-  });
-}
-
-function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-async function openLiveVaultNote(path) {
-  try {
-    const note = await Bridge.vaultNote(path);
-    const category = path.split('/')[0] || 'root';
-    const typeColor = TYPE_COLORS[category] || 'var(--text-dim)';
-    const title = note.frontmatter?.title || path.split('/').pop().replace('.md', '');
-
-    // Render markdown-ish content (basic)
-    const rendered = renderMarkdown(note.content);
-
-    if (window.innerWidth <= 768) {
-      const detail = $('mind-note-detail');
-      detail.innerHTML = renderLiveNoteDetail(title, category, typeColor, path, note, rendered, true);
-      detail.classList.remove('hidden');
-    } else {
-      const modal = $('card-modal-content');
-      modal.innerHTML = renderLiveNoteDetail(title, category, typeColor, path, note, rendered, false);
-      $('card-modal').classList.remove('hidden');
-    }
-  } catch (err) {
-    console.error('[mind] load note error:', err);
-  }
-}
-
-function renderLiveNoteDetail(title, category, typeColor, path, note, rendered, isMobile) {
-  const closeAction = isMobile ? 'closeMobileNoteDetail()' : 'closeModal()';
-  const fm = note.frontmatter || {};
-  const metaParts = [];
-  if (fm.created) metaParts.push(fm.created);
-  if (fm.updated) metaParts.push('updated ' + fm.updated);
-  if (fm.confidence) metaParts.push('confidence: ' + fm.confidence);
-
-  return `
-    <div class="note-detail-header">
-      <button class="note-detail-back" onclick="${closeAction}">${isMobile ? '← Back' : '✕'}</button>
-    </div>
-    <div class="note-detail-body">
-      <div class="note-detail-type-badge" style="color:${typeColor};border-color:${typeColor}">${category}</div>
-      <h2 class="note-detail-title">${escHtml(title)}</h2>
-      <div class="note-detail-meta-row">
-        <span style="color:var(--text-muted);font-size:11px">${escHtml(path)}</span>
-        ${metaParts.length ? '<span>·</span><span>' + metaParts.join(' · ') + '</span>' : ''}
-      </div>
-      ${fm.tags ? `<div class="note-detail-tags">${String(fm.tags).split(',').map(t => `<span class="note-tag">#${t.trim()}</span>`).join('')}</div>` : ''}
-      <div class="note-detail-content" style="white-space:pre-wrap;font-family:var(--font-mono,monospace);font-size:13px;line-height:1.6;max-height:60vh;overflow-y:auto">${rendered}</div>
-    </div>
-  `;
-}
-
-function renderMarkdown(text) {
-  if (!text) return '';
-  // Basic markdown rendering — headers, bold, italic, code, links, lists
-  return escHtml(text)
-    .replace(/^### (.+)$/gm, '<h3 style="color:var(--accent);margin:12px 0 4px">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="color:var(--accent);margin:16px 0 6px">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="color:var(--accent);margin:20px 0 8px">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code style="background:var(--bg-raised);padding:1px 4px;border-radius:3px">$1</code>')
-    .replace(/\[\[([^\]]+)\]\]/g, '<a style="color:var(--accent);cursor:pointer" onclick="searchAndOpen(\'$1\')">$1</a>')
-    .replace(/^- (.+)$/gm, '<div style="padding-left:16px">• $1</div>')
-    .replace(/\n/g, '<br>');
-}
-
-function searchAndOpen(term) {
-  const input = $('mind-search');
-  if (input) input.value = term;
-  liveVaultSearch(term);
-}
-
-async function loadVaultRecent() {
-  try {
-    _vaultRecentNotes = await Bridge.vaultRecent(20);
-    renderRecentSidebar();
-  } catch (err) {
-    console.error('[mind] recent notes error:', err);
-  }
-}
-
-function renderRecentSidebar() {
-  let sidebar = $('vault-recent-sidebar');
-  if (!sidebar) {
-    // Create sidebar element after mind-toolbar
-    const toolbar = document.querySelector('.mind-toolbar');
-    if (!toolbar) return;
-    sidebar = document.createElement('div');
-    sidebar.id = 'vault-recent-sidebar';
-    sidebar.className = 'vault-recent-sidebar';
-    toolbar.parentElement.insertBefore(sidebar, toolbar.nextSibling);
-  }
-
-  if (!_vaultRecentNotes.length) {
-    sidebar.innerHTML = '<div style="color:var(--text-muted);padding:8px;font-size:12px">No recent notes</div>';
-    return;
-  }
-
-  sidebar.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Recent Notes</span>
-      ${_vaultStats ? `<span style="font-size:11px;color:var(--text-muted)">${_vaultStats.totalNotes} total</span>` : ''}
-    </div>
-    <div class="vault-recent-list" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin">
-      ${_vaultRecentNotes.slice(0, 12).map(n => {
-        const name = n.path.split('/').pop().replace('.md', '');
-        const cat = n.path.split('/')[0] || 'root';
-        const color = TYPE_COLORS[cat] || 'var(--text-dim)';
-        const ago = relativeTime(n.modified);
-        return `<div class="vault-recent-chip" onclick="openLiveVaultNote('${n.path.replace(/'/g, "\\'")}')"
-          style="flex-shrink:0;background:var(--bg-raised);padding:6px 10px;border-radius:8px;cursor:pointer;border-left:3px solid ${color};min-width:120px;max-width:200px">
-          <div style="font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(name)}</div>
-          <div style="font-size:10px;color:var(--text-muted)">${cat} · ${ago}</div>
-        </div>`;
-      }).join('')}
-    </div>
-  `;
-}
-
-function relativeTime(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return mins + 'm ago';
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + 'h ago';
-  const days = Math.floor(hrs / 24);
-  return days + 'd ago';
-}
-
-async function loadVaultStats() {
-  try {
-    _vaultStats = await Bridge.vaultStats();
-    renderVaultStatsPanel();
-    // Update mind-badge with total count
-    const badge = $('mind-badge');
-    if (badge) badge.textContent = _vaultStats.totalNotes;
-  } catch (err) {
-    console.error('[mind] stats error:', err);
-  }
-}
-
-function renderVaultStatsPanel() {
-  let panel = $('vault-stats-panel');
-  if (!panel) {
-    const filters = $('mind-filters');
-    if (!filters) return;
-    panel = document.createElement('div');
-    panel.id = 'vault-stats-panel';
-    panel.className = 'vault-stats-panel';
-    filters.parentElement.insertBefore(panel, filters);
-  }
-
-  if (!_vaultStats) return;
-  const s = _vaultStats;
-  const sizeStr = s.totalSize > 1024*1024 ? (s.totalSize / (1024*1024)).toFixed(1) + ' MB' : (s.totalSize / 1024).toFixed(0) + ' KB';
-  const cats = Object.entries(s.categories).sort((a,b) => b[1] - a[1]).slice(0, 8);
-
-  panel.innerHTML = `
-    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:8px 0">
-      <div style="display:flex;align-items:baseline;gap:6px">
-        <span style="font-size:22px;font-weight:700;color:var(--accent)">${s.totalNotes}</span>
-        <span style="font-size:11px;color:var(--text-muted)">notes</span>
-      </div>
-      <div style="display:flex;align-items:baseline;gap:6px">
-        <span style="font-size:16px;font-weight:600;color:var(--text-bright)">${sizeStr}</span>
-        <span style="font-size:11px;color:var(--text-muted)">total</span>
-      </div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${cats.map(([cat, count]) => {
-          const color = TYPE_COLORS[cat] || 'var(--text-dim)';
-          return `<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${color}20;color:${color};cursor:pointer"
-            onclick="setMindFilter('${cat}')">${cat} ${count}</span>`;
-        }).join('')}
-      </div>
-    </div>
-  `;
 }
 
 // ── Timeline ──────────────────────────────────────────────
@@ -812,7 +514,7 @@ function renderTimeline() {
   const range = maxD - minD || 1;
 
   desktopSorted.forEach((note, i) => {
-    const agent = ga(note.agent) || { emoji: '🤖', color: '#D4A574' };
+    const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
     const pct = (new Date(note.date).getTime() - minD) / range;
     const x = 60 + pct * (trackW - 120);
     const above = i % 2 === 0;
@@ -823,7 +525,7 @@ function renderTimeline() {
     item.onclick = () => openVaultNote(note);
     item.innerHTML = `
       <div class="timeline-label ${above ? 'above' : 'below'}">${agent.emoji} ${note.title.substring(0, 22)}${note.title.length > 22 ? '…' : ''}</div>
-      <div class="timeline-dot" style="background:${agent.color || '#D4A574'}"></div>
+      <div class="timeline-dot" style="background:${agent.color || '#cba6f7'}"></div>
     `;
     track.appendChild(item);
   });
@@ -836,7 +538,7 @@ function renderVerticalTimeline(track, sorted) {
 
   let lastDate = '';
   sorted.forEach(note => {
-    const agent = ga(note.agent) || { emoji: '🤖', color: '#D4A574' };
+    const agent = ga(note.agent) || { emoji: '🤖', color: '#cba6f7' };
     const typeColor = TYPE_COLORS[note.type] || 'var(--text-dim)';
     const cc = note.confidence >= 80 ? 'var(--green)' : note.confidence >= 60 ? 'var(--yellow)' : 'var(--red)';
 
@@ -870,357 +572,185 @@ function renderVerticalTimeline(track, sorted) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PULSE PAGE — Full Operations Dashboard
+// PULSE PAGE
 // ═══════════════════════════════════════════════════════════
 
-let _pulseRefreshTimer = null;
-let _currentLogService = 'openclaw-gateway';
-
 function renderPulse() {
-  // Load live data from bridge if available, else show demo
-  if (Bridge.liveMode) {
-    loadPulseData();
+  if (window.innerWidth <= 768) {
+    renderPulseMobileAccordion();
   } else {
-    renderPulseDemo();
-  }
-  // Start auto-refresh every 30s
-  if (_pulseRefreshTimer) clearInterval(_pulseRefreshTimer);
-  _pulseRefreshTimer = setInterval(() => {
-    if (currentPage === 'pulse' && Bridge.liveMode) loadPulseData();
-  }, 30000);
-}
-
-function refreshPulseData() {
-  if (Bridge.liveMode) {
-    loadPulseData();
-    toast('🔄 Refreshing system data...', 'info');
-  } else {
-    toast('Connect bridge first', 'error');
+    renderAgentHealth();
+    renderCostChart();
+    renderSystemLoad();
+    renderCrons();
+    renderHooks();
+    renderErrorLog();
   }
 }
 
-async function loadPulseData() {
-  try {
-    const [overview, services, agents, crons] = await Promise.all([
-      Bridge.getSystemOverview().catch(() => null),
-      Bridge.getSystemServices().catch(() => []),
-      Bridge.getSystemAgents().catch(() => ({})),
-      Bridge.getSystemCrons().catch(() => ({ crons: [], timers: [] })),
-    ]);
-    if (overview) renderMetricsBar(overview);
-    renderServicesPanel(services);
-    renderAgentStatusPanel(agents);
-    renderCronHealthPanel(crons);
-    loadLogPanel(_currentLogService);
-    // Re-init lucide icons
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  } catch (err) {
-    console.error('[pulse] data load error:', err);
-  }
-}
-
-function renderPulseDemo() {
-  // Render static demo data for offline mode
-  const metricsEl = $('pulse-metrics');
-  if (!metricsEl) return;
-
-  // Demo metrics
-  const uptimeCard = $('metric-uptime');
-  if (uptimeCard) {
-    uptimeCard.querySelector('.metric-value').textContent = '4d 7h';
-    uptimeCard.querySelector('.metric-sub').textContent = 'demo data';
-    uptimeCard.querySelector('.metric-value').style.color = '#a6e3a1';
-  }
-  const loadCard = $('metric-load');
-  if (loadCard) {
-    loadCard.querySelector('.metric-value').textContent = '1.2';
-    loadCard.querySelector('.metric-sub').textContent = '1.2 / 0.8 / 0.6';
-  }
-  const memCard = $('metric-memory');
-  if (memCard) {
-    memCard.querySelector('.metric-value').textContent = '6.2 / 14 GB';
-    const memBar = $('mem-bar');
-    if (memBar) { memBar.style.width = '44%'; memBar.style.background = 'linear-gradient(90deg, #a6e3a1, #f9e2af)'; }
-  }
-  const diskCard = $('metric-disk');
-  if (diskCard) {
-    diskCard.querySelector('.metric-value').textContent = '94%';
-    const diskBar = $('disk-bar');
-    if (diskBar) { diskBar.style.width = '94%'; diskBar.style.background = 'linear-gradient(90deg, #f9e2af, #f38ba8)'; }
-  }
-
-  // Demo services
-  const sGrid = $('services-grid');
-  if (sGrid) {
-    sGrid.innerHTML = ['OpenClaw Gateway', 'OAuth Guardian', 'Bridge Server', 'Bridge Sync'].map(name =>
-      `<div class="svc-card"><span class="svc-dot" style="background:#a6e3a1"></span><div class="svc-info"><div class="svc-name">${name}</div><div class="svc-sub">active · demo</div></div></div>`
-    ).join('');
-  }
-
-  // Demo agents
-  const aGrid = $('agent-status-grid');
-  if (aGrid) {
-    aGrid.innerHTML = (typeof AGENTS !== 'undefined' ? AGENTS : []).map(a =>
-      `<div class="agent-card-sys"><div class="agent-card-header-sys"><span>${a.emoji}</span><span class="agent-name-sys">${a.name}</span><span class="agent-status-pill ${a.status === 'active' ? 'pill-active' : 'pill-idle'}">${a.status || 'idle'}</span></div><div class="agent-task-sys">${a.task || 'standing by'}</div></div>`
-    ).join('');
-  }
-
-  // Demo crons
-  const cTable = $('cron-health-table');
-  if (cTable && typeof CRONS !== 'undefined') {
-    cTable.innerHTML = CRONS.map(c =>
-      `<div class="cron-row-sys"><span class="svc-dot" style="background:${c.ok ? '#a6e3a1' : '#f38ba8'}"></span><span class="cron-name-sys">${c.n}</span><span class="cron-sched-sys">${c.s}</span></div>`
-    ).join('');
-  }
-
-  // Demo logs
-  const logViewer = $('log-viewer');
-  if (logViewer) {
-    logViewer.innerHTML = '<div class="log-placeholder">Connect bridge to view live logs</div>';
-  }
-}
-
-// ── Metrics Bar ───────────────────────────────────────────
-
-function renderMetricsBar(data) {
-  // Uptime
-  const uptimeCard = $('metric-uptime');
-  if (uptimeCard) {
-    const upStr = data.uptime || 'unknown';
-    uptimeCard.querySelector('.metric-value').textContent = upStr;
-    // Color: parse hours
-    const hourMatch = upStr.match(/(\d+)\s*day/);
-    const days = hourMatch ? parseInt(hourMatch[1]) : 0;
-    const hasHours = upStr.match(/(\d+)\s*hour/);
-    const hours = hasHours ? parseInt(hasHours[1]) : 0;
-    const totalHours = days * 24 + hours;
-    const upColor = totalHours >= 24 ? '#a6e3a1' : totalHours >= 1 ? '#f9e2af' : '#f38ba8';
-    uptimeCard.querySelector('.metric-value').style.color = upColor;
-    uptimeCard.querySelector('.metric-sub').textContent = totalHours >= 24 ? 'healthy' : 'recently restarted';
-  }
-
-  // Load
-  const loadCard = $('metric-load');
-  if (loadCard && data.load) {
-    const l1 = data.load.avg1;
-    loadCard.querySelector('.metric-value').textContent = l1.toFixed(2);
-    loadCard.querySelector('.metric-value').style.color = l1 < 2 ? '#a6e3a1' : l1 < 4 ? '#f9e2af' : '#f38ba8';
-    loadCard.querySelector('.metric-sub').textContent = `${l1.toFixed(1)} / ${data.load.avg5.toFixed(1)} / ${data.load.avg15.toFixed(1)}`;
-  }
-
-  // Memory
-  const memCard = $('metric-memory');
-  if (memCard && data.memory) {
-    const usedGB = (data.memory.used / 1024).toFixed(1);
-    const totalGB = (data.memory.total / 1024).toFixed(1);
-    const pct = Math.round((data.memory.used / data.memory.total) * 100);
-    memCard.querySelector('.metric-value').textContent = `${usedGB} / ${totalGB} GB`;
-    const memBar = $('mem-bar');
-    if (memBar) {
-      memBar.style.width = pct + '%';
-      memBar.style.background = pct > 85 ? 'linear-gradient(90deg, #f9e2af, #f38ba8)' : 'linear-gradient(90deg, #a6e3a1, #89dceb)';
-    }
-  }
-
-  // Disk
-  const diskCard = $('metric-disk');
-  if (diskCard && data.disk) {
-    const pctStr = data.disk.percent || '0%';
-    const pct = parseInt(pctStr);
-    diskCard.querySelector('.metric-value').textContent = `${data.disk.used} / ${data.disk.total}`;
-    diskCard.querySelector('.metric-value').style.color = pct > 85 ? '#f38ba8' : pct > 70 ? '#f9e2af' : '#a6e3a1';
-    const diskBar = $('disk-bar');
-    if (diskBar) {
-      diskBar.style.width = pct + '%';
-      diskBar.style.background = pct > 85 ? 'linear-gradient(90deg, #f9e2af, #f38ba8)' : 'linear-gradient(90deg, #a6e3a1, #89dceb)';
-    }
-  }
-}
-
-// ── Services Panel ────────────────────────────────────────
-
-function renderServicesPanel(services) {
-  const grid = $('services-grid');
+function renderPulseMobileAccordion() {
+  const grid = document.querySelector('.pulse-grid');
   if (!grid) return;
 
-  const friendlyNames = {
-    'openclaw-gateway': 'OpenClaw Gateway',
-    'oauth-guardian': 'OAuth Guardian',
-    'agent-os-bridge': 'Bridge Server',
-    'bridge-sync': 'Bridge Sync',
-  };
+  // Render content into temporary containers
+  renderAgentHealth();
+  renderCostChart();
+  renderSystemLoad();
+  renderCrons();
+  renderHooks();
+  renderErrorLog();
 
-  grid.innerHTML = services.map(svc => {
-    const isActive = svc.active === 'active';
-    const dotColor = isActive ? '#a6e3a1' : '#f38ba8';
-    const name = friendlyNames[svc.name] || svc.name;
-    const since = svc.since ? timeSince(new Date(svc.since)) : 'unknown';
-    const glowClass = isActive ? 'svc-glow' : '';
+  const sections = [
+    { icon: '\u{1F916}', title: 'Agent Health', contentId: 'agent-health-table' },
+    { icon: '\u{1F4B0}', title: 'Cost (7 days)', contentId: 'cost-chart', isParent: '.cost-chart-container' },
+    { icon: '\u{1F4CA}', title: 'System Load', contentId: 'system-load' },
+    { icon: '\u23F0', title: 'Cron Jobs', contentId: 'cron-status' },
+    { icon: '\u{1F517}', title: 'Webhooks', contentId: 'hook-status' },
+    { icon: '\u{1F6A8}', title: 'Recent Errors', contentId: 'error-log' },
+  ];
 
-    return `<div class="svc-card ${glowClass}" onclick="showServiceLogs('${svc.name}','${name}')">
-      <span class="svc-dot" style="background:${dotColor}"></span>
-      <div class="svc-info">
-        <div class="svc-name">${name}</div>
-        <div class="svc-sub">${svc.active}${svc.sub !== 'unknown' ? ' · ' + svc.sub : ''} · ${since}</div>
-      </div>
-      <span class="svc-pid">${svc.pid ? 'PID ' + svc.pid : ''}</span>
-    </div>`;
-  }).join('');
-}
+  // Wrap each pulse-section in accordion markup
+  const pulseSections = grid.querySelectorAll('.pulse-section');
+  sections.forEach((sec, i) => {
+    const psEl = pulseSections[i];
+    if (!psEl || psEl.dataset.accordion === 'done') return;
 
-function timeSince(date) {
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (secs < 60) return secs + 's';
-  if (secs < 3600) return Math.floor(secs / 60) + 'm';
-  if (secs < 86400) return Math.floor(secs / 3600) + 'h';
-  return Math.floor(secs / 86400) + 'd';
-}
+    psEl.dataset.accordion = 'done';
+    const title = psEl.querySelector('.section-title');
+    if (!title) return;
 
-function showServiceLogs(svcId, svcName) {
-  const slideout = $('service-log-slideout');
-  const title = $('slideout-title');
-  const viewer = $('slideout-log-viewer');
-  if (!slideout || !viewer) return;
-  title.textContent = svcName + ' Logs';
-  slideout.classList.remove('hidden');
-  viewer.innerHTML = '<div class="log-placeholder">Loading...</div>';
-  Bridge.getSystemLogs(svcId, 100).then(data => {
-    renderLogLines(viewer, data.lines || []);
-  }).catch(err => {
-    viewer.innerHTML = `<div class="log-placeholder" style="color:#f38ba8">Error: ${err.message}</div>`;
+    // Wrap children (except title) in accordion-body
+    const body = document.createElement('div');
+    body.className = 'accordion-body';
+    const children = [...psEl.children].filter(c => c !== title);
+    children.forEach(c => body.appendChild(c));
+
+    // Create accordion header
+    const header = document.createElement('div');
+    header.className = 'accordion-header';
+    header.innerHTML = `<span>${sec.icon} ${sec.title}</span><span class="accordion-arrow">\u25B6</span>`;
+    header.onclick = function() { toggleAccordion(this); };
+
+    psEl.innerHTML = '';
+    psEl.classList.add('accordion-section');
+    if (i === 0) psEl.classList.add('open');
+    psEl.appendChild(header);
+    psEl.appendChild(body);
   });
 }
 
-function closeServiceSlideout() {
-  const slideout = $('service-log-slideout');
-  if (slideout) slideout.classList.add('hidden');
+function toggleAccordion(header) {
+  const section = header.parentElement;
+  section.classList.toggle('open');
 }
 
-// ── Agent Status Panel ────────────────────────────────────
-
-function renderAgentStatusPanel(agentData) {
-  const grid = $('agent-status-grid');
-  if (!grid) return;
-
-  // Merge AGENTS roster with live dispatch data
-  const roster = typeof AGENTS !== 'undefined' ? AGENTS : [];
-  grid.innerHTML = roster.map(a => {
-    const liveData = agentData[a.id] || agentData[a.name?.toLowerCase()] || {};
-    const queuedTasks = liveData.queued || [];
-    const doneCount = liveData.doneCount || 0;
-    const isActive = queuedTasks.length > 0 || a.status === 'active';
-    const currentTask = queuedTasks.length > 0 ? queuedTasks[0].title : (a.task || 'standing by');
-    const statusPill = isActive ? 'pill-active' : 'pill-idle';
-
-    return `<div class="agent-card-sys ${isActive ? 'agent-active-glow' : ''}">
-      <div class="agent-card-header-sys">
-        <span class="agent-emoji-sys">${a.emoji}</span>
-        <span class="agent-name-sys">${a.name}</span>
-        <span class="agent-status-pill ${statusPill}">${isActive ? 'active' : 'idle'}</span>
-      </div>
-      <div class="agent-task-sys">${currentTask}</div>
-      <div class="agent-stats-sys">
-        <span class="agent-stat-item">📋 ${queuedTasks.length} queued</span>
-        <span class="agent-stat-item">✅ ${doneCount} done</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── Cron Health Panel ─────────────────────────────────────
-
-function renderCronHealthPanel(cronData) {
-  const table = $('cron-health-table');
-  if (!table) return;
-
-  let rows = '';
-
-  // Crontab entries
-  (cronData.crons || []).forEach(c => {
-    const schedHuman = cronToHuman(c.schedule);
-    rows += `<div class="cron-row-sys">
-      <span class="svc-dot" style="background:#a6e3a1"></span>
-      <span class="cron-name-sys" title="${c.command}">${c.command.substring(0, 40)}</span>
-      <span class="cron-sched-sys">${schedHuman}</span>
-      <span class="cron-type-badge">crontab</span>
-    </div>`;
+function renderAgentHealth() {
+  const c = $('agent-health-table');
+  c.innerHTML = '';
+  AGENTS.forEach(a => {
+    const statusClr = a.status === 'active' ? 'var(--green)' : 'var(--text-muted)';
+    const fitClr = a.fitness > 0.8 ? 'var(--green)' : a.fitness > 0.6 ? 'var(--yellow)' : 'var(--red)';
+    const row = document.createElement('div');
+    row.className = 'health-row';
+    row.innerHTML = `
+      <div class="health-agent"><span class="health-status-dot" style="background:${statusClr}"></span>${a.emoji} ${a.name}</div>
+      <div class="health-task">${a.task || a.role}</div>
+      <div class="health-bar-outer"><div class="health-bar-inner" style="width:${a.fitness * 100}%;background:${fitClr}"></div></div>
+      <div class="health-tokens">${(a.tokens / 1000).toFixed(1)}K</div>
+    `;
+    c.appendChild(row);
   });
+}
 
-  // Systemd timers
-  (cronData.timers || []).forEach(t => {
-    const name = t.unit || t.activates || 'timer';
-    const isOverdue = t.left && t.left.includes('ago');
-    const dotColor = isOverdue ? '#f9e2af' : '#a6e3a1';
-    rows += `<div class="cron-row-sys">
-      <span class="svc-dot" style="background:${dotColor}"></span>
-      <span class="cron-name-sys">${name}</span>
-      <span class="cron-sched-sys">${t.left || 'unknown'}</span>
-      <span class="cron-type-badge type-systemd">systemd</span>
-    </div>`;
+function renderCostChart() {
+  const svg = $('cost-chart');
+  if (!svg) return;
+  const W = svg.parentElement.clientWidth || 400;
+  const H = 160;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = '';
+  const agents = ['righthand', 'researcher', 'coder', 'utility', 'other'];
+  const colors = { righthand: '#E8A838', researcher: '#2BA89E', coder: '#57A773', utility: '#8E44AD', other: '#6C7A89' };
+  const barW = (W - 60) / COST_DATA.length;
+  const maxT = Math.max(...COST_DATA.map(d => agents.reduce((s, a) => s + (d[a] || 0), 0)));
+
+  COST_DATA.forEach((d, i) => {
+    let y = H - 20;
+    agents.forEach(agent => {
+      const val = d[agent] || 0;
+      const bH = (val / maxT) * (H - 30);
+      y -= bH;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', 30 + i * barW + 4);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', barW - 8);
+      rect.setAttribute('height', bH);
+      rect.setAttribute('fill', colors[agent] || '#94e2d5');
+      rect.setAttribute('rx', '2');
+      svg.appendChild(rect);
+    });
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', 30 + (i + 0.5) * barW);
+    txt.setAttribute('y', H - 4);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('fill', '#6c7086');
+    txt.setAttribute('font-size', '10');
+    txt.textContent = d.day;
+    svg.appendChild(txt);
   });
-
-  if (!rows) {
-    rows = '<div class="log-placeholder">No cron jobs found</div>';
-  }
-  table.innerHTML = rows;
 }
 
-function cronToHuman(sched) {
-  if (!sched) return '';
-  const parts = sched.split(/\s+/);
-  if (parts.length < 5) return sched;
-  const [min, hr, dom, mon, dow] = parts;
-  if (min === '*' && hr === '*') return 'every minute';
-  if (min !== '*' && hr === '*') return `every hour at :${min.padStart(2,'0')}`;
-  if (min === '0' && hr === '*') return 'every hour';
-  if (min === '*/5') return 'every 5 min';
-  if (min === '*/10') return 'every 10 min';
-  if (min === '*/15') return 'every 15 min';
-  if (min === '*/30' || (min === '0' && hr === '*/2')) return 'every 30 min';
-  if (dom === '*' && mon === '*' && dow === '*') return `daily at ${hr}:${min.padStart(2,'0')}`;
-  return sched;
+function renderSystemLoad() {
+  const loads = [
+    { label: 'CPU', val: 34, color: 'var(--accent)' },
+    { label: 'Mem', val: 67, color: 'var(--accent2)' },
+    { label: 'Disk', val: 94, color: 'var(--red)' },
+    { label: 'Net', val: 12, color: 'var(--green)' },
+  ];
+  $('system-load').innerHTML = loads.map(l => `
+    <div class="load-row">
+      <span class="load-label">${l.label}</span>
+      <div class="load-bar-outer"><div class="load-bar-inner" style="width:${l.val}%;background:${l.color}"></div></div>
+      <span class="load-value">${l.val}%</span>
+    </div>
+  `).join('');
 }
 
-// ── Live Logs Panel ───────────────────────────────────────
-
-function switchLogTab(svc, btn) {
-  _currentLogService = svc;
-  document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  loadLogPanel(svc);
+function renderCrons() {
+  $('cron-status').innerHTML = CRONS.map(c => `
+    <div class="cron-row">
+      <span class="status-dot ${c.ok ? 'status-ok' : 'status-fail'}"></span>
+      <span class="cron-name">${c.n}</span>
+      <span class="cron-schedule">${c.s}</span>
+    </div>
+  `).join('');
 }
 
-async function loadLogPanel(svc) {
-  const viewer = $('log-viewer');
-  if (!viewer) return;
-  if (!Bridge.liveMode) {
-    viewer.innerHTML = '<div class="log-placeholder">Connect bridge to view live logs</div>';
-    return;
-  }
-  viewer.innerHTML = '<div class="log-placeholder">Loading...</div>';
-  try {
-    const data = await Bridge.getSystemLogs(svc, 50);
-    renderLogLines(viewer, data.lines || []);
-  } catch (err) {
-    viewer.innerHTML = `<div class="log-placeholder" style="color:#f38ba8">Error: ${err.message}</div>`;
-  }
+function renderHooks() {
+  $('hook-status').innerHTML = HOOKS.map(h => `
+    <div class="hook-row">
+      <span class="status-dot ${h.s === 'ok' ? 'status-ok' : h.s === 'warn' ? 'status-warn' : 'status-fail'}"></span>
+      <span class="hook-name">${h.n}</span>
+      <span class="hook-latency">${h.l}</span>
+    </div>
+  `).join('');
 }
 
-function renderLogLines(container, lines) {
-  if (!lines.length) {
-    container.innerHTML = '<div class="log-placeholder">No log entries</div>';
-    return;
-  }
-  container.innerHTML = lines.map(l => {
-    const text = l.text || '';
-    let severity = 'info';
-    if (/error|fail|fatal|panic/i.test(text)) severity = 'error';
-    else if (/warn/i.test(text)) severity = 'warn';
-    const ts = l.ts ? `<span class="log-ts">${l.ts.substring(11, 19) || l.ts}</span>` : '';
-    return `<div class="log-line log-${severity}">${ts}<span class="log-text">${escHtml(text)}</span></div>`;
+function renderErrorLog() {
+  const errors = STREAM_EVENTS.filter(e => e.level === 'error' || e.level === 'warn' || e.level === 'info').slice(0, 8);
+  $('error-log').innerHTML = errors.map(e => {
+    const agent = ga(e.agent) || { emoji: '❓' };
+    const levelClass = e.level;
+    const borderColor = e.level === 'error' ? 'var(--red)' : e.level === 'warn' ? 'var(--yellow)' : 'var(--green)';
+    const bgColor = e.level === 'error' ? 'rgba(243,139,168,0.05)' : e.level === 'warn' ? 'rgba(249,226,175,0.05)' : 'rgba(166,227,161,0.03)';
+    return `
+      <div class="error-item error-line ${levelClass}" style="border-left-color:${borderColor};background:${bgColor}">
+        <span class="error-time">${e.time}</span>
+        <span class="error-agent">${agent.emoji}</span>
+        <span class="log-level ${levelClass}" style="min-width:35px;font-size:10px">${e.level.toUpperCase()}</span>
+        <span class="error-text">${e.text}</span>
+      </div>`;
   }).join('');
-  // Auto-scroll to bottom
-  container.scrollTop = container.scrollHeight;
 }
 
 function quickAction(action) {
@@ -1231,7 +761,7 @@ function quickAction(action) {
     'health-check':    '🩺 Running health check...',
   };
   toast(msgs[action] || action, 'success');
-  if (typeof addXP === 'function') addXP(5, 'quick action');
+  addXP(5, 'quick action');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1290,7 +820,7 @@ function makeBoardCard(card, colId) {
 }
 
 function openBoardCard(card, colId) {
-  const agent = ga(card.agent) || { emoji: '🤖', name: card.agent, color: '#D4A574' };
+  const agent = ga(card.agent) || { emoji: '🤖', name: card.agent, color: '#cba6f7' };
   const pCls = (card.priority || 'P3').toLowerCase();
   const col = BOARD_COLUMNS.find(c => c.id === colId);
   const modal = $('card-modal-content');
@@ -1435,611 +965,4 @@ function toggleLevelFilter(level, btn) {
 function addStreamEvent(event) {
   streamEvents.unshift(event);
   if (currentPage === 'stream') renderStreamLog();
-}
-
-// ═══════════════════════════════════════════════════════════
-// PLANS PAGE — Kanban Board
-// ═══════════════════════════════════════════════════════════
-
-let plansData = [];
-let currentPlanId = null; // null = "All Plans" overview
-let plansLoaded = false;
-let plansPollingInterval = null;
-let plansLastSyncTime = null;
-
-const PLAN_PRIORITY_COLORS = {P1:'#f38ba8', P2:'#fab387', P3:'#89b4fa', P4:'#6c7086'};
-const DEFAULT_COLUMNS = ['Backlog','In Progress','Review','Done'];
-
-// Helper: normalize column — handles both string and {id, name, color} formats
-function colName(col) { return typeof col === 'object' ? (col.name || col.id) : col; }
-function colId(col) { return typeof col === 'object' ? (col.id || col.name) : col; }
-function colColor(col, idx) {
-  if (typeof col === 'object' && col.color) return col.color;
-  const palette = ['#89b4fa','#fab387','#cba6f7','#a6e3a1'];
-  return palette[idx % palette.length];
-}
-function taskInCol(task, col) {
-  const cid = colId(col);
-  const cname = colName(col);
-  return task.column === cid || task.column === cname || task.status === cid || task.status === cname;
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
-}
-
-async function renderPlans() {
-  const v = $('view-plans');
-  if (!v) return;
-
-  if (!Bridge.liveMode) {
-    stopPlansPolling();
-    v.innerHTML = `<div class="plans-empty"><div class="empty-icon">📋</div><div class="empty-title">Connect bridge to view plans</div><div class="empty-desc">Configure bridge connection to load your Kanban boards</div></div>`;
-    return;
-  }
-
-  v.innerHTML = `<div class="plans-loading"><span class="plans-spinner"></span> Loading plans...</div>`;
-
-  try {
-    await loadFullPlans();
-    plansLoaded = true;
-    renderPlansUI();
-    startPlansPolling();
-  } catch (e) {
-    v.innerHTML = `<div class="plans-empty"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load plans</div><div class="empty-desc">${e.message}</div></div>`;
-  }
-}
-
-async function loadFullPlans() {
-  const summaries = await Bridge.getPlans();
-  const list = Array.isArray(summaries) ? summaries : (summaries.plans || []);
-  // Fetch full plan data for each (needed for tasks, cross-refs)
-  const full = await Promise.all(list.map(async s => {
-    try { return await Bridge.getPlan(s.id); } catch { return s; }
-  }));
-  plansData = full;
-  plansLastSyncTime = Date.now();
-}
-
-function startPlansPolling() {
-  stopPlansPolling();
-  plansPollingInterval = setInterval(async () => {
-    if (!Bridge.liveMode) { stopPlansPolling(); return; }
-    try {
-      const prev = JSON.stringify(plansData.map(p => ({ id: p.id, updated_at: p.updated_at, tc: (p.tasks||[]).length })));
-      await loadFullPlans();
-      const next = JSON.stringify(plansData.map(p => ({ id: p.id, updated_at: p.updated_at, tc: (p.tasks||[]).length })));
-      if (prev !== next) renderPlansUI();
-      else updateSyncIndicator();
-    } catch { /* silent */ }
-  }, 10000);
-}
-
-function stopPlansPolling() {
-  if (plansPollingInterval) { clearInterval(plansPollingInterval); plansPollingInterval = null; }
-}
-
-function updateSyncIndicator() {
-  const el = document.querySelector('.plans-sync-indicator');
-  if (el && plansLastSyncTime) {
-    const ago = Math.floor((Date.now() - plansLastSyncTime) / 1000);
-    el.textContent = ago < 5 ? 'Synced just now' : `Synced ${ago}s ago`;
-  }
-}
-
-function renderPlansUI() {
-  const v = $('view-plans');
-  if (!v) return;
-
-  // Sync indicator text
-  const syncText = plansLastSyncTime ? (() => {
-    const ago = Math.floor((Date.now() - plansLastSyncTime) / 1000);
-    return ago < 5 ? 'Synced just now' : `Synced ${ago}s ago`;
-  })() : '';
-
-  // Top bar: "All Plans" pill + plan tabs + sync indicator + new plan button
-  let html = `<div class="plans-topbar">
-    <div class="plans-tabs-scroll">
-      <button class="plans-tab${currentPlanId === null ? ' active' : ''}" onclick="switchPlan(null)">📋 All Plans</button>`;
-  plansData.forEach(p => {
-    const active = p.id === currentPlanId ? ' active' : '';
-    const statusCls = p.status || 'active';
-    const taskCount = (p.tasks || []).length;
-    html += `<button class="plans-tab${active}" onclick="switchPlan('${p.id}')">${p.name || 'Untitled'}<span class="plans-tab-count">${taskCount}</span><span class="plan-status-dot ${statusCls}"></span></button>`;
-  });
-  html += `</div>
-    <span class="plans-sync-indicator">${syncText}</span>
-    <button class="plans-new-btn" onclick="showNewPlanModal()">+ New Plan</button>
-  </div>`;
-
-  if (plansData.length === 0) {
-    html += `<div class="plans-empty"><div class="empty-icon">📋</div><div class="empty-title">No plans yet</div><div class="empty-desc">Create your first plan to get started</div></div>`;
-    v.innerHTML = html;
-    lucide.createIcons();
-    return;
-  }
-
-  // "All Plans" overview or single plan kanban
-  if (currentPlanId === null) {
-    html += renderAllPlansOverview();
-  } else {
-    const plan = plansData.find(p => p.id === currentPlanId);
-    if (!plan) { currentPlanId = null; html += renderAllPlansOverview(); }
-    else html += renderSinglePlanKanban(plan);
-  }
-
-  v.innerHTML = html;
-  lucide.createIcons();
-}
-
-function renderAllPlansOverview() {
-  let html = `<div class="plans-overview-grid">`;
-  plansData.forEach(p => {
-    const tasks = p.tasks || [];
-    const columns = p.columns || DEFAULT_COLUMNS;
-    const statusLabel = p.status || 'active';
-    const totalTasks = tasks.length;
-    const doneTasks = tasks.filter(t => {
-      const lastCol = columns[columns.length - 1];
-      return taskInCol(t, lastCol);
-    }).length;
-    const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-
-    html += `<div class="plans-overview-card" onclick="switchPlan('${p.id}')">
-      <div class="plans-ov-header">
-        <span class="plans-ov-name">${p.name || 'Untitled'}</span>
-        <span class="plan-status-badge ${statusLabel}">${statusLabel}</span>
-      </div>`;
-    if (p.description) html += `<div class="plans-ov-desc">${p.description}</div>`;
-
-    // Column summary chips
-    html += `<div class="plans-ov-cols">`;
-    columns.forEach((col, ci) => {
-      const count = tasks.filter(t => taskInCol(t, col)).length;
-      html += `<span class="plans-ov-col-chip" style="border-color:${colColor(col, ci)}">${colName(col)} <strong>${count}</strong></span>`;
-    });
-    html += `</div>`;
-
-    // Progress bar
-    html += `<div class="plans-ov-progress">
-      <div class="plans-ov-progress-bar" style="width:${progress}%"></div>
-    </div>
-    <div class="plans-ov-footer">
-      <span>${totalTasks} tasks · ${doneTasks} done</span>
-      <span class="plans-ov-arrow">→</span>
-    </div>`;
-
-    // Cross-references from this plan
-    const refs = getCrossRefsForPlan(p);
-    if (refs.length > 0) {
-      html += `<div class="plans-ov-refs">`;
-      refs.forEach(r => {
-        html += `<span class="plans-cross-ref" onclick="event.stopPropagation();switchPlan('${r.planId}')">🔗 ${r.planName}</span>`;
-      });
-      html += `</div>`;
-    }
-
-    html += `</div>`;
-  });
-  html += `</div>`;
-  return html;
-}
-
-function renderSinglePlanKanban(plan) {
-  let html = '';
-  const statusLabel = plan.status || 'active';
-  html += `<div class="plan-info-bar"><span class="plan-status-badge ${statusLabel}">${statusLabel.charAt(0).toUpperCase()+statusLabel.slice(1)}</span>`;
-  if (plan.description) html += `<span class="plan-desc">${plan.description}</span>`;
-  html += `</div>`;
-
-  const columns = plan.columns || DEFAULT_COLUMNS;
-  const tasks = plan.tasks || [];
-
-  html += `<div class="kanban-container">`;
-  columns.forEach((col, ci) => {
-    const cId = colId(col);
-    const cName = colName(col);
-    const cColor = colColor(col, ci);
-    const colTasks = tasks.filter(t => taskInCol(t, col));
-
-    html += `<div class="kanban-column" data-col="${cId}">
-      <div class="kanban-col-header" style="border-top:3px solid ${cColor}">
-        <span class="kanban-col-title">${cName}</span>
-        <span class="kanban-col-count">${colTasks.length}</span>
-      </div>
-      <div class="kanban-col-body">`;
-
-    colTasks.forEach(task => {
-      html += renderKanbanCard(plan, task);
-    });
-
-    html += `</div>
-      <button class="kanban-add-btn" onclick="showQuickCreate('${plan.id}','${cId}',this)">+ Add task</button>
-    </div>`;
-  });
-  html += `</div>`;
-
-  // Cross-references section
-  const refs = getCrossRefsForPlan(plan);
-  if (refs.length > 0) {
-    html += `<div class="plans-related-section">
-      <div class="plans-related-title">🔗 Related Plans</div>
-      <div class="plans-related-list">`;
-    refs.forEach(r => {
-      html += `<div class="plans-related-item" onclick="switchPlan('${r.planId}')">
-        <span class="plans-related-name">${r.planName}</span>
-        <span class="plans-related-detail">${r.refs.length} cross-reference${r.refs.length > 1 ? 's' : ''}</span>
-      </div>`;
-    });
-    html += `</div></div>`;
-  }
-
-  return html;
-}
-
-function renderKanbanCard(plan, task) {
-  const agent = ga(task.agent);
-  const agentColor = agent ? agent.color : '#6c7086';
-  const agentEmoji = agent ? agent.emoji : '🤖';
-  const agentName = agent ? agent.name : (task.agent || 'Unassigned');
-  const prio = task.priority || 'P3';
-  const prioColor = PLAN_PRIORITY_COLORS[prio] || '#6c7086';
-  const labels = task.labels || [];
-  const blockedBy = task.blockedBy || [];
-
-  let cardHtml = `<div class="kanban-card" style="border-left:3px solid ${agentColor}" onclick="openTaskDetail('${plan.id}','${task.id}')">
-    <div class="kanban-card-top">
-      <span class="kanban-card-agent">${agentEmoji} ${agentName}</span>
-      <span class="kanban-card-prio" style="background:${prioColor}">${prio}</span>
-    </div>
-    <div class="kanban-card-title">${task.title || 'Untitled'}</div>`;
-
-  // Cross-reference badges
-  if (blockedBy.length > 0) {
-    cardHtml += `<div class="kanban-card-xrefs">`;
-    blockedBy.forEach(ref => {
-      const refPlan = plansData.find(p => p.id === ref.planId);
-      const refName = refPlan ? refPlan.name : ref.planId;
-      cardHtml += `<span class="kanban-xref-badge" title="Blocked by: [${refName}] ${ref.taskTitle || ref.taskId}">🔗 ${ref.taskTitle || ref.taskId}</span>`;
-    });
-    cardHtml += `</div>`;
-  }
-
-  if (labels.length) {
-    cardHtml += `<div class="kanban-card-labels">${labels.map(l => `<span class="kanban-label">${l}</span>`).join('')}</div>`;
-  }
-  cardHtml += `<div class="kanban-card-time">${timeAgo(task.updated_at || task.created_at)}</div>
-  </div>`;
-  return cardHtml;
-}
-
-// Cross-reference helpers
-function getCrossRefsForPlan(plan) {
-  const tasks = plan.tasks || [];
-  const refMap = new Map(); // planId → { planName, refs: [] }
-  tasks.forEach(t => {
-    const blockedBy = t.blockedBy || [];
-    blockedBy.forEach(ref => {
-      if (ref.planId && ref.planId !== plan.id) {
-        if (!refMap.has(ref.planId)) {
-          const other = plansData.find(p => p.id === ref.planId);
-          refMap.set(ref.planId, { planId: ref.planId, planName: other ? other.name : ref.planId, refs: [] });
-        }
-        refMap.get(ref.planId).refs.push({ taskId: t.id, taskTitle: t.title, refTaskId: ref.taskId });
-      }
-    });
-    // Also check relatedPlans field
-    const related = plan.relatedPlans || [];
-    related.forEach(rp => {
-      const rpId = typeof rp === 'string' ? rp : rp.id;
-      if (rpId && !refMap.has(rpId)) {
-        const other = plansData.find(p => p.id === rpId);
-        if (other) refMap.set(rpId, { planId: rpId, planName: other.name, refs: [{ note: 'Related plan' }] });
-      }
-    });
-  });
-  return Array.from(refMap.values());
-}
-
-function switchPlan(id) {
-  currentPlanId = id;
-  renderPlansUI();
-  // Scroll top of plans view
-  const v = $('view-plans');
-  if (v) v.scrollTop = 0;
-}
-
-// ── Quick Create (inline) ──────────────────────────────────
-
-function showQuickCreate(planId, col, btn) {
-  // Remove any existing quick-create
-  document.querySelectorAll('.kanban-quick-create').forEach(e => e.remove());
-
-  const form = document.createElement('div');
-  form.className = 'kanban-quick-create';
-  form.innerHTML = `
-    <input type="text" class="qc-title" placeholder="Task title..." autofocus />
-    <select class="qc-priority">
-      <option value="P1">P1</option><option value="P2">P2</option>
-      <option value="P3" selected>P3</option><option value="P4">P4</option>
-    </select>
-    <div class="qc-actions">
-      <button class="qc-create-btn" onclick="submitQuickCreate('${planId}','${col}',this)">Create</button>
-      <button class="qc-cancel-btn" onclick="this.closest('.kanban-quick-create').remove()">✕</button>
-    </div>`;
-  btn.parentElement.insertBefore(form, btn);
-  form.querySelector('.qc-title').focus();
-  form.querySelector('.qc-title').addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitQuickCreate(planId, col, form.querySelector('.qc-create-btn'));
-    if (e.key === 'Escape') form.remove();
-  });
-}
-
-async function submitQuickCreate(planId, col, btn) {
-  const form = btn.closest('.kanban-quick-create');
-  const title = form.querySelector('.qc-title').value.trim();
-  const priority = form.querySelector('.qc-priority').value;
-  if (!title) return;
-
-  btn.disabled = true;
-  btn.textContent = '...';
-  try {
-    await Bridge.createTask(planId, { title, priority, column: col });
-    form.remove();
-    toast('Task created', 'success');
-    // Reload plan
-    const updated = await Bridge.getPlan(planId);
-    const idx = plansData.findIndex(p => p.id === planId);
-    if (idx >= 0) plansData[idx] = updated;
-    renderPlansUI();
-  } catch (e) {
-    toast('Failed: ' + e.message, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Create';
-  }
-}
-
-// ── Task Detail Modal ──────────────────────────────────────
-
-function openTaskDetail(planId, taskId) {
-  const plan = plansData.find(p => p.id === planId);
-  if (!plan) return;
-  const task = (plan.tasks || []).find(t => t.id === taskId);
-  if (!task) return;
-
-  const agent = ga(task.agent);
-  const columns = plan.columns || DEFAULT_COLUMNS;
-  const prio = task.priority || 'P3';
-  const labels = task.labels || [];
-  const comments = task.comments || [];
-
-  const overlay = document.createElement('div');
-  overlay.className = 'task-modal-overlay';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-
-  overlay.innerHTML = `<div class="task-modal">
-    <div class="task-modal-header">
-      <input class="task-modal-title" value="${(task.title||'').replace(/"/g,'&quot;')}" 
-        onchange="updateTaskField('${planId}','${taskId}','title',this.value)" />
-      <button class="task-modal-close" onclick="this.closest('.task-modal-overlay').remove()">✕</button>
-    </div>
-    <div class="task-modal-body">
-      <div class="task-modal-main">
-        <div class="task-field-group">
-          <label>Description</label>
-          <textarea class="task-modal-desc" rows="4" placeholder="Add a description..."
-            onchange="updateTaskField('${planId}','${taskId}','description',this.value)">${task.description || ''}</textarea>
-        </div>
-        <div class="task-field-group">
-          <label>Labels</label>
-          <div class="task-labels-row">
-            ${labels.map(l => `<span class="kanban-label removable" onclick="removeLabel('${planId}','${taskId}','${l}',this)">${l} ✕</span>`).join('')}
-            <input class="task-label-input" placeholder="+ Add label" onkeydown="addLabelKey(event,'${planId}','${taskId}')" />
-          </div>
-        </div>
-        <div class="task-field-group">
-          <label>Comments</label>
-          <div class="task-comments-list">
-            ${comments.map(c => `<div class="task-comment"><span class="task-comment-author">${c.author || 'Unknown'}</span><span class="task-comment-time">${timeAgo(c.created_at)}</span><p>${c.text || ''}</p></div>`).join('')}
-            ${comments.length === 0 ? '<div class="task-no-comments">No comments yet</div>' : ''}
-          </div>
-          <div class="task-comment-input-row">
-            <input class="task-comment-input" placeholder="Add a comment..." id="task-comment-input-${taskId}" onkeydown="if(event.key==='Enter')submitComment('${planId}','${taskId}')" />
-            <button class="task-comment-send" onclick="submitComment('${planId}','${taskId}')">Send</button>
-          </div>
-        </div>
-      </div>
-      <div class="task-modal-sidebar">
-        <div class="task-field-group">
-          <label>Agent</label>
-          <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','agent',this.value)">
-            <option value="">Unassigned</option>
-            ${AGENTS.map(a => `<option value="${a.id}" ${a.id===task.agent?'selected':''}>${a.emoji} ${a.name}</option>`).join('')}
-          </select>
-        </div>
-        <div class="task-field-group">
-          <label>Column</label>
-          <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','column',this.value)">
-            ${columns.map(c => { const cid = colId(c), cn = colName(c); return `<option value="${cid}" ${cid===task.column||cn===task.column||cid===task.status||cn===task.status?'selected':''}>${cn}</option>`; }).join('')}
-          </select>
-        </div>
-        <div class="task-field-group">
-          <label>Priority</label>
-          <select class="task-select" onchange="updateTaskField('${planId}','${taskId}','priority',this.value)">
-            ${['P1','P2','P3','P4'].map(p => `<option value="${p}" ${p===prio?'selected':''}>${p}</option>`).join('')}
-          </select>
-        </div>
-        <div class="task-field-group task-danger-zone">
-          <button class="task-delete-btn" onclick="confirmDeleteTask('${planId}','${taskId}')">🗑️ Delete Task</button>
-        </div>
-      </div>
-    </div>
-  </div>`;
-
-  document.body.appendChild(overlay);
-}
-
-async function updateTaskField(planId, taskId, field, value) {
-  try {
-    await Bridge.updateTask(planId, taskId, { [field]: value });
-    // Update local data
-    const plan = plansData.find(p => p.id === planId);
-    if (plan) {
-      const task = (plan.tasks || []).find(t => t.id === taskId);
-      if (task) task[field] = value;
-    }
-    if (field === 'column' || field === 'agent' || field === 'priority') {
-      document.querySelector('.task-modal-overlay')?.remove();
-      renderPlansUI();
-    }
-  } catch (e) {
-    toast('Update failed: ' + e.message, 'error');
-  }
-}
-
-async function addLabelKey(event, planId, taskId) {
-  if (event.key !== 'Enter') return;
-  const input = event.target;
-  const label = input.value.trim();
-  if (!label) return;
-
-  const plan = plansData.find(p => p.id === planId);
-  if (!plan) return;
-  const task = (plan.tasks || []).find(t => t.id === taskId);
-  if (!task) return;
-
-  const labels = task.labels || [];
-  if (labels.includes(label)) { input.value = ''; return; }
-  labels.push(label);
-  task.labels = labels;
-  input.value = '';
-
-  try {
-    await Bridge.updateTask(planId, taskId, { labels });
-    // Re-render the labels row
-    const row = input.closest('.task-labels-row');
-    const pill = document.createElement('span');
-    pill.className = 'kanban-label removable';
-    pill.textContent = label + ' ✕';
-    pill.onclick = () => removeLabel(planId, taskId, label, pill);
-    row.insertBefore(pill, input);
-  } catch (e) {
-    toast('Failed: ' + e.message, 'error');
-  }
-}
-
-async function removeLabel(planId, taskId, label, el) {
-  const plan = plansData.find(p => p.id === planId);
-  if (!plan) return;
-  const task = (plan.tasks || []).find(t => t.id === taskId);
-  if (!task) return;
-
-  task.labels = (task.labels || []).filter(l => l !== label);
-  el.remove();
-  try {
-    await Bridge.updateTask(planId, taskId, { labels: task.labels });
-  } catch (e) {
-    toast('Failed: ' + e.message, 'error');
-  }
-}
-
-async function submitComment(planId, taskId) {
-  const input = document.getElementById(`task-comment-input-${taskId}`);
-  if (!input) return;
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-
-  try {
-    await Bridge.updateTask(planId, taskId, { comment: text });
-    // Reload and reopen
-    const updated = await Bridge.getPlan(planId);
-    const idx = plansData.findIndex(p => p.id === planId);
-    if (idx >= 0) plansData[idx] = updated;
-    document.querySelector('.task-modal-overlay')?.remove();
-    openTaskDetail(planId, taskId);
-  } catch (e) {
-    toast('Comment failed: ' + e.message, 'error');
-  }
-}
-
-function confirmDeleteTask(planId, taskId) {
-  if (!confirm('Delete this task? This cannot be undone.')) return;
-  deleteTask(planId, taskId);
-}
-
-async function deleteTask(planId, taskId) {
-  try {
-    await Bridge.deleteTask(planId, taskId);
-    toast('Task deleted', 'success');
-    document.querySelector('.task-modal-overlay')?.remove();
-    const updated = await Bridge.getPlan(planId);
-    const idx = plansData.findIndex(p => p.id === planId);
-    if (idx >= 0) plansData[idx] = updated;
-    renderPlansUI();
-  } catch (e) {
-    toast('Delete failed: ' + e.message, 'error');
-  }
-}
-
-// ── New Plan Modal ─────────────────────────────────────────
-
-function showNewPlanModal() {
-  const overlay = document.createElement('div');
-  overlay.className = 'task-modal-overlay';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-
-  overlay.innerHTML = `<div class="task-modal" style="max-width:480px">
-    <div class="task-modal-header">
-      <h3 style="margin:0;font-size:16px;color:var(--text)">New Plan</h3>
-      <button class="task-modal-close" onclick="this.closest('.task-modal-overlay').remove()">✕</button>
-    </div>
-    <div class="task-modal-body" style="flex-direction:column;gap:12px;">
-      <div class="task-field-group">
-        <label>Name</label>
-        <input class="task-modal-title" id="new-plan-name" placeholder="Plan name..." />
-      </div>
-      <div class="task-field-group">
-        <label>Description</label>
-        <textarea class="task-modal-desc" id="new-plan-desc" rows="3" placeholder="What is this plan for?"></textarea>
-      </div>
-      <div class="task-field-group">
-        <label>Columns</label>
-        <div style="color:var(--text-muted);font-size:12px;margin-bottom:4px">Default: Backlog, In Progress, Review, Done</div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button class="qc-cancel-btn" onclick="this.closest('.task-modal-overlay').remove()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer">Cancel</button>
-        <button class="qc-create-btn" onclick="submitNewPlan()" style="padding:8px 16px">Create Plan</button>
-      </div>
-      <div id="new-plan-status" style="font-size:12px;color:var(--text-muted)"></div>
-    </div>
-  </div>`;
-
-  document.body.appendChild(overlay);
-  setTimeout(() => document.getElementById('new-plan-name')?.focus(), 100);
-}
-
-async function submitNewPlan() {
-  const name = document.getElementById('new-plan-name')?.value.trim();
-  const description = document.getElementById('new-plan-desc')?.value.trim();
-  const status = document.getElementById('new-plan-status');
-
-  if (!name) { if (status) status.textContent = '❌ Name is required'; return; }
-  if (status) status.textContent = '⏳ Creating...';
-
-  try {
-    const plan = await Bridge.createPlan({ name, description, columns: DEFAULT_COLUMNS });
-    plansData.push(plan);
-    currentPlanId = plan.id;
-    document.querySelector('.task-modal-overlay')?.remove();
-    toast('Plan created!', 'success');
-    renderPlansUI();
-  } catch (e) {
-    if (status) status.textContent = '❌ ' + e.message;
-  }
 }

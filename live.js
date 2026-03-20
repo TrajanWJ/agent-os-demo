@@ -497,8 +497,6 @@ function updateMetric(id, value) {
 
 // ── Discord channels (real structure) ─────────────────────
 async function loadChannels() {
-  // Skip if bridge.js already replaced DC_CHANNELS with proper numeric IDs
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode) return;
   const data = await apiFetch('channels');
   if (!data || data.error) return;
 
@@ -659,10 +657,10 @@ async function loadVaultNotes() {
 
   // Replace VAULT_NOTES
   const typeColors = {
-    research: '#5B8AF0', vision: '#5B8AF0', architecture: '#D4A574',
-    operations: '#F39C12', report: '#E74C3C', code: '#4CAF50',
-    decision: '#E91E63', reference: '#1ABC9C', session: '#9B59B6',
-    note: '#9B59B6', personal: '#D4A574', system: '#F39C12',
+    research: '#89b4fa', vision: '#89b4fa', architecture: '#f9e2af',
+    operations: '#fab387', report: '#f38ba8', code: '#a6e3a1',
+    decision: '#f5c2e7', reference: '#94e2d5', session: '#cba6f7',
+    note: '#cba6f7', personal: '#f9e2af', system: '#fab387',
   };
 
   VAULT_NOTES.length = 0;

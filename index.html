@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0f0f12">
+  <meta name="theme-color" content="#181825">
   <title>Agent OS v7</title>
-  <link rel="stylesheet" href="styles.css?v=73">
+  <link rel="stylesheet" href="styles.css">
   <!-- Lucide Icons (modern SVG icon set) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
@@ -35,13 +35,8 @@
         </button>
         <button class="nav-item" data-page="queue" onclick="nav('queue')">
           <i data-lucide="inbox" class="nav-icon-svg"></i>
-          <span class="nav-label">Proposals</span>
-          <span class="nav-badge" id="queue-badge">8</span>
-        </button>
-        <button class="nav-item" data-page="plans" onclick="nav('plans')">
-          <i data-lucide="kanban" class="nav-icon-svg"></i>
-          <span class="nav-label">Plans</span>
-          <span class="nav-badge" id="plans-badge"></span>
+          <span class="nav-label">Queue</span>
+          <span class="nav-badge" id="queue-badge"></span>
         </button>
         <button class="nav-item" data-page="mind" onclick="nav('mind')">
           <i data-lucide="brain" class="nav-icon-svg"></i>
@@ -71,12 +66,9 @@
         </button>
       </div>
       <div class="sidebar-footer">
-        <a href="life.html" class="sidebar-life-link" title="Open Life OS">
-          <span>🧬</span> <span>Life OS</span> <span style="font-size:10px;color:var(--text-muted)">↗</span>
-        </a>
         <div class="sidebar-agents">
           <span class="agents-dot active"></span>
-          <span id="sidebar-active-count">2 active</span>
+          <span id="sidebar-active-count"></span>
         </div>
         <div class="sidebar-xp">
           <span class="xp-icon">⭐</span>
@@ -99,7 +91,7 @@
         <div class="topbar-right">
           <div class="topbar-agents" id="topbar-agents">
             <span class="agent-dot-active"></span>
-            <span id="active-agents-text">2 agents active</span>
+            <span id="active-agents-text"></span>
           </div>
           <div class="xp-badge" id="xp-badge" onclick="showLevelPanel()">
             <span>⭐ Lv3</span>
@@ -122,33 +114,17 @@
 
         <!-- FEED VIEW -->
         <div id="view-feed" class="view active">
-          <!-- Dashboard: Agent Status Bar -->
-          <div class="dash-agents-bar" id="dash-agents-bar"></div>
-
-          <!-- Dashboard: Metrics + System Pulse -->
-          <div class="dash-middle">
-            <div class="dash-metrics" id="dash-metrics"></div>
-            <div class="dash-pulse" id="dash-pulse"></div>
-          </div>
-
-          <!-- Dashboard: Activity Feed (compact) -->
-          <div class="dash-feed-section">
-            <div class="dash-feed-header">
-              <h3 class="dash-section-title"><i data-lucide="activity" style="width:16px;height:16px"></i> Recent Activity</h3>
-              <button class="dash-view-all-btn" id="dash-view-all-btn" onclick="toggleDashFeedExpand()">View All</button>
+          <div class="feed-toolbar">
+            <div class="filter-chips" id="feed-filters">
+              <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>
+              <button class="chip" data-filter="error" onclick="filterFeed('error')">🔴 Errors</button>
+              <button class="chip" data-filter="question_asked" onclick="filterFeed('question_asked')">❓ Questions</button>
+              <button class="chip" data-filter="task_completed" onclick="filterFeed('task_completed')">✅ Completed</button>
+              <button class="chip" data-filter="vault_write" onclick="filterFeed('vault_write')">📚 Vault</button>
+              <button class="chip" data-filter="insight" onclick="filterFeed('insight')">💡 Insights</button>
             </div>
-            <div class="feed-toolbar">
-              <div class="filter-chips dash-filter-chips" id="feed-filters">
-                <button class="chip active" data-filter="all" onclick="filterFeed('all')">All</button>
-                <button class="chip" data-filter="error" onclick="filterFeed('error')">🔴 Errors</button>
-                <button class="chip" data-filter="question_asked" onclick="filterFeed('question_asked')">❓ Questions</button>
-                <button class="chip" data-filter="task_completed" onclick="filterFeed('task_completed')">✅ Completed</button>
-                <button class="chip" data-filter="vault_write" onclick="filterFeed('vault_write')">📚 Vault</button>
-                <button class="chip" data-filter="insight" onclick="filterFeed('insight')">💡 Insights</button>
-              </div>
-            </div>
-            <div id="feed-list" class="feed-list dash-feed-list"></div>
           </div>
+          <div id="feed-list" class="feed-list"></div>
         </div>
 
         <!-- QUEUE VIEW -->
@@ -167,44 +143,7 @@
               <span class="stat-label">Expired</span>
             </div>
           </div>
-          <div class="proposal-flow" id="proposal-flow">
-            <div class="flow-step">
-              <div class="flow-icon">📡</div>
-              <div class="flow-label">Sources</div>
-              <div class="flow-desc">Agents, Feed, Vault, Cron</div>
-            </div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">
-              <div class="flow-icon">📝</div>
-              <div class="flow-label">Created</div>
-              <div class="flow-desc" id="flow-created">0</div>
-            </div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">
-              <div class="flow-icon">🤖</div>
-              <div class="flow-label">AI Triage</div>
-              <div class="flow-desc">Auto-classify</div>
-            </div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step flow-safe">
-              <div class="flow-icon">✅</div>
-              <div class="flow-label">Auto-Execute</div>
-              <div class="flow-desc" id="flow-auto">0 safe</div>
-            </div>
-            <div class="flow-step flow-escalate">
-              <div class="flow-icon">⚠️</div>
-              <div class="flow-label">Human Review</div>
-              <div class="flow-desc" id="flow-escalate">0 risky</div>
-            </div>
-            <div class="flow-step flow-dismiss">
-              <div class="flow-icon">🗑️</div>
-              <div class="flow-label">Dismissed</div>
-              <div class="flow-desc" id="flow-dismiss">0</div>
-            </div>
-          </div>
           <div class="queue-batch-bar" id="queue-batch-bar">
-            <button class="batch-toggle-btn" onclick="showNewProposalModal()" style="background:var(--accent);color:#000;border:none;font-weight:600;">+ New Proposal</button>
-            <button class="batch-toggle-btn" onclick="autoGenerateProposal()" id="auto-gen-btn" style="background:#89b4fa33;color:#89b4fa;border:1px solid #89b4fa55;font-weight:600;">⚡ Auto-Generate</button>
             <button class="batch-toggle-btn" id="batch-toggle-btn" onclick="toggleBatchMode()">☐ Batch Mode</button>
             <div class="batch-actions hidden" id="batch-actions">
               <button class="batch-action-btn" onclick="batchApproveAll()">✅ Approve All</button>
@@ -214,12 +153,6 @@
             </div>
           </div>
           <div id="queue-auto-stats"></div>
-          <div class="queue-filter-tabs" id="queue-filter-tabs" style="display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;">
-            <button class="filter-chip active" data-filter="all" onclick="filterProposals('all')">All</button>
-            <button class="filter-chip" data-filter="pending" onclick="filterProposals('pending')">⏳ Pending</button>
-            <button class="filter-chip" data-filter="approved" onclick="filterProposals('approved')">✅ Approved</button>
-            <button class="filter-chip" data-filter="dismissed" onclick="filterProposals('dismissed')">🗑️ Dismissed</button>
-          </div>
           <div id="queue-list" class="queue-list"></div>
           <div id="queue-empty" class="queue-empty hidden">
             <div class="empty-icon">🎯</div>
@@ -381,83 +314,72 @@
 
         <!-- PULSE VIEW -->
         <div id="view-pulse" class="view">
-          <!-- Top Metrics Bar -->
           <div class="pulse-metrics" id="pulse-metrics">
-            <div class="metric-card" id="metric-uptime">
-              <div class="metric-value">—</div>
-              <div class="metric-label">Uptime</div>
-              <div class="metric-sub">loading...</div>
+            <div class="metric-card">
+              <div class="metric-value" id="metric-cost">$3.10</div>
+              <div class="metric-label">Cost today</div>
+              <div class="metric-sub">↑ $0.40/hr</div>
             </div>
-            <div class="metric-card" id="metric-load">
-              <div class="metric-value">—</div>
-              <div class="metric-label">Load Avg</div>
-              <div class="metric-sub">1 / 5 / 15 min</div>
+            <div class="metric-card">
+              <div class="metric-value" id="metric-agents">2</div>
+              <div class="metric-label">Active agents</div>
+              <div class="metric-sub" id="metric-agents-total">6 total</div>
             </div>
-            <div class="metric-card" id="metric-memory">
-              <div class="metric-value">—</div>
-              <div class="metric-label">Memory</div>
-              <div class="metric-sub"><div class="sys-progress-bar"><div class="sys-progress-fill" id="mem-bar"></div></div></div>
-            </div>
-            <div class="metric-card" id="metric-disk">
-              <div class="metric-value">—</div>
-              <div class="metric-label">Disk</div>
-              <div class="metric-sub"><div class="sys-progress-bar"><div class="sys-progress-fill" id="disk-bar"></div></div></div>
+            <div class="metric-card">
+              <div class="metric-value" id="metric-tasks">14</div>
+              <div class="metric-label">Tasks done</div>
+              <div class="metric-sub">today</div>
             </div>
           </div>
 
-          <!-- 2x2 Dashboard Grid -->
-          <div class="pulse-grid pulse-grid-2x2">
-            <!-- Panel 1: Services Grid -->
-            <div class="pulse-section" id="panel-services">
-              <div class="section-title"><i data-lucide="server"></i> Services</div>
-              <div id="services-grid"></div>
+          <div class="pulse-grid">
+            <!-- Agent Health -->
+            <div class="pulse-section">
+              <div class="section-title">Agent Health</div>
+              <div id="agent-health-table"></div>
             </div>
 
-            <!-- Panel 2: Agent Status -->
-            <div class="pulse-section" id="panel-agents">
-              <div class="section-title"><i data-lucide="users"></i> Agent Status</div>
-              <div id="agent-status-grid"></div>
-            </div>
-
-            <!-- Panel 3: Cron Health -->
-            <div class="pulse-section" id="panel-crons">
-              <div class="section-title"><i data-lucide="clock"></i> Cron Health</div>
-              <div id="cron-health-table"></div>
-            </div>
-
-            <!-- Panel 4: Live Logs -->
-            <div class="pulse-section" id="panel-logs">
-              <div class="section-title"><i data-lucide="terminal"></i> Live Logs</div>
-              <div class="log-tabs" id="log-tabs">
-                <button class="log-tab active" data-svc="openclaw-gateway" onclick="switchLogTab('openclaw-gateway',this)">Gateway</button>
-                <button class="log-tab" data-svc="oauth-guardian" onclick="switchLogTab('oauth-guardian',this)">OAuth</button>
-                <button class="log-tab" data-svc="agent-os-bridge" onclick="switchLogTab('agent-os-bridge',this)">Bridge</button>
-                <button class="log-tab" data-svc="bridge-sync" onclick="switchLogTab('bridge-sync',this)">Sync</button>
+            <!-- Cost Chart -->
+            <div class="pulse-section">
+              <div class="section-title">Cost (7 days)</div>
+              <div class="cost-chart-container">
+                <svg id="cost-chart" class="cost-chart"></svg>
               </div>
-              <div class="log-viewer" id="log-viewer"></div>
+            </div>
+
+            <!-- System Load -->
+            <div class="pulse-section">
+              <div class="section-title">System Load</div>
+              <div id="system-load"></div>
+            </div>
+
+            <!-- Cron Status -->
+            <div class="pulse-section">
+              <div class="section-title">Cron Jobs</div>
+              <div id="cron-status"></div>
+            </div>
+
+            <!-- Webhook Status -->
+            <div class="pulse-section">
+              <div class="section-title">Webhooks</div>
+              <div id="hook-status"></div>
+            </div>
+
+            <!-- Error Log -->
+            <div class="pulse-section pulse-section-wide">
+              <div class="section-title">Recent Errors</div>
+              <div id="error-log"></div>
             </div>
           </div>
 
           <!-- Quick Actions -->
           <div class="quick-actions">
             <button class="quick-btn" onclick="quickAction('restart-gateway')">🔄 Restart Gateway</button>
-            <button class="quick-btn" onclick="quickAction('clear-queue')">🗑️ Clear Proposals</button>
+            <button class="quick-btn" onclick="quickAction('clear-queue')">🗑️ Clear Queue</button>
             <button class="quick-btn" onclick="quickAction('reindex')">📚 Reindex Vault</button>
-            <button class="quick-btn" onclick="refreshPulseData()">🔄 Refresh</button>
-          </div>
-
-          <!-- Service Log Slide-out -->
-          <div class="service-log-slideout hidden" id="service-log-slideout">
-            <div class="slideout-header">
-              <span id="slideout-title">Service Logs</span>
-              <button onclick="closeServiceSlideout()">✕</button>
-            </div>
-            <div class="log-viewer" id="slideout-log-viewer"></div>
+            <button class="quick-btn" onclick="quickAction('health-check')">🩺 Health Check</button>
           </div>
         </div>
-
-        <!-- PLANS VIEW -->
-        <div id="view-plans" class="view"></div>
 
         <!-- BOARD VIEW -->
         <div id="view-board" class="view">
@@ -512,9 +434,17 @@
             <div class="config-section">
               <div class="section-title">Theme</div>
               <div class="theme-options">
-                <label class="theme-option active">
-                  <div class="theme-preview obsidian"></div>
-                  <span>Obsidian Dark</span>
+                <label class="theme-option active" onclick="setTheme('mocha')">
+                  <div class="theme-preview mocha"></div>
+                  <span>Mocha</span>
+                </label>
+                <label class="theme-option" onclick="setTheme('latte')">
+                  <div class="theme-preview latte"></div>
+                  <span>Latte</span>
+                </label>
+                <label class="theme-option" onclick="setTheme('macchiato')">
+                  <div class="theme-preview macchiato"></div>
+                  <span>Macchiato</span>
                 </label>
               </div>
             </div>
@@ -525,11 +455,11 @@
             <div class="config-section">
               <div class="section-title">Skills</div>
               <div id="config-skills" class="skills-list">
-                <div class="skill-item"><span>🔬</span> Research Agent</div>
-                <div class="skill-item"><span>💻</span> Code Review</div>
-                <div class="skill-item"><span>📚</span> Vault Keeper</div>
-                <div class="skill-item"><span>😈</span> Devil's Advocate</div>
-                <div class="skill-item"><span>🛡️</span> Security Audit</div>
+                <div class="skill-item"><span>🔬</span> Deep Research</div>
+                <div class="skill-item"><span>💻</span> Development</div>
+                <div class="skill-item"><span>⚙️</span> Infrastructure</div>
+                <div class="skill-item"><span>😈</span> Red Team</div>
+                <div class="skill-item"><span>🔧</span> General Purpose</div>
               </div>
             </div>
           </div>
@@ -543,7 +473,7 @@
 
         <!-- Missions View -->
         <div id="view-missions" class="view hidden">
-          <div class="view-header"><h2>🎯 Missions</h2><span class="view-subtitle">Goal tracking & dispatch operations</span></div>
+          <div class="view-header"><h2>🏆 Missions</h2><span class="view-subtitle">Goals, streaks & achievements</span></div>
           <div class="missions-content" id="missions-content"></div>
         </div>
 
@@ -578,8 +508,8 @@
     </button>
     <button class="mobile-nav-item" data-page="queue" onclick="nav('queue')">
       <i data-lucide="inbox" class="mobile-icon-svg"></i>
-      <span class="mobile-label">Proposals</span>
-      <span class="mobile-badge">8</span>
+      <span class="mobile-label">Queue</span>
+      <span class="mobile-badge" id="queue-mobile-badge"></span>
     </button>
     <button class="mobile-nav-item" data-page="mind" onclick="nav('mind')">
       <i data-lucide="brain" class="mobile-icon-svg"></i>
@@ -601,8 +531,7 @@
     </div>
     <div class="mobile-menu-items">
       <button class="mobile-menu-item" onclick="nav('pulse');toggleMobileMenu()"><i data-lucide="activity" class="menu-item-icon"></i> System</button>
-      <button class="mobile-menu-item" onclick="nav('plans');toggleMobileMenu()"><i data-lucide="kanban" class="menu-item-icon"></i> Plans</button>
-      <button class="mobile-menu-item" onclick="nav('board');toggleMobileMenu()"><i data-lucide="columns" class="menu-item-icon"></i> Board</button>
+      <button class="mobile-menu-item" onclick="nav('board');toggleMobileMenu()"><i data-lucide="kanban" class="menu-item-icon"></i> Board</button>
       <button class="mobile-menu-item" onclick="nav('schedule');toggleMobileMenu()"><i data-lucide="calendar" class="menu-item-icon"></i> Schedule</button>
       <button class="mobile-menu-item" onclick="nav('missions');toggleMobileMenu()"><i data-lucide="trophy" class="menu-item-icon"></i> Missions</button>
       <button class="mobile-menu-item" onclick="nav('explore');toggleMobileMenu()"><i data-lucide="search" class="menu-item-icon"></i> Explore</button>
@@ -661,11 +590,10 @@
     <div class="card-modal" id="card-modal-content"></div>
   </div>
 
-  <script src="data.js?v=73"></script>
-  <script src="app.js?v=73"></script>
-  <script src="app2.js?v=73"></script>
-  <script src="app3.js?v=73"></script>
-  <script src="live.js?v=73"></script>
-  <script src="bridge.js?v=73"></script>
+  <script src="data.js?v=1773993468"></script>
+  <script src="app.js?v=1773993468"></script>
+  <script src="app2.js?v=1773993468"></script>
+  <script src="app3.js?v=1773993468"></script>
+  <script src="live.js?v=1773993468"></script>
 </body>
 </html>

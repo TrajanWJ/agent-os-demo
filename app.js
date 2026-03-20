@@ -14,7 +14,7 @@ let notifications = [];
 
 // Page titles
 const PAGE_TITLES = {
-  feed: 'Home', queue: 'Proposals', plans: 'Plans', talk: 'Talk',
+  feed: 'Home', queue: 'Queue', talk: 'Talk',
   mind: 'Mind', pulse: 'System', board: 'Board',
   stream: 'Stream', command: 'Command', config: 'Config',
   schedule: 'Schedule', missions: 'Missions', explore: 'Explore'
@@ -44,20 +44,8 @@ function nav(page) {
   $('page-title').textContent = PAGE_TITLES[page] || page;
 
   // Lazy init pages
-  if (page === 'feed')     renderDashboard();
-  if (page === 'talk' && typeof Bridge !== 'undefined' && Bridge.liveMode && typeof _liveChannelData !== 'undefined') {
-    // Ensure currentChannel is a numeric Discord ID when bridge is live
-    if (!/^\d+$/.test(currentChannel) && _liveChannelData?.flat?.length) {
-      const match = _liveChannelData.flat.find(c => c.name === currentChannel || c.name.includes(currentChannel));
-      if (match) currentChannel = match.id;
-      else currentChannel = _liveChannelData.flat[0].id;
-    }
-    if (typeof renderChannelList === 'function') renderChannelList();
-    if (typeof loadLiveMessages === 'function') loadLiveMessages(currentChannel);
-  }
   if (page === 'mind')     initMind();
   if (page === 'pulse')    renderPulse();
-  if (page === 'plans')    renderPlans();
   if (page === 'board')    renderBoard();
   if (page === 'stream')   renderStream();
   if (page === 'config')   renderConfig();
@@ -246,163 +234,36 @@ const TYPE_LABELS = {
   vault_write:    'vault',
 };
 
-// ═══════════════════════════════════════════════════════════
-// DASHBOARD — Mission Control
-// ═══════════════════════════════════════════════════════════
-
-let dashFeedExpanded = false;
-
-function renderDashboard() {
-  renderDashAgents();
-  renderDashMetrics();
-  renderDashPulse();
-  renderFeed();
-  applyDashFeedLimit();
-  lucide.createIcons();
-}
-
-function renderDashAgents() {
-  const bar = $('dash-agents-bar');
-  if (!bar) return;
-  bar.innerHTML = AGENTS.map(a => {
-    const isActive = a.status === 'active';
-    const taskText = a.task || 'Idle';
-    return `
-      <div class="dash-agent-card" onclick="openTalkWithAgent('${a.id}')" title="${a.name} — ${taskText}">
-        <div class="dash-agent-card-top">
-          <span class="dash-agent-emoji">${a.emoji}</span>
-          <span class="dash-agent-name" style="color:${a.color}">${a.name}</span>
-          <span class="dash-agent-status ${isActive ? 'active' : 'idle'}"></span>
-        </div>
-        <div class="dash-agent-task">${isActive ? taskText : 'Idle'}</div>
-      </div>`;
-  }).join('');
-}
-
-function renderDashMetrics() {
-  const el = $('dash-metrics');
-  if (!el) return;
-  const activeCount = AGENTS.filter(a => a.status === 'active').length;
-  const queueDepth = typeof queueCards !== 'undefined' ? queueCards.length : 0;
-  const tasksToday = AGENTS.reduce((s, a) => s + (a.tasks || 0), 0);
-  const totalTokens = AGENTS.reduce((s, a) => s + (a.tokens || 0), 0);
-  const tokenStr = totalTokens >= 1000 ? (totalTokens / 1000).toFixed(1) + 'K' : totalTokens.toString();
-
-  const cards = [
-    { icon: 'users',        num: activeCount, label: 'Active Agents',  trend: '↑ 2',   dir: 'up' },
-    { icon: 'inbox',        num: queueDepth,  label: 'Proposals',      trend: queueDepth > 5 ? '↑ High' : '→ Normal', dir: queueDepth > 5 ? 'down' : 'flat' },
-    { icon: 'check-circle', num: tasksToday,   label: 'Tasks Today',    trend: '↑ 12%', dir: 'up' },
-    { icon: 'zap',          num: tokenStr,     label: 'Token Usage',    trend: '49.9K budget', dir: 'flat' },
-  ];
-
-  el.innerHTML = cards.map(c => `
-    <div class="dash-stat-card">
-      <div class="dash-stat-icon">
-        <i data-lucide="${c.icon}"></i>
-        <span class="dash-stat-trend ${c.dir}">${c.trend}</span>
-      </div>
-      <div class="dash-stat-number">${c.num}</div>
-      <div class="dash-stat-label">${c.label}</div>
-    </div>`).join('');
-}
-
-function renderDashPulse() {
-  const el = $('dash-pulse');
-  if (!el) return;
-
-  // Show demo data initially, then overlay with live
-  el.innerHTML = `
-    <div class="dash-pulse-title"><i data-lucide="heart-pulse"></i> System Pulse</div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Gateway</span>
-      <span class="dash-pulse-value" id="dp-gateway"><span class="dash-pulse-dot green"></span> Loading...</span>
-    </div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Uptime</span>
-      <span class="dash-pulse-value" id="dp-uptime">—</span>
-    </div>
-    <div class="dash-pulse-divider"></div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Memory</span>
-      <span class="dash-pulse-value" id="dp-memory">—</span>
-    </div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Disk</span>
-      <span class="dash-pulse-value" id="dp-disk">—</span>
-    </div>
-    <div class="dash-pulse-divider"></div>
-    <div class="dash-pulse-row">
-      <span class="dash-pulse-label">Load</span>
-      <span class="dash-pulse-value" id="dp-load">—</span>
-    </div>
-  `;
-
-  // Fetch live data if bridge is connected
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode) {
-    Bridge.getSystemOverview().then(data => {
-      const gw = $('dp-gateway');
-      const up = $('dp-uptime');
-      const mem = $('dp-memory');
-      const disk = $('dp-disk');
-      const load = $('dp-load');
-      if (gw) {
-        const gwStatus = data.services?.['openclaw-gateway'] || 'unknown';
-        const isActive = gwStatus === 'active';
-        gw.innerHTML = `<span class="dash-pulse-dot ${isActive ? 'green' : 'red'}"></span> ${isActive ? 'Healthy' : gwStatus}`;
-      }
-      if (up) up.textContent = data.uptime || 'unknown';
-      if (mem && data.memory) {
-        const usedGB = (data.memory.used / 1024).toFixed(1);
-        const totalGB = (data.memory.total / 1024).toFixed(1);
-        mem.textContent = `${usedGB} / ${totalGB} GB`;
-      }
-      if (disk && data.disk) {
-        const pct = parseInt(data.disk.percent);
-        disk.innerHTML = `<span class="dash-pulse-dot ${pct > 90 ? 'red' : pct > 75 ? 'yellow' : 'green'}"></span> ${data.disk.percent} used`;
-      }
-      if (load && data.load) {
-        const l1 = data.load.avg1;
-        const color = l1 < 2 ? 'green' : l1 < 4 ? 'yellow' : 'red';
-        load.innerHTML = `<span class="dash-pulse-dot ${color}"></span> ${l1.toFixed(2)}`;
-      }
-    }).catch(() => {});
-  }
-}
-
-function applyDashFeedLimit() {
+function renderFeedSkeletons(count = 4) {
   const list = $('feed-list');
-  if (!list) return;
-  if (dashFeedExpanded) {
-    list.classList.remove('collapsed');
-    list.classList.add('expanded');
-  } else {
-    list.classList.add('collapsed');
-    list.classList.remove('expanded');
-    // Show only first 5 cards
-    const cards = list.querySelectorAll('.feed-card');
-    cards.forEach((c, i) => {
-      c.style.display = i < 5 ? '' : 'none';
-    });
+  list.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const skel = document.createElement('div');
+    skel.className = 'skeleton-card';
+    skel.innerHTML = `
+      <div class="skeleton skeleton-avatar"></div>
+      <div class="skeleton-body">
+        <div class="skeleton skeleton-line short"></div>
+        <div class="skeleton skeleton-line long"></div>
+        <div class="skeleton skeleton-line medium"></div>
+      </div>
+    `;
+    list.appendChild(skel);
   }
-}
-
-function toggleDashFeedExpand() {
-  dashFeedExpanded = !dashFeedExpanded;
-  const btn = $('dash-view-all-btn');
-  if (btn) {
-    btn.textContent = dashFeedExpanded ? 'Show Less' : 'View All';
-    btn.classList.toggle('expanded', dashFeedExpanded);
-  }
-  if (dashFeedExpanded) {
-    // Show all cards
-    const cards = $('feed-list').querySelectorAll('.feed-card');
-    cards.forEach(c => c.style.display = '');
-  }
-  applyDashFeedLimit();
 }
 
 function renderFeed() {
   const list = $('feed-list');
+  // Show skeletons briefly on first render
+  if (list.children.length === 0) {
+    renderFeedSkeletons();
+    setTimeout(() => {
+      list.innerHTML = '';
+      const filtered = feedFilter === 'all' ? feedEvents : feedEvents.filter(e => e.type === feedFilter);
+      filtered.forEach(event => list.appendChild(makeFeedCard(event)));
+    }, 400);
+    return;
+  }
   list.innerHTML = '';
   const filtered = feedFilter === 'all' ? feedEvents : feedEvents.filter(e => e.type === feedFilter);
   filtered.forEach(event => {
@@ -411,12 +272,13 @@ function renderFeed() {
 }
 
 function makeFeedCard(event, isNew = false) {
-  const agent = ga(event.agent) || { emoji: '🤖', name: event.agent, color: '#D4A574' };
+  const agent = ga(event.agent) || { emoji: '🤖', name: event.agent, color: '#cba6f7' };
   const card = document.createElement('div');
   card.className = `feed-card type-${event.type}${event.pinned ? ' pinned' : ''}${event.urgent ? ' urgent' : ''}${isNew ? ' new' : ''}`;
   card.dataset.id = event.id;
   card.dataset.type = event.type;
   card.style.borderLeftColor = agent.color;
+  card.style.setProperty('--agent-color', agent.color);
 
   // Format content (basic inline code support)
   const formattedContent = event.content
@@ -500,30 +362,18 @@ let queueCards = QUEUE_QUESTIONS.map(q => ({ ...q, remaining: q.ttl - q.elapsed 
 let qStats = { answered: 0, autoresolved: 0, expired: 0 };
 let qTimerInterval = null;
 
-let _proposalFilter = 'all';
-function filterProposals(status) {
-  _proposalFilter = status;
-  $$('#queue-filter-tabs .filter-chip').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.filter === status);
-  });
-  renderQueue();
-}
-
 function renderQueue() {
   updateQueueStats();
   const list = $('queue-list');
   list.innerHTML = '';
 
-  const filtered = _proposalFilter === 'all' ? queueCards
-    : queueCards.filter(q => (q._status || 'pending') === _proposalFilter);
-
-  if (filtered.length === 0) {
+  if (queueCards.length === 0) {
     $('queue-empty').classList.remove('hidden');
     return;
   }
   $('queue-empty').classList.add('hidden');
 
-  filtered.forEach(q => {
+  queueCards.forEach(q => {
     list.appendChild(makeQueueCard(q));
   });
 
@@ -534,13 +384,14 @@ function renderQueue() {
 }
 
 function makeQueueCard(q) {
-  const agent = ga(q.agent) || { emoji: '🤖', name: q.agent, color: '#D4A574' };
+  const agent = ga(q.agent) || { emoji: '🤖', name: q.agent, color: '#cba6f7' };
   const pct = (q.remaining / q.ttl) * 100;
   const urgency = pct < 20 ? 'urgent' : pct < 40 ? 'warning' : '';
 
   const card = document.createElement('div');
   card.className = `queue-card priority-${q.priority}`;
   card.style.boxShadow = `0 0 12px ${agent.color}25`;
+  card.style.setProperty('--agent-color', agent.color);
   card.id = `qcard-${q.id}`;
 
   let answerHTML = '';
@@ -604,11 +455,8 @@ function makeQueueCard(q) {
         <div class="queue-agent-name" style="color:${agent.color}">${agent.name}</div>
         <div style="font-size:10px;color:var(--text-muted)">${q.type}</div>
       </div>
-      <span class="queue-priority-badge">${q._priority || q.priority}</span>
-      ${q._status && q._status !== 'pending' ? `<span style="font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;background:${q._status==='approved'?'#a6e3a122':'#f38ba822'};color:${q._status==='approved'?'#a6e3a1':'#f38ba8'};text-transform:uppercase;font-weight:600;letter-spacing:.5px">${q._status}</span>` : ''}
-      ${q._triageVerdict ? `<span style="font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;background:${q._triageVerdict==='escalate'?'#f9e2af33':'#a6e3a133'};color:${q._triageVerdict==='escalate'?'#f9e2af':'#a6e3a1'};">${q._triageVerdict==='escalate'?'⚠️ Needs Review':'✅ Safe'}</span>` : ''}
+      <span class="queue-priority-badge">${q.priority}</span>
     </div>
-    ${q._source ? `<div style="font-size:10px;color:var(--text-muted);margin:-4px 0 6px 46px;">via ${q._source}${q._type ? ' · ' + q._type : ''}</div>` : ''}
     <div class="queue-question">${q.question}</div>
     <div class="queue-context">${q.context}</div>
     <div class="queue-answer-area">${answerHTML}</div>
@@ -677,7 +525,7 @@ function answerQueue(qId, answer) {
     $('queue-empty').classList.remove('hidden');
   }
   // Mirror to Discord #dispatch
-  syncToDiscord('dispatch', `📋 Proposal decision: **${q.question?.substring(0,60)||qId}** → \`${answer}\``, q.agent);
+  syncToDiscord('dispatch', `📋 Queue decision: **${q.question?.substring(0,60)||qId}** → \`${answer}\``, q.agent);
   // Bidirectional: emit to event bus
   if (typeof EventBus !== 'undefined') {
     EventBus.emit('queue:answered', { agent: q.agent, question: q.question || qId, answer, qId });
@@ -789,9 +637,12 @@ function updateQueueStats() {
   $('q-autoresolved').textContent = qStats.autoresolved;
   $('q-expired').textContent = qStats.expired;
 
-  // Update badge
+  // Update badges
+  const count = queueCards.length;
   const badge = $('queue-badge');
-  if (badge) badge.textContent = queueCards.length || '';
+  if (badge) badge.textContent = count || '';
+  const mobileBadge = $('queue-mobile-badge');
+  if (mobileBadge) mobileBadge.textContent = count || '';
 }
 
 // Generate a new queue card (for simulation)
@@ -840,7 +691,7 @@ function generateQueueCard() {
 // ═══════════════════════════════════════════════════════════
 
 let talkMode = 'channels'; // 'channels' | 'dms'
-let currentChannel = '1482997518362214422'; // concierge
+let currentChannel = 'bridge';
 let currentDM = null;
 let memberListVisible = false;
 let threadPanelVisible = false;
@@ -850,9 +701,9 @@ let typingTimer = null;
 const THREAD_REPLIES = {};
 
 const CHANNEL_COLOR = {
-  bridge: '#D4A574', concierge: '#D4A574', dev: '#4CAF50', 'research-feed': '#5B8AF0',
-  'devils-corner': '#E74C3C', 'ops-log': '#F39C12', dispatch: '#E67E22',
-  'code-output': '#4CAF50', 'agent-feed': '#1ABC9C',
+  bridge: '#cba6f7', dev: '#a6e3a1', 'research-feed': '#89b4fa',
+  'devils-corner': '#f38ba8', 'ops-log': '#fab387', dispatch: '#f9e2af',
+  'code-output': '#a6e3a1', 'agent-feed': '#94e2d5',
 };
 
 function renderChannelList() {
@@ -1011,17 +862,11 @@ function switchChannel(chId) {
   const ch = DC_CHANNELS.text.find(c => c.id === chId);
   if (ch) ch.unread = 0;
 
-  // Show channel name (resolve from live data if available)
-  let displayName = chId;
-  if (typeof _liveChannelData !== 'undefined' && _liveChannelData?.flat) {
-    const lch = _liveChannelData.flat.find(c => c.id === chId);
-    if (lch) displayName = lch.name;
-  }
-  $('current-channel-name').textContent = displayName;
-  $('message-input').placeholder = `Message #${displayName}`;
+  $('current-channel-name').textContent = chId;
+  $('message-input').placeholder = `Message #${chId}`;
 
   // Update topbar
-  const color = CHANNEL_COLOR[chId] || '#D4A574';
+  const color = CHANNEL_COLOR[chId] || '#cba6f7';
   $('current-channel-name').style.color = color;
 
   // Show channel topic
@@ -1039,28 +884,12 @@ function switchChannel(chId) {
 
   renderMessages(chId);
   renderPinnedMessages(chId);
-
-  // Bridge: load real Discord messages when live
-  if (typeof Bridge !== 'undefined' && Bridge.liveMode && /^\d+$/.test(chId) && typeof loadLiveMessages === 'function') {
-    loadLiveMessages(chId);
-  }
 }
 
 function selectDM(agentId) {
   currentDM = agentId;
   talkMode = 'dms';
-
-  // Update server rail icons
-  const serverIcons = $$('.server-icon');
-  serverIcons[0].classList.remove('active');
-  $('dm-icon').classList.add('active');
-  // Update mobile tabs
-  $$('.mobile-talk-tab').forEach((tab, i) => {
-    tab.classList.toggle('active', i === 1);
-  });
-
-  // Re-render DM list with correct active state
-  renderChannelList();
+  setTalkMode('dms');
 
   $$('.channel-item').forEach(el => {
     const ag = AGENTS.find(a => a.emoji === el.querySelector('span')?.textContent);
@@ -1069,7 +898,7 @@ function selectDM(agentId) {
 
   const agent = ga(agentId);
   $('current-channel-name').textContent = agent ? `${agent.emoji} ${agent.name}` : agentId;
-  $('current-channel-name').style.color = agent?.color || '#D4A574';
+  $('current-channel-name').style.color = agent?.color || '#cba6f7';
   $('message-input').placeholder = `Message ${agent?.name || agentId}...`;
 
   renderMessages(null, agentId);
@@ -1110,12 +939,11 @@ function renderMessages(channelId, dmId = null) {
 
 function makeMessageGroup(msg, collapsed = false, channelId = null) {
   const isUser = msg.agent === 'user';
-  const agent = isUser ? { emoji: '🧑', name: 'You', color: '#D4A574' } : (ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#D4A574' });
+  const agent = isUser ? { emoji: '🧑', name: 'You', color: '#cba6f7' } : (ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' });
 
   const group = document.createElement('div');
   group.className = `msg-group${collapsed ? ' collapsed' : ''}${isUser ? ' msg-user' : ''}`;
   group.id = `msg-${msg.id}`;
-  group.setAttribute('data-msg-id', msg.id);
 
   // Reply reference
   let replyHTML = '';
@@ -1126,7 +954,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
       replyHTML = `
         <div class="msg-reply-ref">
           <span>↩</span>
-          <span class="reply-author" style="color:${ga(refMsg.agent)?.color || '#D4A574'}">${refAgent.name}</span>
+          <span class="reply-author" style="color:${ga(refMsg.agent)?.color || '#cba6f7'}">${refAgent.name}</span>
           <span>${refMsg.text.substring(0, 60)}${refMsg.text.length > 60 ? '...' : ''}</span>
         </div>
       `;
@@ -1140,7 +968,7 @@ function makeMessageGroup(msg, collapsed = false, channelId = null) {
   let embedHTML = '';
   if (msg.embed) {
     embedHTML = `
-      <div class="msg-embed" style="border-color:${msg.embed.color || '#D4A574'}">
+      <div class="msg-embed" style="border-color:${msg.embed.color || '#cba6f7'}">
         <div class="embed-title">${msg.embed.title}</div>
         <div class="embed-desc">${msg.embed.desc}</div>
       </div>
@@ -1346,38 +1174,6 @@ function handleSlashCommand(text) {
       toast(`🔍 Searching: ${args || '...'}`, 'info');
       appendSystemMessage(`Search results for "${args}":\n• 3 vault notes matched\n• 2 recent conversations\n• 1 dispatched task`);
       break;
-    case '/ask': {
-      const askParts = args.split(/\s+/);
-      const targetAgent = askParts[0] || 'righthand';
-      const question = askParts.slice(1).join(' ') || 'How are you?';
-      const agent = ga(targetAgent) || AGENTS[0];
-      appendSystemMessage(`Asking ${agent.emoji} ${agent.name}: "${question}"`);
-      setTimeout(() => {
-        appendSystemMessage(`${agent.emoji} **${agent.name}**: I've received your question and I'm working on it. I'll update you shortly.`);
-      }, 1500);
-      break;
-    }
-    case '/pin': {
-      const msgs = currentDM ? (DM_MESSAGES[currentDM] || []) : (DC_MESSAGES[currentChannel] || []);
-      const lastMsg = msgs[msgs.length - 1];
-      if (lastMsg && currentChannel) {
-        pinMessage(lastMsg.id, currentChannel);
-      } else {
-        toast('📌 No message to pin', 'error');
-      }
-      break;
-    }
-    case '/thread': {
-      const msgs2 = currentDM ? (DM_MESSAGES[currentDM] || []) : (DC_MESSAGES[currentChannel] || []);
-      const lastMsg2 = msgs2[msgs2.length - 1];
-      if (lastMsg2) {
-        threadFromMessage(lastMsg2.id);
-        toast('🧵 Thread started', 'success');
-      } else {
-        toast('🧵 No message to thread', 'error');
-      }
-      break;
-    }
     default:
       toast(`Unknown command: ${cmd}`, 'error');
       return;
@@ -1581,7 +1377,7 @@ function threadFromMessage(msgId) {
   if (!THREAD_REPLIES[msgId]) {
     THREAD_REPLIES[msgId] = [];
     // Seed with 2-3 fake replies for demo
-    const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#D4A574' };
+    const agent = ga(msg.agent) || { id: 'righthand', emoji: '🤖', name: 'Agent', color: '#cba6f7' };
     const otherAgents = AGENTS.filter(a => a.id !== msg.agent).slice(0, 2);
     const fakeReplies = [
       { id: 'tr_' + msgId + '_1', agent: otherAgents[0]?.id || 'researcher', text: 'Good point — I\'ll factor this into my analysis.', time: msg.time, ts: (msg.ts || Date.now()/1000) + 60 },
@@ -1602,11 +1398,11 @@ function threadFromMessage(msgId) {
 }
 
 function renderThreadPanel(msgId, msg) {
-  const agent = ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#D4A574' };
+  const agent = ga(msg.agent) || { emoji: '🤖', name: msg.agent, color: '#cba6f7' };
   const replies = THREAD_REPLIES[msgId] || [];
 
   const repliesHTML = replies.map(r => {
-    const ra = ga(r.agent) || { emoji: '🤖', name: r.agent, color: '#D4A574' };
+    const ra = ga(r.agent) || { emoji: '🤖', name: r.agent, color: '#cba6f7' };
     const time = r.time || new Date(r.ts * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     return `
       <div class="thread-reply">
@@ -1733,7 +1529,25 @@ function toggleServerSettings() {
 function openMemberProfile(agentId) {
   const agent = ga(agentId);
   if (!agent) return;
-  toast(`${agent.emoji} ${agent.name} — ${agent.role} · ${agent.status}`, 'info', 3000);
+  const agentNotes = VAULT_NOTES.filter(n => n.agent === agentId);
+  const agentTasks = Object.values(BOARD_CARDS).flat().filter(c => c.agent === agentId);
+  const modal = $('card-modal-content');
+  modal.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span style="font-size:28px;border:2px solid ${agent.color};border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center">${agent.emoji}</span>
+      <div>
+        <div style="font-weight:700;font-size:16px;color:${agent.color}">${agent.name}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${agent.role} · ${agent.status}</div>
+      </div>
+      <button onclick="closeModal()" style="margin-left:auto;color:var(--text-muted);font-size:18px">✕</button>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:16px;font-size:12px;color:var(--text-dim)">
+      <span>📊 ${agent.tasks} tasks</span><span>📁 ${agent.files} files</span><span>🔤 ${(agent.tokens/1000).toFixed(1)}K tokens</span><span>💪 ${Math.round(agent.fitness*100)}% fitness</span>
+    </div>
+    ${agentNotes.length ? `<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Vault Notes (${agentNotes.length})</div>${agentNotes.slice(0,5).map(n => `<div style="padding:4px 0;font-size:12px;color:var(--text-dim)">📚 ${n.title}</div>`).join('')}</div>` : ''}
+    ${agentTasks.length ? `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Tasks (${agentTasks.length})</div>${agentTasks.slice(0,5).map(t => `<div style="padding:4px 0;font-size:12px;color:var(--text-dim)">📋 ${t.title}</div>`).join('')}</div>` : ''}
+  `;
+  $('card-modal').classList.remove('hidden');
 }
 
 function attachFile() {
@@ -1780,14 +1594,6 @@ document.addEventListener('click', e => {
 
 // ── Initial Talk render ───────────────────────────────────
 function initTalk() {
-  // Ensure channels with demo data have message entries
-  // Map concierge to bridge messages if concierge has none
-  if (!DC_MESSAGES['concierge'] && DC_MESSAGES['bridge']) {
-    DC_MESSAGES['concierge'] = DC_MESSAGES['bridge'];
-  }
-  if (!DC_PINNED['concierge'] && DC_PINNED['bridge']) {
-    DC_PINNED['concierge'] = DC_PINNED['bridge'];
-  }
   renderChannelList();
-  switchChannel('concierge');
+  switchChannel('bridge');
 }
