@@ -1016,21 +1016,22 @@ function createRoom() {
 
 
 // ═══════════════════════════════════════════════════════════
-// PAGE 3: BRIEFING — Living Document
+// PAGE 3: BRIEFING — Comprehensive Daily Status Document
 // ═══════════════════════════════════════════════════════════
 
 let briefingRefreshTimer = null;
 let briefingLastData = {};
+let briefingCollapsed = {};
 
 function initBriefing() {
   renderBriefingDocument();
-  // Auto-refresh every 30 seconds
   if (briefingRefreshTimer) clearInterval(briefingRefreshTimer);
   briefingRefreshTimer = setInterval(() => {
     if (currentPage === 'briefing') renderBriefingDocument();
   }, 30000);
 }
 
+// Fetch all real data from bridge endpoints
 async function fetchBriefingData() {
   const baseUrl = (typeof Bridge !== 'undefined' && Bridge.baseUrl) ? Bridge.baseUrl : '';
   const fetchJSON = async (url) => {
@@ -1041,157 +1042,352 @@ async function fetchBriefingData() {
     return null;
   };
 
-  const [feedData, proposalsData, systemData, tasksData, vaultData] = await Promise.all([
-    fetchJSON('/api/feed?limit=50'),
-    fetchJSON('/api/proposals?status=all'),
+  const [systemOverview, systemAgents, systemCrons, systemServices, tasksAll, proposalsAll, proposalsPending, vaultRecent, vaultStats, feedData, discordRecent] = await Promise.all([
     fetchJSON('/api/system/overview'),
+    fetchJSON('/api/system/agents'),
+    fetchJSON('/api/system/crons'),
+    fetchJSON('/api/system/services'),
     fetchJSON('/api/tasks/all'),
+    fetchJSON('/api/proposals?status=all'),
+    fetchJSON('/api/proposals?status=pending'),
+    fetchJSON('/api/vault/recent?limit=20'),
     fetchJSON('/api/vault/stats'),
+    fetchJSON('/api/feed?limit=50'),
+    fetchJSON('/api/discord/recent?limit=20'),
   ]);
 
-  return { feed: feedData, proposals: proposalsData, system: systemData, tasks: tasksData, vault: vaultData };
+  return { systemOverview, systemAgents, systemCrons, systemServices, tasksAll, proposalsAll, proposalsPending, vaultRecent, vaultStats, feedData, discordRecent };
+}
+
+function briefingToggle(sectionId) {
+  briefingCollapsed[sectionId] = !briefingCollapsed[sectionId];
+  const body = document.getElementById('briefing-section-' + sectionId);
+  const icon = document.getElementById('briefing-chevron-' + sectionId);
+  if (body) body.style.display = briefingCollapsed[sectionId] ? 'none' : 'block';
+  if (icon) icon.textContent = briefingCollapsed[sectionId] ? '▸' : '▾';
+}
+
+function briefingCard(id, icon, title, content, alertClass) {
+  const collapsed = briefingCollapsed[id];
+  return `
+    <div class="briefing-card ${alertClass || ''}">
+      <div class="briefing-card-header" onclick="briefingToggle('${id}')">
+        <span class="briefing-card-icon">${icon}</span>
+        <span class="briefing-card-title">${title}</span>
+        <span class="briefing-card-chevron" id="briefing-chevron-${id}">${collapsed ? '▸' : '▾'}</span>
+      </div>
+      <div class="briefing-card-body" id="briefing-section-${id}" style="${collapsed ? 'display:none' : ''}">
+        ${content}
+      </div>
+    </div>
+  `;
+}
+
+function briefingSkeleton() {
+  return `
+    <div class="briefing-skeleton">
+      <div class="briefing-skeleton-line" style="width:80%"></div>
+      <div class="briefing-skeleton-line" style="width:60%"></div>
+      <div class="briefing-skeleton-line" style="width:70%"></div>
+    </div>
+  `;
+}
+
+function briefingStatCard(label, value, sub, cls) {
+  return `<div class="briefing-stat ${cls || ''}"><div class="briefing-stat-value">${value}</div><div class="briefing-stat-label">${label}</div>${sub ? `<div class="briefing-stat-sub">${sub}</div>` : ''}</div>`;
+}
+
+function briefingServiceDot(name, status) {
+  const active = (status || '').trim() === 'active';
+  const cls = active ? 'briefing-status-ok' : 'briefing-status-error';
+  const label = active ? 'online' : 'down';
+  return `<span class="briefing-svc"><span class="${cls}">●</span> ${name}: <strong>${label}</strong></span>`;
+}
+
+// Render Section 1: System Health
+function renderBriefingSystemHealth(data) {
+  const sys = data.systemOverview;
+  if (!sys) return briefingCard('health', '🖥️', 'System Health', '<p class="briefing-unavailable">System data unavailable</p>');
+
+  const diskPct = parseInt(sys.disk?.percent) || 0;
+  const diskAlert = diskPct > 85 ? 'briefing-card-alert' : '';
+  const memTotal = sys.memory?.total || 0;
+  const memUsed = sys.memory?.used || 0;
+  const memPct = memTotal > 0 ? Math.round((memUsed / memTotal) * 100) : 0;
+
+  const stats = `
+    <div class="briefing-stats-row">
+      ${briefingStatCard('Uptime', sys.uptime || '—')}
+      ${briefingStatCard('CPU Load', sys.load ? sys.load.avg1.toFixed(2) : '—', sys.load ? `5m: ${sys.load.avg5.toFixed(2)} · 15m: ${sys.load.avg15.toFixed(2)}` : '')}
+      ${briefingStatCard('Memory', `${memPct}%`, `${memUsed}MB / ${memTotal}MB`)}
+      ${briefingStatCard('Disk', sys.disk?.percent || '—', `${sys.disk?.used || '?'} / ${sys.disk?.total || '?'}`, diskPct > 85 ? 'briefing-stat-alert' : '')}
+    </div>
+  `;
+
+  const svcs = sys.services || {};
+  const svcList = Object.keys(svcs).length > 0
+    ? `<div class="briefing-svc-row">${Object.entries(svcs).map(([n, s]) => briefingServiceDot(n, s)).join('')}</div>`
+    : '';
+
+  const diskWarn = diskPct > 85
+    ? `<div class="briefing-doc-warning">⚠️ Disk usage at <strong>${diskPct}%</strong> — consider cleanup</div>`
+    : '';
+
+  return briefingCard('health', '🖥️', 'System Health', stats + svcList + diskWarn, diskAlert);
+}
+
+// Render Section 2: Agent Status
+function renderBriefingAgentStatus(data) {
+  const knownAgents = [
+    { id: 'right-hand', name: 'Right Hand', emoji: '🤝', alwaysActive: true },
+    { id: 'researcher', name: 'Researcher', emoji: '🔬' },
+    { id: 'coder', name: 'Coder', emoji: '💻' },
+    { id: 'ops', name: 'Ops', emoji: '⚙️' },
+    { id: 'devils-advocate', name: "Devil's Advocate", emoji: '😈' },
+    { id: 'utility', name: 'Utility', emoji: '🔧' },
+  ];
+
+  // Bridge agents data: { agentId: { queued: [...], doneCount: N } }
+  const bridgeAgents = data.systemAgents || {};
+
+  // Also check global AGENTS array for status
+  const globalAgents = (typeof AGENTS !== 'undefined' && Array.isArray(AGENTS)) ? AGENTS : [];
+
+  const rows = knownAgents.map(a => {
+    const ba = bridgeAgents[a.id] || {};
+    const ga = globalAgents.find(g => g.id === a.id);
+    const queued = (ba.queued || []).length;
+    const done = ba.doneCount || 0;
+    const isActive = a.alwaysActive || queued > 0 || (ga && ga.status === 'active');
+    const statusCls = isActive ? 'briefing-agent-active' : 'briefing-agent-idle';
+    const statusLabel = isActive ? 'active' : 'idle';
+    return `
+      <div class="briefing-agent-row">
+        <span class="briefing-agent-name">${a.emoji} ${a.name}</span>
+        <span class="briefing-agent-status ${statusCls}">${statusLabel}</span>
+        <span class="briefing-agent-meta">${done > 0 ? `${done} done` : ''}${queued > 0 ? ` · ${queued} queued` : ''}</span>
+      </div>
+    `;
+  }).join('');
+
+  return briefingCard('agents', '🤖', 'Agent Status', `<div class="briefing-agent-list">${rows}</div>`);
+}
+
+// Render Section 3: Work Summary
+function renderBriefingWorkSummary(data) {
+  const tasks = data.tasksAll;
+  if (!tasks) return briefingCard('work', '📊', 'Work Summary', '<p class="briefing-unavailable">Task data unavailable</p>');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const allTasks = Array.isArray(tasks) ? tasks : (tasks.active || []).concat(tasks.queued || [], tasks.done || [], tasks.failed || []);
+
+  const active = allTasks.filter(t => t.status === 'active');
+  const queued = allTasks.filter(t => t.status === 'queued');
+  const done = allTasks.filter(t => t.status === 'done');
+  const failed = allTasks.filter(t => t.status === 'failed');
+
+  const doneToday = done.filter(t => (t.completed_at || t.updated_at || '').startsWith(today));
+
+  const stats = `
+    <div class="briefing-stats-row">
+      ${briefingStatCard('Completed Today', `<span class="briefing-clickable" onclick="nav('tasks')">${doneToday.length}</span>`)}
+      ${briefingStatCard('In Progress', `<span class="briefing-clickable" onclick="nav('tasks')">${active.length}</span>`)}
+      ${briefingStatCard('Queued', `<span class="briefing-clickable" onclick="nav('tasks')">${queued.length}</span>`)}
+      ${briefingStatCard('Failed', `<span class="briefing-clickable" onclick="nav('tasks')" style="${failed.length > 0 ? 'color:var(--red)' : ''}">${failed.length}</span>`, '', failed.length > 0 ? 'briefing-stat-alert' : '')}
+    </div>
+  `;
+
+  let details = '';
+  if (doneToday.length > 0) {
+    details += '<div class="briefing-task-list"><strong>Completed today:</strong><ul>' +
+      doneToday.slice(0, 5).map(t => `<li>${t.title || t.id}${t.agent ? ` <span class="briefing-agent-tag">${t.agent}</span>` : ''}</li>`).join('') +
+      (doneToday.length > 5 ? `<li class="briefing-more">+${doneToday.length - 5} more</li>` : '') +
+      '</ul></div>';
+  }
+  if (active.length > 0) {
+    details += '<div class="briefing-task-list"><strong>In progress:</strong><ul>' +
+      active.slice(0, 5).map(t => `<li>${t.title || t.id}${t.agent ? ` <span class="briefing-agent-tag">${t.agent}</span>` : ''}</li>`).join('') +
+      '</ul></div>';
+  }
+  if (failed.length > 0) {
+    details += '<div class="briefing-task-list briefing-doc-warning"><strong>Failed:</strong><ul>' +
+      failed.slice(0, 3).map(t => `<li>${t.title || t.id}${t.error ? `: ${t.error.substring(0, 60)}` : ''}</li>`).join('') +
+      '</ul></div>';
+  }
+
+  return briefingCard('work', '📊', 'Work Summary', stats + details, failed.length > 0 ? 'briefing-card-warn' : '');
+}
+
+// Render Section 4: Proposals
+function renderBriefingProposals(data) {
+  const allP = data.proposalsAll;
+  const pendingP = data.proposalsPending;
+  if (!allP && !pendingP) return briefingCard('proposals', '🗳️', 'Proposals', '<p class="briefing-unavailable">Proposal data unavailable</p>');
+
+  const all = Array.isArray(allP) ? allP : [];
+  const pending = Array.isArray(pendingP) ? pendingP : all.filter(p => p.status === 'pending');
+  const today = new Date().toISOString().slice(0, 10);
+  const autoToday = all.filter(p => (p.triage_verdict === 'auto-execute' || p.status === 'auto-approved') && (p.resolved_at || p.created_at || '').startsWith(today));
+  const mostRecent = all.length > 0 ? all[0] : null;
+
+  const content = `
+    <div class="briefing-stats-row">
+      ${briefingStatCard('Pending', `<span class="briefing-clickable" onclick="nav('queue')" style="${pending.length > 0 ? 'color:var(--yellow)' : ''}">${pending.length}</span>`)}
+      ${briefingStatCard('Auto-Approved Today', autoToday.length)}
+      ${briefingStatCard('Total', all.length)}
+    </div>
+    ${mostRecent ? `<p class="briefing-recent-item">Latest: "<em class="briefing-clickable" onclick="nav('queue')">${(mostRecent.title || mostRecent.question || 'Untitled').substring(0, 70)}</em>"</p>` : ''}
+    ${pending.length > 0 ? `<p><span class="briefing-clickable" onclick="nav('queue')">→ Review ${pending.length} pending decision${pending.length !== 1 ? 's' : ''}</span></p>` : ''}
+  `;
+
+  return briefingCard('proposals', '🗳️', 'Proposals', content, pending.length > 0 ? 'briefing-card-attention' : '');
+}
+
+// Render Section 5: Vault Activity
+function renderBriefingVault(data) {
+  const recent = data.vaultRecent;
+  const stats = data.vaultStats;
+  if (!recent && !stats) return briefingCard('vault', '📚', 'Vault Activity', '<p class="briefing-unavailable">Vault data unavailable</p>');
+
+  const recentNotes = Array.isArray(recent) ? recent : [];
+  const today = new Date().toISOString().slice(0, 10);
+  const modifiedToday = recentNotes.filter(n => (n.modified || n.mtime || '').startsWith(today));
+  const latestNote = recentNotes.length > 0 ? recentNotes[0] : null;
+  const totalNotes = stats?.total || stats?.count || stats?.noteCount || recentNotes.length;
+
+  const content = `
+    <div class="briefing-stats-row">
+      ${briefingStatCard('Modified Today', modifiedToday.length)}
+      ${briefingStatCard('Total Notes', totalNotes)}
+    </div>
+    ${latestNote ? `<p class="briefing-recent-item">Latest: <strong>${latestNote.title || latestNote.name || latestNote.path || '—'}</strong>${latestNote.path ? ` <span class="briefing-path">${latestNote.path}</span>` : ''}</p>` : ''}
+  `;
+
+  return briefingCard('vault', '📚', 'Vault Activity', content);
+}
+
+// Render Section 6: Discord Activity
+function renderBriefingDiscord(data) {
+  const msgs = data.discordRecent;
+  if (!msgs) return briefingCard('discord', '💬', 'Discord Activity', '<p class="briefing-unavailable">Discord data unavailable</p>');
+
+  const messages = Array.isArray(msgs) ? msgs : [];
+  const now = Date.now();
+  const hourAgo = now - 3600000;
+  const recentMsgs = messages.filter(m => new Date(m.timestamp).getTime() > hourAgo);
+
+  // Channel frequency
+  const channelCounts = {};
+  messages.forEach(m => {
+    const ch = m.channel || 'unknown';
+    channelCounts[ch] = (channelCounts[ch] || 0) + 1;
+  });
+  const mostActive = Object.entries(channelCounts).sort((a, b) => b[1] - a[1])[0];
+  const lastMsg = messages.length > 0 ? messages[0] : null;
+
+  const content = `
+    <div class="briefing-stats-row">
+      ${briefingStatCard('Last Hour', recentMsgs.length)}
+      ${briefingStatCard('Most Active', mostActive ? `#${mostActive[0]}` : '—')}
+    </div>
+    ${lastMsg ? `<p class="briefing-recent-item">Last: <strong>${lastMsg.author || 'Unknown'}</strong>: "${(lastMsg.content || '').substring(0, 80)}${(lastMsg.content || '').length > 80 ? '...' : ''}"</p>` : ''}
+  `;
+
+  return briefingCard('discord', '💬', 'Discord Activity', content);
+}
+
+// Render Section 7: Schedule / Crons
+function renderBriefingSchedule(data) {
+  const crons = data.systemCrons;
+  
+  // Hardcoded known crons as fallback
+  const knownCrons = [
+    { schedule: '*/30 * * * *', command: 'QMD vault update', type: 'crontab' },
+    { schedule: '0 */3 * * *', command: 'Ontology sync', type: 'crontab' },
+    { schedule: '0 6 * * *', command: 'Daily healthcheck', type: 'crontab' },
+    { schedule: '*/1 * * * *', command: 'Bridge sync', type: 'systemd' },
+  ];
+
+  const cronList = (Array.isArray(crons) && crons.length > 0) ? crons : knownCrons;
+
+  const rows = cronList.slice(0, 8).map(c => {
+    const sched = c.schedule || c.expression || c.timing || '—';
+    const cmd = c.command || c.name || c.description || '—';
+    const type = c.type || 'cron';
+    return `<div class="briefing-cron-row"><span class="briefing-cron-sched">${sched}</span><span class="briefing-cron-cmd">${cmd}</span><span class="briefing-cron-type">${type}</span></div>`;
+  }).join('');
+
+  const source = (Array.isArray(crons) && crons.length > 0) ? '' : '<p class="briefing-unavailable" style="font-size:12px">Showing known crons (live endpoint unavailable)</p>';
+
+  return briefingCard('schedule', '📅', 'Schedule / Crons', `<div class="briefing-cron-list">${rows}</div>${source}`);
+}
+
+// Render Section: Active Missions (kept from original)
+function renderBriefingMissionsSection() {
+  if (typeof MISSION_GOALS !== 'undefined' && MISSION_GOALS.length > 0) {
+    const activeMissions = MISSION_GOALS.filter(m => m.status === 'active');
+    if (activeMissions.length === 0) return '';
+
+    const content = activeMissions.map(m => {
+      const pct = m.progress || 0;
+      const agents = (m.agents || []).map(a => iga(a).emoji).join(' ');
+      return `
+        <div class="briefing-mission-row">
+          <strong class="briefing-clickable" onclick="nav('missions')">${m.name || m.title}</strong>
+          <div class="briefing-progress-bar"><div class="briefing-progress-fill" style="width:${pct}%"></div></div>
+          <span class="briefing-live-value">${pct}%</span>
+          ${agents ? `<span class="briefing-mission-agents">${agents}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    return briefingCard('missions', '🎯', 'Active Missions', content);
+  }
+  return '';
 }
 
 async function renderBriefingDocument() {
   const container = document.getElementById('briefing-document');
   if (!container) return;
 
+  // Show loading skeletons
+  container.innerHTML = `
+    <div class="briefing-doc-greeting">Loading briefing...</div>
+    ${briefingSkeleton()}${briefingSkeleton()}${briefingSkeleton()}
+  `;
+
   const data = await fetchBriefingData();
+  briefingLastData = data;
 
   // Time-based greeting
-  const hour = new Date().getHours();
+  const hour = new Date().getUTCHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const dayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false });
 
-  // Agent stats from global AGENTS
-  const activeAgents = AGENTS.filter(a => a.status === 'active');
-  const idleAgents = AGENTS.filter(a => a.status !== 'active');
-
-  // Task completions from feed
-  const tasksDone = feedEvents.filter(e => e.type === 'task_completed');
-  const errors = feedEvents.filter(e => e.type === 'error');
-  const vaultWrites = feedEvents.filter(e => e.type === 'vault_write');
-  const questions = feedEvents.filter(e => e.type === 'question_asked');
-
-  // Pending proposals
-  const pendingProposals = queueCards.filter(q => !q._status || q._status === 'pending');
-  const autoApproved = queueCards.filter(q => q._status === 'auto-approved');
-
-  // Agent summaries
-  const agentSummaries = AGENTS.map(a => {
-    const agentTasks = tasksDone.filter(t => t.agent === a.id);
-    const lastTask = agentTasks.length > 0 ? agentTasks[0].content : null;
-    return { ...a, taskCount: agentTasks.length, lastTask };
-  }).filter(a => a.taskCount > 0);
-
-  // System health
-  const systemOk = errors.length === 0;
-
-  // Build document
   const doc = `
     <div class="briefing-doc-greeting">${greeting}, Trajan.</div>
-    <div class="briefing-doc-date">It's ${dayStr}.</div>
-    <p>
-      <span class="briefing-live-value">${activeAgents.length}</span> agents are active, 
-      <span class="briefing-live-value">${idleAgents.length}</span> are idle.
-    </p>
+    <div class="briefing-doc-date">${dayStr} · ${timeStr} UTC</div>
 
-    <div class="briefing-doc-divider">━━━ Since You Were Last Here ━━━</div>
+    ${renderBriefingSystemHealth(data)}
+    ${renderBriefingAgentStatus(data)}
+    ${renderBriefingWorkSummary(data)}
+    ${renderBriefingProposals(data)}
+    ${renderBriefingVault(data)}
+    ${renderBriefingDiscord(data)}
+    ${renderBriefingSchedule(data)}
+    ${renderBriefingMissionsSection()}
 
-    ${agentSummaries.length > 0 ? agentSummaries.map(a => `
-      <p><span class="entity-link entity-agent" onclick="goToEntity('agent','${a.id}','${a.name}')">${a.emoji} <strong>${a.name}</strong></span> completed <span class="briefing-live-value">${a.taskCount}</span> tasks${a.lastTask ? `, including "<em>${a.lastTask.substring(0, 60)}${a.lastTask.length > 60 ? '...' : ''}</em>"` : ''}.</p>
-    `).join('') : '<p>No task completions recorded yet today.</p>'}
-
-    <p><span class="briefing-live-value">${autoApproved.length}</span> proposals were auto-approved. 
-    <span class="briefing-live-value">${pendingProposals.length}</span> are waiting for your decision.</p>
-
-    <p><span class="briefing-live-value">${vaultWrites.length}</span> vault notes were created or updated.</p>
-
-    ${errors.length > 0 ? `
-      <p class="briefing-doc-warning">⚠️ <span class="briefing-live-value">${errors.length}</span> errors occurred. 
-      Most recent: "<em>${errors[0].content.substring(0, 80)}</em>".</p>
-    ` : '<p>No errors. Systems nominal. ✅</p>'}
-
-    <div class="briefing-doc-divider">━━━ What Needs Your Attention ━━━</div>
-
-    <p>You have <span class="briefing-live-value briefing-clickable" onclick="nav('inbox')">${pendingProposals.length}</span> pending decisions.
-    ${pendingProposals.length > 0 ? ` Highest priority: "<em class="briefing-clickable" onclick="nav('queue')">${(pendingProposals[0].question || pendingProposals[0].title || 'Untitled').substring(0, 50)}</em>" from ${iga(pendingProposals[0].agent || pendingProposals[0]._source).emoji} ${iga(pendingProposals[0].agent || pendingProposals[0]._source).name}.` : ''}</p>
-
-    <p><span class="briefing-live-value">${questions.length}</span> agents have questions waiting.
-    ${questions.length > 0 ? ` Most urgent: "<em class="briefing-clickable" onclick="nav('feed')">${questions[0].content.substring(0, 50)}</em>" from ${iga(questions[0].agent).emoji} ${iga(questions[0].agent).name}.` : ''}</p>
-
-    ${inboxItems.filter(i => i.unread).length > 0 ? `<p><span class="briefing-live-value briefing-clickable" onclick="nav('inbox')">${inboxItems.filter(i => i.unread).length}</span> inbox items unread.</p>` : ''}
-
-    <div class="briefing-doc-divider">━━━ Active Missions ━━━</div>
-
-    ${renderBriefingMissions()}
-
-    <div class="briefing-doc-divider">━━━ System Health ━━━</div>
-
-    <p>
-      Gateway: <span class="briefing-live-value briefing-status-ok">●</span> online. 
-      Bridge: <span class="briefing-live-value briefing-status-ok">●</span> connected.
-    </p>
-    <p>
-      Disk: <span class="briefing-live-value">~87%</span>. 
-      Memory: <span class="briefing-live-value">42%</span>. 
-      Load: <span class="briefing-live-value">0.34</span>.
-    </p>
-    ${!systemOk ? '<p class="briefing-doc-warning">⚠️ Errors detected — check System page.</p>' : ''}
-
-    <div class="briefing-doc-divider">━━━ Suggested Focus ━━━</div>
-
-    <p>Based on pending work and urgency, consider focusing on: 
-    <strong class="briefing-clickable" onclick="nav('${pendingProposals.length > 0 ? 'queue' : 'feed'}')">${
-      pendingProposals.length > 0 
-        ? (pendingProposals[0].question || pendingProposals[0].title || 'pending proposals').substring(0, 60)
-        : 'reviewing the feed for updates'
-    }</strong>.</p>
-    <p style="color:var(--text-muted);font-size:14px">${
-      pendingProposals.length > 0 
-        ? `${pendingProposals.length} decision${pendingProposals.length !== 1 ? 's' : ''} waiting — oldest is ${formatInboxTime(pendingProposals[pendingProposals.length-1]._createdAt || pendingProposals[pendingProposals.length-1].time || new Date().toISOString())} old.`
-        : 'All caught up. Good time for strategic thinking or vault review.'
-    }</p>
+    <div class="briefing-doc-footer">
+      Last refreshed: ${timeStr} UTC · Auto-refreshes every 30s
+    </div>
   `;
 
   container.innerHTML = doc;
 }
 
-function renderBriefingMissions() {
-  // Use MISSION_GOALS from data.js if available
-  if (typeof MISSION_GOALS !== 'undefined' && MISSION_GOALS.length > 0) {
-    return MISSION_GOALS.filter(m => m.status === 'active').map(m => {
-      const pct = m.progress || Math.floor(Math.random() * 60 + 20);
-      const agents = (m.agents || []).map(a => iga(a).emoji).join(' ');
-      const velocity = Math.random() > 0.3 ? 'On track' : 'Slowing — velocity dropped 20%';
-      return `
-        <p><strong class="briefing-clickable" onclick="nav('missions')">${m.name || m.title}</strong> — 
-        <span class="briefing-live-value">${pct}%</span> complete, 
-        ${agents ? agents + ' working on it.' : ''}</p>
-        <p style="color:var(--text-muted);font-size:14px;margin-top:-8px">${velocity}</p>
-      `;
-    }).join('') || '<p>No active missions.</p>';
-  }
-
-  // Fallback static missions
-  return `
-    <p><strong class="briefing-clickable" onclick="nav('missions')">Market Intelligence</strong> — 
-    <span class="briefing-live-value">65%</span> complete, 🔬🤝 working on it.</p>
-    <p style="color:var(--text-muted);font-size:14px;margin-top:-8px">On track</p>
-
-    <p><strong class="briefing-clickable" onclick="nav('missions')">Infrastructure Hardening</strong> — 
-    <span class="briefing-live-value">40%</span> complete, ⚙️😈 working on it.</p>
-    <p style="color:var(--text-muted);font-size:14px;margin-top:-8px">On track</p>
-
-    <p><strong class="briefing-clickable" onclick="nav('missions')">Knowledge Management</strong> — 
-    <span class="briefing-live-value">78%</span> complete, 🔧🔬🤝 working on it.</p>
-    <p style="color:var(--text-muted);font-size:14px;margin-top:-8px">On track</p>
-  `;
-}
-
 function refreshBriefing() {
   toast('🔄 Refreshing briefing...', 'info', 1500);
-  // Reset cached data and re-fetch
   briefingLastData = {};
   renderBriefingDocument();
 }

@@ -1,6 +1,14 @@
 /* Agent OS v5 — app.js — Core + Feed + Queue + Talk */
 'use strict';
 
+// Global polling pause when tab is hidden
+let _tabVisible = true;
+document.addEventListener('visibilitychange', () => {
+  _tabVisible = !document.hidden;
+  if (_tabVisible) console.log('[Polling] Tab visible — resuming');
+});
+function shouldPoll() { return _tabVisible; }
+
 // Safe date helper — prevents crashes on invalid date strings
 function safeDate(v) {
   if (!v) return null;
@@ -38,7 +46,7 @@ const PAGE_TITLES = {
 // ── Navigation ────────────────────────────────────────────
 function nav(page) {
   // Redirect removed pages
-  const redirects = { plans: 'missions', schedule: 'briefing', explore: 'mind', board: 'feed', config: 'feed', command: 'feed' };
+  const redirects = { schedule: 'briefing', explore: 'mind', board: 'feed', config: 'feed', command: 'feed' };
   if (redirects[page]) page = redirects[page];
   if (currentPage === page) return;
 
@@ -384,6 +392,7 @@ async function fetchStreamFromBridge() {
 }
 
 async function pollStream() {
+  if (!shouldPoll()) return;
   if (currentPage !== 'feed') return;
   const items = await fetchStreamFromBridge();
   if (!items || items.length === 0) return;
@@ -1259,6 +1268,7 @@ function toggleResolvedSection() {
 }
 
 function tickSyncIndicator() {
+  if (!shouldPoll()) return;
   const el = document.getElementById('proposals-sync-indicator');
   if (!el) return;
   const diff = Math.floor((Date.now() - _lastProposalSync) / 1000);
@@ -1731,6 +1741,11 @@ function setTalkMode(mode) {
     return; // don't switch channel/DM yet — let drawer handle it
   }
   if (mode === 'channels') {
+    // Auto-select first real channel if none selected
+    if (!currentChannel && DC_CHANNELS.categories) {
+      const firstCat = DC_CHANNELS.categories.find(c => c.channels && c.channels.length > 0);
+      if (firstCat) currentChannel = firstCat.channels[0].id;
+    }
     switchChannel(currentChannel);
   } else {
     // Show first DM
@@ -2730,6 +2745,7 @@ PAGE_TITLES.feed = 'The Stream';
 let badgePollTimer = null;
 
 function pollBadges() {
+  if (!shouldPoll()) return;
   fetch('/api/proposals?status=pending')
     .then(r => r.ok ? r.json() : null)
     .then(data => {
